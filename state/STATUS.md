@@ -47,6 +47,10 @@ Nothing currently blocked.
 | Dubai Company + DAO legal structure | 2026-07-25 | ✅ Decided |
 | kolonie-docs as single docs repo (no separate ops repo) | 2026-07-25 | ✅ Decided |
 | All repos private initially | 2026-07-25 | ✅ Decided |
+| GitHub Projects as project board (replaces Trello) | 2026-07-25 | ✅ Decided |
+| Trello archived, all coordination via GitHub | 2026-07-25 | ✅ Decided |
+| GitHub Projects as project board (replaces Trello) | 2026-07-25 | ✅ Decided |
+| Trello archived, all coordination via GitHub | 2026-07-25 | ✅ Decided |
 
 ## Open Questions
 
