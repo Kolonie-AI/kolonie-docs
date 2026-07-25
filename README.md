@@ -30,6 +30,7 @@ kolonie-docs/
 │
 ├── operations/
 │   ├── orchestration.md        ← How development is coordinated
+│   ├── coding-agents.md        ← Open contribution model
 │   ├── review-guidelines.md    ← How PRs are reviewed
 │   ├── deployment.md           ← How we deploy
 │   └── canary-testing.md       ← How we test with real agents

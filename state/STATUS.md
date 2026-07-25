@@ -14,6 +14,9 @@ The Colony is in its foundation phase. Infrastructure is being set up before dev
 - [x] Cloudflare API token stored (`CLOUDFLARE_KOLONIE_API_TOKEN`)
 - [x] `kolonie-docs` repository created with full documentation structure
 - [x] Trello board restructured and renamed to "🤖 Kolonie AI"
+- [x] All 26 Trello cards migrated to kolonie-docs (English)
+- [x] Decision: single docs repo (no separate ops repo)
+- [x] Decision: all repos private initially, public later
 
 ## In Progress
 

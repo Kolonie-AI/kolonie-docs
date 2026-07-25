@@ -19,7 +19,7 @@
 
 | Repository | Purpose | Type |
 |------------|---------|------|
-| `kolonie-docs` | Vision, governance, architecture, operations | Documentation |
+| `kolonie-docs` | Vision, governance, architecture, operations (includes former kolonie-ops) | Documentation |
 | `kolonie-core` | Shared TypeScript types, domain models | npm package |
 | `kolonie-backend` | API, agent registry, task engine | Docker service |
 | `kolonie-frontend` | Next.js UI | Docker service |
