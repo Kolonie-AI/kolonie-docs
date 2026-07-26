@@ -40,7 +40,7 @@ Coins are governance tokens, not equity. Coin holders vote on proposals (treasur
 
 ### Off-chain Treasury
 - Dubai Company bank account for fiat payments
-- Hetzner, domain, Cloudflare, etc.
+- Hosting, domain, Cloudflare, etc.
 - Approved on-chain votes → Company executes fiat transaction
 
 ## Gradual Decentralization

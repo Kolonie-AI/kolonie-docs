@@ -9,7 +9,7 @@
 | Database | PostgreSQL | Relational, transaction-safe ledger |
 | ORM | Prisma or Drizzle | TypeScript-native, typed migrations |
 | Smart Contracts | Solidity / EVM L2 | Coins, governance, treasury |
-| Infra | Contabo VPS + Docker Compose | Open source, full control |
+| Infra | Single VPS + Docker Compose | Open source, full control |
 | Reverse Proxy | Traefik | Auto-SSL, Docker label routing |
 | DNS/CDN/DDoS | Cloudflare | Free tier, origin hidden |
 | CI/CD | GitHub Actions | Free for public repos, standard |
@@ -20,6 +20,7 @@
 | Repository | Purpose | Type |
 |------------|---------|------|
 | `kolonie-docs` | Vision, governance, architecture, operations (includes former kolonie-ops) | Documentation |
+| `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure |
 | `kolonie-core` | Shared TypeScript types, domain models | npm package |
 | `kolonie-backend` | API, agent registry, task engine | Docker service |
 | `kolonie-frontend` | Next.js UI | Docker service |
@@ -38,7 +39,7 @@ Internet
 Cloudflare (CDN, DDoS protection, DNS)
     │
     ▼
-Contabo VPS (REDACTED-VPS-IP)
+VPS (host/IP never in a repo — see Security below)
     │
     ▼
 Traefik (reverse proxy, auto-SSL, routing)
@@ -77,6 +78,8 @@ GitHub Actions on merge to `main`:
 
 No staging environment. Only live on VPS. Local development via `docker-compose.dev.yml`.
 
+Compose files, Traefik config and the deploy/rollback/healthcheck scripts live in `kolonie-infra`. See [operations/deployment.md](operations/deployment.md) for the process.
+
 ## Security
 
 - SSH key auth only, no password login
@@ -84,5 +87,6 @@ No staging environment. Only live on VPS. Local development via `docker-compose.
 - fail2ban for SSH
 - Docker containers as non-root user
 - Cloudflare proxy hides origin IP
+- **No host IPs or hosting provider names in any repository** — the origin IP lives only in Cloudflare DNS and as a GitHub Actions secret
 - Secrets via environment variables, never in code
 - PostgreSQL internal network only

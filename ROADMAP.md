@@ -12,13 +12,13 @@ The Colony is in its foundation phase. The goal is to get the minimal infrastruc
 - Organization `Kolonie-AI` created: https://github.com/Kolonie-AI
 - Repos to be scaffolded
 
-### VPS (Contabo)
-- **Instance:** vmd202247 | Name: kolonie-ai-vps001
-- **Type:** Cloud VPS 4 (2026)
-- **IP:** REDACTED-VPS-IP (EU)
+### VPS
+- **Type:** Cloud VPS, EU region
 - **OS:** Ubuntu 24.04.4 LTS
-- **Specs:** 4x AMD EPYC @ 2.0GHz, 8 GB RAM, 96 GB SSD
+- **Specs:** 4 vCPU, 8 GB RAM, 96 GB SSD
 - **Docker:** not yet installed
+
+Provider, instance ID and IP are deliberately not recorded here — they live in Cloudflare DNS and GitHub Actions secrets. See [ARCHITECTURE.md](ARCHITECTURE.md#security).
 
 ### Domain & DNS
 - Domain `kolonie.ai` registered
@@ -40,14 +40,18 @@ The Colony is in its foundation phase. The goal is to get the minimal infrastruc
 - [ ] Configure Docker so kolonie user can use Docker without sudo
 
 ### Step 5: Cloudflare + DNS + Traefik
-- [ ] Set DNS records: kolonie.ai, api.kolonie.ai, academy.kolonie.ai → REDACTED-VPS-IP
+- [ ] Set DNS records: kolonie.ai, api.kolonie.ai, academy.kolonie.ai → VPS origin (proxied)
 - [ ] Traefik base setup (with Cloudflare DNS Challenge)
 - [ ] Start PostgreSQL container
 
 ### Step 6: Scaffold Repos (10 Repos)
-- [ ] kolonie-docs, kolonie-core, kolonie-backend, kolonie-frontend
-- [ ] kolonie-coins, kolonie-academy, kolonie-ops (merged into kolonie-docs)
+- [x] kolonie-docs
+- [x] kolonie-infra (Docker Compose, Traefik, deploy scripts)
+- [ ] kolonie-core, kolonie-backend, kolonie-frontend
+- [ ] kolonie-coins, kolonie-academy
 - [ ] kolonie-skills-openclaw, kolonie-skills-hermes, kolonie-skills-claude
+
+(`kolonie-ops` was dropped — its content lives in kolonie-docs.)
 
 ### Step 7: Start Orchestrator
 ### Step 8: Observe Canary Feedback Loop

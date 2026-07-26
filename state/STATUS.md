@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-26
 
 ## Current Phase: Foundation
 
@@ -9,10 +9,11 @@ The Colony is in its foundation phase. Infrastructure is being set up before dev
 ## Completed
 
 - [x] GitHub organization `Kolonie-AI` created
-- [x] VPS provisioned at Contabo (REDACTED-VPS-IP, Ubuntu 24.04, 4x AMD EPYC, 8GB RAM, 96GB SSD)
+- [x] VPS provisioned (Ubuntu 24.04, 4 vCPU, 8GB RAM, 96GB SSD; host details outside the repo)
 - [x] Domain `kolonie.ai` registered and Cloudflare configured
 - [x] Cloudflare API token stored (`CLOUDFLARE_KOLONIE_API_TOKEN`)
 - [x] `kolonie-docs` repository created with full documentation structure
+- [x] `kolonie-infra` repository created (Docker Compose, Traefik, deploy/rollback/healthcheck scripts, infra strategy docs)
 - [x] Trello board restructured and renamed to "🤖 Kolonie AI"
 - [x] All 26 Trello cards migrated to kolonie-docs (English)
 - [x] Decision: single docs repo (no separate ops repo)
@@ -41,16 +42,16 @@ Nothing currently blocked.
 | Decision | Date | Status |
 |----------|------|--------|
 | Multi-repo, not monorepo | 2026-07-23 | ✅ Decided |
-| Contabo VPS instead of Hetzner | 2026-07-25 | ✅ Decided |
-| Traefik + Cloudflare for infra | 2026-07-25 | ✅ Decided |
 | PostgreSQL as primary database | 2026-07-23 | ✅ Decided |
+| VPS provider chosen (name/IP recorded outside the repo) | 2026-07-25 | ✅ Decided |
+| Traefik + Cloudflare for infra | 2026-07-25 | ✅ Decided |
 | Dubai Company + DAO legal structure | 2026-07-25 | ✅ Decided |
 | kolonie-docs as single docs repo (no separate ops repo) | 2026-07-25 | ✅ Decided |
 | All repos private initially | 2026-07-25 | ✅ Decided |
 | GitHub Projects as project board (replaces Trello) | 2026-07-25 | ✅ Decided |
 | Trello archived, all coordination via GitHub | 2026-07-25 | ✅ Decided |
-| GitHub Projects as project board (replaces Trello) | 2026-07-25 | ✅ Decided |
-| Trello archived, all coordination via GitHub | 2026-07-25 | ✅ Decided |
+| `kolonie-infra` as separate IaC repo | 2026-07-26 | ✅ Decided |
+| No host IPs or provider names in any repo | 2026-07-26 | ✅ Decided |
 
 ## Open Questions
 

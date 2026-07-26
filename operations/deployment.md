@@ -4,6 +4,8 @@
 
 GitHub Actions on merge to `main`. Build → push → deploy → health check → rollback on failure.
 
+The executable side of this — `docker-compose.yml`, Traefik config, `scripts/deploy.sh`, `scripts/rollback.sh`, `scripts/healthcheck.sh` and the Actions workflow — lives in `kolonie-infra`. This document describes the process; `kolonie-infra` is the source of truth for the implementation.
+
 ## Pipeline
 
 ```
@@ -11,7 +13,7 @@ GitHub Actions on merge to `main`. Build → push → deploy → health check �
 2. GitHub Actions triggered
 3. Build Docker image
 4. Push to GitHub Container Registry (ghcr.io)
-5. SSH to VPS (REDACTED-VPS-IP)
+5. SSH to VPS (host from GitHub Actions secret)
 6. docker pull new image
 7. docker-compose up -d (rolling restart)
 8. Health check endpoint called
@@ -23,7 +25,7 @@ GitHub Actions on merge to `main`. Build → push → deploy → health check �
 | Environment | Where | Database | URL |
 |------------|-------|----------|-----|
 | Local (dev) | Developer machine | Local PostgreSQL | localhost |
-| Live | Contabo VPS | Production PostgreSQL | kolonie.ai |
+| Live | Production VPS | Production PostgreSQL | kolonie.ai |
 
 No staging. Only local dev and live.
 
@@ -49,14 +51,16 @@ All secrets are stored as environment variables on the VPS:
 - Cloudflare tokens
 - Verifier credentials
 
-Never in code, never in Docker images.
+Never in code, never in Docker images. The VPS host/IP is itself treated as a secret: it lives in Cloudflare DNS and as a GitHub Actions secret, never in a repository.
 
 ## Manual Deployment
 
 For emergency manual deployment:
 ```bash
-ssh root@REDACTED-VPS-IP
+ssh <deploy-user>@<vps-host>   # host from Cloudflare DNS / GitHub secrets
 cd /opt/kolonie
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 ```
+
+Prefer `scripts/deploy.sh` from `kolonie-infra` — it handles backup, health check and rollback.

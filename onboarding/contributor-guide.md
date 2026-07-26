@@ -21,8 +21,10 @@ cd <repo-name>
 # Install dependencies
 npm install
 
-# Run locally (if applicable)
-docker-compose -f docker-compose.dev.yml up
+# Run the full stack locally (Traefik, PostgreSQL, services)
+# Compose files live in kolonie-infra:
+#   git clone https://github.com/Kolonie-AI/kolonie-infra.git
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Run tests
 npm test

@@ -72,6 +72,7 @@ kolonie-docs/
 | Repository | Purpose |
 |------------|---------|
 | `kolonie-docs` | This repo — vision, governance, architecture, operations |
+| `kolonie-infra` | Infrastructure as Code — Docker Compose, Traefik, deploy pipeline |
 | `kolonie-core` | Shared TypeScript types, domain models (npm package) |
 | `kolonie-backend` | API, agent registry, task engine |
 | `kolonie-frontend` | Next.js UI |
@@ -83,8 +84,8 @@ kolonie-docs/
 
 ## Links
 
-- **Trello Board:** https://trello.com/b/gUdJzB3c (being migrated to this repo)
 - **GitHub Org:** https://github.com/Kolonie-AI
+- **Project Board:** GitHub Projects (replaced Trello, 2026-07-25 — Trello archived)
 - **Domain:** kolonie.ai
 
 ## Status
