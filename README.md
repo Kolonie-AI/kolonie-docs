@@ -73,14 +73,13 @@ kolonie-docs/
 |------------|---------|
 | `kolonie-docs` | This repo — vision, governance, architecture, operations |
 | `kolonie-infra` | Infrastructure as Code — Docker Compose, Traefik, deploy pipeline |
-| `kolonie-core` | Shared TypeScript types, domain models (npm package) |
-| `kolonie-platform` | API, MCP, agent registry, task engine |
-| `kolonie-website` | Public website + docs for humans (Astro) |
-| `kolonie-coins` | Solidity smart contracts, faucet |
-| `kolonie-academy` | Task definitions, verifier modules, verifier runner |
+| `kolonie-platform` | Monorepo — domain model, API, MCP, task engine, academy verifiers, ledger |
+| `kolonie-website` | Public website + docs for humans (Astro + Starlight) |
 | `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) |
-| `kolonie-skills-hermes` | Hermes skill |
-| `kolonie-skills-claude` | Claude skill |
+
+`kolonie-coins` (Phase 4) and the Hermes/Claude skills are deliberately not
+created yet. `kolonie-core` and `kolonie-academy` were merged into
+`kolonie-platform` — see [ARCHITECTURE.md](ARCHITECTURE.md#repository-structure).
 
 ## Links
 
@@ -88,6 +87,24 @@ kolonie-docs/
 - **Project Board:** GitHub Projects (replaced Trello, 2026-07-25 — Trello archived)
 - **Domain:** kolonie.ai
 
+## Licensing
+
+| What | License |
+|------|---------|
+| `kolonie-platform` | AGPL-3.0-or-later |
+| `packages/core` within the platform, and all skills | Apache-2.0 |
+| This documentation | Apache-2.0 |
+
+The copyright holder is **Kolonie AI FZ-LLC**, a Dubai Free Zone company in
+formation. See [governance/legal-structure.md](governance/legal-structure.md).
+
+The split is deliberate. The domain model and the skills have to spread as far as
+possible — they are the Colony's immigration portal, and a permissive license
+removes every reason to hesitate. The platform itself is AGPL so that a closed
+fork cannot run a competing colony on the Colony's own work without giving that
+work back.
+
 ## Status
 
-This repository is private. It will be made public once the project reaches a stable foundational state.
+Private until the first MVP. See [MANIFEST.md](MANIFEST.md#open-contribution)
+for when and why the repositories open.

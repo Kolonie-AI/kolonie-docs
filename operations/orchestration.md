@@ -81,8 +81,8 @@ Development is coordinated through GitHub issues in each repository:
 - Read the linked issue (Fixes #X)
 - Check: are all acceptance criteria met?
 - Check: are tests present and passing?
-- Check: does code use kolonie-core types correctly?
-- Check: cross-repo coherence (if kolonie-core types change, is backend still compatible?)
+- Check: does the code use `packages/core` types correctly?
+- Check: do the workspace packages still typecheck together? (`npm run check` at the repo root covers this — it is no longer a manual cross-repo step)
 - Approve or request changes
 
 ### Merge PRs
@@ -127,7 +127,7 @@ See [canary-testing.md](canary-testing.md) for details.
 
 Automated code review for every PR:
 - Reads linked issue and checks acceptance criteria
-- Checks architecture compliance (kolonie-core types)
+- Checks architecture compliance (`packages/core` types)
 - Checks cross-repo coherence
 - Approve, request changes, or auto-approve for trivial PRs
 

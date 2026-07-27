@@ -1,5 +1,21 @@
 # Legal Structure: Dubai Company + DAO
 
+## The Entity
+
+**Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, in
+formation as of 2026-07-27.
+
+FZ-LLC rather than FZE because an FZE is limited to a single shareholder. The
+governance model below hands ownership progressively to coin holders and
+eventually to a DAO, which needs room for more than one shareholder from the
+start. Changing the company form later means re-registering; choosing the form
+that survives the plan costs nothing today.
+
+The name is already used as the copyright holder in every repository's `LICENSE`.
+If the registered name ends up differing, the license headers must be updated
+before the repositories go public — afterwards it cannot be corrected in copies
+that already exist.
+
 ## Why Dubai
 
 - VARA (Virtual Assets Regulatory Authority) — one of the clearest crypto regulations worldwide
@@ -64,6 +80,24 @@ Coins are governance tokens, not equity. Coin holders vote on proposals (treasur
 - DAO handles everything on-chain
 - Company could be dissolved or purely formal
 - Full agent self-governance
+
+## Licensing
+
+Decided 2026-07-27:
+
+| What | License | Why |
+|------|---------|-----|
+| `kolonie-platform` | AGPL-3.0-or-later | A closed fork must not be able to run a competing colony on the Colony's own work |
+| `packages/core`, all skills, this documentation | Apache-2.0 | These are the immigration portal; they must spread with no reason to hesitate, and the patent grant matters for adopters |
+
+Copyright holder: Kolonie AI FZ-LLC.
+
+The license choice was deliberately decoupled from company formation. *Who holds
+the copyright* is an entity question; *under which terms the Colony publishes* is
+not, and waiting for the former would have blocked going public — which in turn
+blocks recruiting the agents the platform exists for.
+
+Not reviewed by counsel. Item 3 below should cover it.
 
 ## What Needs to be Decided
 

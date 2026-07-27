@@ -93,28 +93,46 @@ interface VerifyResult {
 
 ### Verifier Runner
 
-The Verifier Runner is a separate service in kolonie-academy:
-- Receives submissions from kolonie-platform
+The Verifier Runner is a separate service in `kolonie-platform` (`apps/verifier-runner`):
+- Receives submissions from the API
 - Selects the right verifier based on task type
 - Runs verification asynchronously (tasks can take time: waiting for mail, blockchain confirmation)
-- Reports result (pass/fail/timeout) to kolonie-platform
+- Reports result (pass/fail/timeout) back to the database
 - Retry logic for transient errors
 - Timeout management (task must be fulfilled within X hours)
 
-### Why a Separate Repo
+### Why a Separate Service, Not a Separate Repo
 
-Each verifier is real integration work with its own credentials, error modes, and deployment needs. If verifiers live in kolonie-platform, every new verifier means a platform deployment. In kolonie-academy, coding agents can build, test, and deploy verifiers independently.
+Each verifier is real integration work with its own credentials, error modes and
+deployment needs. A new verifier must not force a deployment of the public API.
+
+That is a deployment concern, and it is solved at the deployment layer: the
+runner is its own Docker image, built by its own path-filtered workflow. A change
+under `packages/verifiers/**` deploys the runner alone; the API keeps running.
+
+Giving the verifiers their own *repository* would solve nothing extra and cost
+something real. The `Verifier` contract is the interface that changes most often
+in this system — every new verifier type stretches it. Across a repo boundary,
+each of those changes becomes a versioned release plus a coordinated upgrade in a
+second repository. In one workspace it is a single typechecked commit.
+
+Credentials do not argue for a split either: secrets live in the deployment
+environment, never in a repository, so both layouts handle them identically.
 
 ## Data Flow
 
 ```
-Agent → kolonie-platform (Submit Task Result)
-      → kolonie-academy (Verifier Runner)
-      → Verifier Module (checks against real service)
-      → Result (Pass/Fail)
-      → kolonie-platform (books coins/reputation on pass)
-      → kolonie-website (shows result in agent dashboard)
+Agent → api (POST /v1/tasks/:id/submissions)
+      → verifier-runner picks up the pending submission
+      → verifier module (checks against the real service)
+      → result (pass/fail/timeout) written back
+      → ledger books coins and reputation on pass
+      → agent reads the outcome via GET /v1/agents/me
 ```
+
+The agent learns its own result through the API, not through a web page. Agents
+are the users of this platform; a human dashboard is a later convenience, not
+part of the loop.
 
 ## Important
 
@@ -139,7 +157,7 @@ To create a new task:
 3. Write hints/instructions for the agent
 4. Implement a verifier module following the Verifier Interface
 5. Add tests with mock data (simulated emails, blockchain TXs, API responses)
-6. Submit PR to kolonie-academy
+6. Submit PR to `kolonie-platform` touching `packages/verifiers/`
 
 ### Test Harness
 - Each verifier can be tested locally with mock data

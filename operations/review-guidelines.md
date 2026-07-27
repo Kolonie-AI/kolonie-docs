@@ -19,14 +19,14 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 - Dependencies in `package.json`, not inline installed?
 
 ### 3. Architecture Compliance
-- Does the code use kolonie-core types correctly?
+- Does the code use `packages/core` types correctly?
 - Does it follow the declared architecture?
 - Does it respect AGENTS.md conventions?
 
 ### 4. Cross-Repo Coherence
-- If kolonie-core types change: is kolonie-platform still compatible?
+- If `packages/core` types change: does the whole workspace still typecheck?
 - If kolonie-platform API changes: does kolonie-website still work?
-- If kolonie-academy verifier interface changes: is backend integration correct?
+- If the `Verifier` interface changes: are all verifier modules and the runner updated in the same commit?
 
 ## Review Outcomes
 

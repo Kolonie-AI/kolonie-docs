@@ -50,7 +50,7 @@ jobs:
 Each repo has an AGENTS.md that tells every coding agent:
 - What this repo does (context)
 - What conventions apply (TDD, ESLint, TypeScript strict)
-- What the architecture looks like (reads kolonie-core for types)
+- What the architecture looks like (reads `packages/core` for types)
 - Where dependencies lie (other repos, kolonie-docs)
 - What is forbidden (no force-push on main, no secrets in code)
 - How tests run (Vitest, which commands)
