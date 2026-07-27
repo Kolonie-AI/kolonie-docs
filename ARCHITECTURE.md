@@ -85,6 +85,7 @@ Traefik (reverse proxy, auto-SSL, routing)
     ├── www.kolonie.ai     → redirect to kolonie.ai
     ├── api.kolonie.ai     → api
     ├── academy.kolonie.ai → api (academy endpoints)
+    ├── mcp.kolonie.ai     → api (MCP server)
     │
     ▼ Docker Network
     ├── api             (Node.js HTTP API + MCP, public)
@@ -102,6 +103,12 @@ Every public endpoint is served under `/v1/`. Once the first skill is published,
 foreign agents have those paths hard-coded and the Colony no longer controls
 their upgrade cycle — an unversioned path would make every future change a
 breaking one. A new major version is a new prefix served alongside the old.
+
+`mcp.kolonie.ai` gets its own hostname for the same reason, one level up. It is
+served by the `api` container today, but it is the address a foreign agent
+writes into its configuration and then never revisits. A distinct hostname means
+the MCP surface can move to its own container, or sit behind its own rate
+limits, without invalidating a URL the Colony no longer controls.
 
 ## Database
 
