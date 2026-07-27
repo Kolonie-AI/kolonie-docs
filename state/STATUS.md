@@ -4,18 +4,22 @@
 
 ## How to read this file
 
-**This file does not track tasks.** Open work lives in GitHub issues, across all
-repositories, and the labels are authoritative:
+**This file does not track tasks.** Open work is GitHub issues; each issue's
+status is the board column it sits in:
+
+<https://github.com/orgs/Kolonie-AI/projects/1>
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --label p0-mvp          # critical path
-gh search issues --owner Kolonie-AI --state open --label ready-to-build  # startable now
-gh search issues --owner Kolonie-AI --state open --label blocked         # stuck, and why
+# startable right now, on the critical path
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
+
+# the whole board at a glance
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
-Human view of the same thing: <https://github.com/orgs/Kolonie-AI/projects/1>
-
-Read the issues **first**, then this file for the narrative they cannot carry:
+Read the board **first**, then this file for the narrative it cannot carry:
 what exists, what is running, and why things were decided the way they were.
 The procedure for all of it is in [AGENTS.md](../AGENTS.md).
 
@@ -34,11 +38,13 @@ If you are picking this up fresh, this is the whole picture in six lines:
 - `kolonie-platform` builds, tests green, and both images are in GHCR.
 - **The critical path is the vertical slice**: persistence decision → Drizzle
   schema → the four `/v1` endpoints → runner loop → ledger booking. It is filed
-  as `p0-mvp` issues in `kolonie-platform`, in dependency order.
+  as `p0-mvp` issues in `kolonie-platform`, in dependency order — only the first
+  is in Ready; the rest sit in Blocked behind it.
 - **Deliberately parked:** the infrastructure work — SSL mode, `ufw`, `fail2ban`,
   backups. Filed in `kolonie-infra`, labelled `p1`. The slice can be built and
   tested locally without any of it. The one infra item that *is* on the critical
   path is the GHCR credential, because nothing deploys without it.
+- Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
 
@@ -64,8 +70,8 @@ If you are picking this up fresh, this is the whole picture in six lines:
   images pushed to GHCR
 - `kolonie-core` archived, superseded by `packages/core`
 - LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
-- Work tracked in GitHub issues with a shared label vocabulary across all three
-  repositories, and a board over them (2026-07-27)
+- Work tracked in GitHub issues across all three repositories, with status held
+  in the board column and priority/area/type in labels (2026-07-27)
 
 ## Key Decisions Made
 
@@ -90,6 +96,8 @@ If you are picking this up fresh, this is the whole picture in six lines:
 | Repos go public at the first MVP; `kolonie-infra` stays private permanently | 2026-07-27 | ✅ Decided |
 | `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ✅ Decided |
 | Task state lives in GitHub issues; documents carry no checkboxes | 2026-07-27 | ✅ Decided |
+| Issue status is the board column; no status labels, no sync script | 2026-07-27 | ✅ Decided |
+| GitHub Team plan, so the board's built-in workflows maintain it | 2026-07-27 | ✅ Decided |
 
 ## Why Task State Moved Out of This File
 
@@ -106,6 +114,20 @@ which one is right. Task status is no different from a balance.
 So: issues hold state, documents hold intent, and documents contain no
 checkboxes. The rule and its two apparent exceptions are spelled out in
 [AGENTS.md §3](../AGENTS.md).
+
+The same argument was then applied a second time, against the first version of
+this process. Status had been recorded twice — as a label on the issue *and* as
+a board column — with a script reconciling the two. That is the identical defect
+one paragraph up, committed while writing the rule against it. The script was not
+solving a GitHub limitation; it was maintaining a duplicate that should not have
+existed.
+
+Status is now the board column and nothing else. This also stopped the process
+fighting the tool: four of GitHub's seven built-in project workflows write to the
+Status field, and none of them can act on a label. With status in the board they
+do the work natively, which is what the Team plan was bought for. The cost is one
+extra token scope — `project` alongside `repo` — which any agent reading the
+board needs regardless.
 
 ## Why the Monorepo Decision Was Reversed
 
@@ -132,7 +154,8 @@ reviews cover it. When it arrives, split then.
 
 ## Open Questions
 
-Filed as issues in `kolonie-docs`, labelled `question` or `idea`:
+Filed as issues in `kolonie-docs`, in the Inbox column, labelled `question` or
+`idea`:
 
 ```bash
 gh issue list -R Kolonie-AI/kolonie-docs --label question

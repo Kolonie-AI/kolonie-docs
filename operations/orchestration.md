@@ -19,33 +19,34 @@ Whether that is actually true is tracked as an issue and tested, not assumed.
 
 | | Holds | Read it with |
 |---|---|---|
-| **GitHub issues** | Every open task, idea and question. The truth | `gh search issues --owner Kolonie-AI --state open` |
-| **Labels** | Status, priority, area. Authoritative | `--label ready-to-build`, `--label p0-mvp` |
-| **[Project board](https://github.com/orgs/Kolonie-AI/projects/1)** | A view for humans. Holds nothing unique | `gh project item-list 1 --owner Kolonie-AI` |
-| **`state/STATUS.md`** | Narrative: what exists, what runs, what was decided and why | Read after the issues |
+| **GitHub issues** | Every open task, idea and question | `gh search issues --owner Kolonie-AI --state open` |
+| **[Project board](https://github.com/orgs/Kolonie-AI/projects/1)** | The status of each issue — the column it is in | `gh project item-list 1 --owner Kolonie-AI` |
+| **Labels** | Priority, area, type. Never status | `--label p0-mvp`, `--label area:infra` |
+| **`state/STATUS.md`** | Narrative: what exists, what runs, what was decided and why | Read after the board |
 | **`ROADMAP.md`** | Phase order and the MVP definition of done | Read once; it changes rarely |
 
-Nothing that belongs in an issue may be duplicated into a document. The full
-rules, the label vocabulary and the literal commands are in
-[AGENTS.md](../AGENTS.md) — that file is the entry point for a new orchestrator.
-This one describes what to do once you are oriented.
+Each fact is recorded exactly once. Status is the board column and nothing else;
+there are no status labels, and no document duplicates either. The full rules,
+the column meanings and the literal commands are in [AGENTS.md](../AGENTS.md) —
+that file is the entry point for a new orchestrator. This one describes what to
+do once you are oriented.
 
 ## The Orchestration Loop
 
 ```
 1. Read AGENTS.md in this repository
-2. List open issues across all repos, by label:
-     p0-mvp         → what is on the critical path
-     ready-to-build → what can be started right now
-     blocked        → what is stuck, and why
-3. Read state/STATUS.md for the narrative — after the issues, not before
+2. Read the board, by column:
+     Ready   → what can be started right now
+     Blocked → what is stuck, and why
+   Cross with the p0-mvp label for the critical path
+3. Read state/STATUS.md for the narrative — after the board, not before
 4. Check the repositories: open PRs, CI status
 5. Decide the next action, in this order of precedence:
-     a. A blocked issue whose blocker is resolved     → unblock it
-     b. A p0-mvp issue that is ready-to-build         → hand off or take it
-     c. A p0-mvp issue blocked only by a missing spec → write the spec
+     a. A Blocked issue whose blocker is resolved     → move it out of Blocked
+     b. A p0-mvp issue in Ready                       → hand off or take it
+     c. A p0-mvp issue blocked only by a missing spec → write the spec, → Ready
      d. Nothing on the critical path is actionable    → say so; do not invent work
-6. Record the outcome on the issue. Move the label
+6. Comment the outcome on the issue. Move the item to the column that is now true
 7. Update state/STATUS.md only if the narrative changed —
    never to record task progress
 ```
@@ -54,8 +55,8 @@ This one describes what to do once you are oriented.
 
 Today there is one maintainer and one managing agent, and a coordination protocol
 would cost more than it saves. When a second orchestrator appears, the mechanism
-is the `in-progress` label: an issue carrying it is claimed, and the claiming
-agent names itself in a comment.
+is the **In Progress** column: an item sitting there is claimed, and the claiming
+agent names itself in a comment on the issue.
 
 An earlier version of this document specified a locking protocol with a dedicated
 `orchestrating` issue and a one-hour staleness timeout. That is a real solution to
@@ -70,7 +71,7 @@ collide — a protocol nobody has needed is a protocol nobody has tested.
 - Break it into issues small enough that one agent finishes one in one sitting
 - Write each to the standard in [AGENTS.md §7](../AGENTS.md): goal, context with
   the deciding document quoted, blockers, acceptance criteria, definition of done
-- Label `area:*`, one of `p0-mvp`/`p1`/`p2`, and `ready-to-build` **only** if an
+- Label `area:*` and one of `p0-mvp`/`p1`/`p2`. Move it to **Ready** only if an
   agent that has never seen the project could pick it up unaided
 
 ### Reviewing PRs
@@ -101,8 +102,8 @@ See [review-guidelines.md](review-guidelines.md).
 Before starting the next phase:
 
 1. No open `p0-mvp` issue from the current phase
-2. No open `blocked` issue whose blocker has quietly been resolved
-3. `state/STATUS.md` matches what the issues say
+2. Nothing in Blocked whose blocker has quietly been resolved
+3. `state/STATUS.md` matches what the board says
 
 ## Canary Feedback Loop
 
@@ -113,7 +114,7 @@ not the same as having one. Revisit once a real agent has completed the loop onc
 
 ## See Also
 
-- [AGENTS.md](../AGENTS.md) — the entry point, label vocabulary, literal commands
+- [AGENTS.md](../AGENTS.md) — the entry point, board columns, label vocabulary, literal commands
 - [Roadmap](../ROADMAP.md) — what to build and in which order
 - [Coding Agents](coding-agents.md) — how contributions enter the repositories
 - [Review Guidelines](review-guidelines.md) — how to review

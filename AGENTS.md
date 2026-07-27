@@ -13,10 +13,9 @@ Open an issue for it before you continue.**
 
 ## 1. What you need
 
-- A GitHub token with `repo` scope and membership in the `Kolonie-AI`
-  organisation. That is all. Everything below works with it.
-- Optionally `project` scope, for the board described in §4. The board is a
-  convenience. Nothing in the process depends on it.
+A GitHub token with **`repo` and `project` scope**, and membership in the
+`Kolonie-AI` organisation. That is all, and both scopes are required: `repo`
+reads the issues, `project` reads the status they are in.
 
 ## 2. What this repository is
 
@@ -35,26 +34,25 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 
 ## 3. Where the work is: issues, not documents
 
-**The state of every open task lives in GitHub issues.** It does not live in the
-Markdown files of this repository, and it does not live in any agent's private
-memory.
+**Every open task is a GitHub issue.** No task lives in the Markdown files of
+this repository, and none lives in any agent's private memory.
 
-This is not a preference. `operations/orchestration.md` states that orchestration
-must be repo-driven rather than agent-bound, *"to eliminate the single point of
-failure."* Any task that exists only in one agent's context breaks that promise
-the moment that agent is replaced.
+This is not a preference. `operations/orchestration.md` requires orchestration to
+be repo-driven rather than agent-bound, *"to eliminate the single point of
+failure."* A task that exists only in one agent's context breaks that promise the
+moment the agent is replaced.
 
 ### The rule that keeps it true
 
 > **No checkboxes in documents.**
 
 Documents describe **intent**; issues carry **state**. A `- [ ]` in a Markdown
-file is state in the wrong place, and it will drift away from reality within a
-week. If you find one, convert it to an issue and delete it.
+file is state in the wrong place, and it drifts within a week. Convert it to an
+issue and delete it.
 
 Two consequences that look like exceptions but are not:
 
-- `ROADMAP.md` contains the MVP definition of done as a list. That list is a
+- `ROADMAP.md` holds the MVP definition of done as a list. That list is a
   **contract** — it defines what "done" means and changes only deliberately.
   Progress against it is tracked in issues, not by ticking it.
 - `state/STATUS.md` records decisions and their reasoning. A decision is a fact
@@ -70,56 +68,47 @@ Two consequences that look like exceptions but are not:
 | Work for a repository that does not exist yet | `kolonie-docs`, with the matching `area:` label |
 | A half-formed idea or an open question | `kolonie-docs`, labelled `idea` or `question` |
 
-**Never create a draft item on the project board.** A draft lives only inside the
-board: it is not in git, not in any repository, not reachable by cloning, and not
-readable without `project` scope. It would reintroduce exactly the single point
-of failure this process exists to remove. Every idea gets a real issue.
+**Never create a draft item on the board.** A draft lives only inside the board
+and is not an issue: it cannot be linked, closed, assigned or found by an issue
+query. Every idea gets a real issue.
 
-## 4. The board is a view, not a store
+## 4. Status lives on the board
 
 <https://github.com/orgs/Kolonie-AI/projects/1>
 
-It exists so a human can see everything at once. It holds no information that is
-not already on the issues.
+An issue's **status is the column it sits in**, and that is the only place it is
+recorded. There are no status labels. An earlier version of this process kept
+both and needed a script to reconcile them — two records of the same fact, which
+is the exact failure mode `docs/decisions.md` D-002 in `kolonie-platform`
+rejected for the coin ledger. One record, or none.
 
-**Labels are authoritative. If a label and the board disagree, the label is
-right.** Fix the board, not the label. If the board were deleted tomorrow, no
-information would be lost — that property is the point, and it is worth
-protecting.
+| Column | Meaning |
+|--------|---------|
+| **Inbox** | Raw idea or open question, not yet specified |
+| **Backlog** | Understood, not scheduled |
+| **Ready** | Spec is complete — any agent can pick this up without asking |
+| **In Progress** | Someone is working on it |
+| **In Review** | A pull request is open |
+| **Blocked** | Waiting on a dependency, a decision, or a human |
+| **Done** | Issue closed |
 
-### Keeping it in sync
+The board maintains itself. GitHub's built-in workflows add new issues from all
+three repositories and move items on close, on PR link and on merge. **You move
+an item only when you change what is true** — taking an issue (→ In Progress),
+finishing a spec (→ Ready), hitting a blocker (→ Blocked).
 
 ```bash
-scripts/sync-board.sh --dry-run   # show what would change
-scripts/sync-board.sh             # add missing issues, correct every status
+gh project item-edit --id <item-id> --project-id PVT_kwDOEmwuYs4BebbB \
+  --field-id PVTSSF_lADOEmwuYs4BebbBzhY1uQw --single-select-option-id <option-id>
 ```
 
-Idempotent, and it only ever writes to the board. Run it at the start of an
-orchestration session and after creating issues.
+Option ids: Inbox `b14e3c08`, Backlog `774c5381`, Ready `ee5ea42c`,
+In Progress `39185de7`, In Review `d66d01e2`, Blocked `535fb10b`, Done `9b67912d`.
 
-It exists because the organisation is on the **GitHub Free plan, which allows
-exactly two enabled project workflows**. Auto-add is configured per repository
-and each instance consumes one of the two, so three repositories plus status
-automation does not fit. The two slots are spent where a human would not notice
-the omission; the script covers the rest.
+## 5. Labels
 
-The GitHub API cannot help here either: of the 29 `projectV2` GraphQL mutations,
-the only one touching workflows is `deleteProjectV2Workflow`. Workflows can be
-read and deleted, never created or enabled. No token scope changes that — do not
-spend time looking for one.
-
-## 5. Label vocabulary
-
-Identical in all three repositories, so a single query spans the whole project.
-
-**Status** — at most one at a time. Closed means done; there is no `done` label.
-
-| Label | Meaning |
-|-------|---------|
-| `ready-to-build` | The spec is complete. Any agent can pick this up without asking |
-| `in-progress` | Someone is actively working on it |
-| `in-review` | A pull request is open |
-| `blocked` | Waiting on a dependency, a decision, or a human |
+Labels carry what belongs to the **issue**, never its status. Identical in all
+three repositories, so one query spans the project.
 
 **Priority**
 
@@ -141,60 +130,56 @@ starts), plus the GitHub defaults `bug` and `documentation`.
 
 Run these. They are the procedure, not an illustration of it.
 
-**1. See everything that is open, across all repositories:**
+**1. What can be started right now, by anyone:**
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --json repository,number,title,labels
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
-**2. What is on the critical path:**
+**2. What is on the critical path and startable — start here:**
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --label p0-mvp
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
-**3. What can be started right now, by anyone:**
+**3. What is stuck, and why** — read the "Blocked by" section of each:
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --label ready-to-build
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
-**4. What is stuck, and why:**
+**4. The whole board at a glance:**
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --label blocked
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
 Then read `state/STATUS.md` for the narrative — what exists, what is running,
-what is deliberately parked. Read it *after* the issues, not before: the issues
-are current by construction, the prose is current by discipline.
+what is deliberately parked. Read it *after* the board, not before: the board is
+current by construction, the prose is current by discipline.
 
 **5. Decide the next action.** In this order of precedence:
 
-1. A `blocked` issue whose blocker has been resolved → unblock it
-2. A `p0-mvp` issue that is `ready-to-build` → hand it off or take it
-3. A `p0-mvp` issue that is blocked only by a missing spec → write the spec
+1. A Blocked issue whose blocker has been resolved → move it out of Blocked
+2. A `p0-mvp` issue in Ready → hand it off or take it
+3. A `p0-mvp` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it
 
-**6. Record what you did on the issue**, not in a document. Move the label — the
-label is the state. Then, if your token carries `project` scope, mirror it onto
-the board in one step:
-
-```bash
-scripts/sync-board.sh
-```
-
-If it does not, stop after the label. The board will be reconciled by whoever
-runs the script next, and nothing is lost in the meantime.
+**6. Record what you did on the issue** — a comment, not a document — and move
+the item to the column that is now true.
 
 ## 7. Writing an issue
 
-A `ready-to-build` issue must be pickup-able by an agent that has never seen this
+An issue in **Ready** must be pickup-able by an agent that has never seen this
 project. That means:
 
 - **Goal** — one paragraph, what exists at the end
-- **Context** — *why*, with the document and section that decided it. Quote the
+- **Context** — *why*, naming the document and section that decided it. Quote the
   constraint rather than paraphrasing; a reader who disagrees with a paraphrase
   cannot check it
 - **Blocked by** — issue numbers, if any
@@ -202,9 +187,9 @@ project. That means:
 - **Definition of done** — the repository's own check command, tests including at
   least one rejection case, and the no-secrets rule
 
-An issue that does not meet this bar keeps `blocked` or no status label. Do not
-label something `ready-to-build` to make the board look better; a badly specified
-issue costs more than an unwritten one.
+An issue that does not meet this bar stays in Backlog or Blocked. Do not move
+something to Ready to make the board look better; a badly specified issue costs
+more than an unwritten one.
 
 ## 8. Confirm with the maintainer before
 

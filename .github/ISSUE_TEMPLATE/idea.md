@@ -25,4 +25,5 @@ labels: idea
       rejected alternatives and what they would have cost
 
 <!-- Use `question` instead of `idea` if it is a decision waiting on a human
-     rather than a thought waiting to be developed. -->
+     rather than a thought waiting to be developed. Either way it belongs in the
+     Inbox column until it is specified. -->

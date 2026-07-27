@@ -30,6 +30,6 @@ labels: ''
 - [ ] Tests present, including at least one rejection case
 - [ ] No secrets, host names or IP addresses in the diff
 
-<!-- Label with: area:*, one of p0-mvp / p1 / p2, and ready-to-build ONLY if an
-     agent that has never seen this project could pick it up unaided.
-     See AGENTS.md in kolonie-docs. -->
+<!-- Label with: area:* and one of p0-mvp / p1 / p2. Labels never carry status.
+     Move the item to Ready on the board ONLY if an agent that has never seen
+     this project could pick it up unaided. See AGENTS.md in kolonie-docs. -->

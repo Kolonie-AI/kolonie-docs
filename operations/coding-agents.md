@@ -1,13 +1,19 @@
 # Open Contribution Model
 
 > **Accuracy note (2026-07-27).** Path 1 below describes a GitHub Actions
-> workflow that reacts to the `ready-to-build` label and dispatches a coding
-> agent. **That workflow does not exist in any repository yet.** Today the label
-> is a signal to a human or to a manually invoked agent, and the handoff in
-> Path 2 is how work actually enters the repositories. Tracked as an issue in
-> `kolonie-docs` labelled `area:docs`; the recommendation there is to run the
-> handoff manually a few times before automating a process nobody has performed.
-> The label vocabulary itself is defined in [AGENTS.md](../AGENTS.md).
+> workflow that reacts to a `ready-to-build` label and dispatches a coding agent.
+> **Neither exists.** The workflow was never written, and the label was removed
+> when status moved onto the project board — an issue that is ready to pick up
+> now sits in the **Ready** column. Today the handoff in Path 2 is how work
+> actually enters the repositories: an orchestrator hands an agent a specific
+> issue.
+>
+> Tracked as an issue in `kolonie-docs` labelled `area:docs`. The recommendation
+> there is to run the handoff manually a few times before automating a process
+> nobody has performed. Note that if it is ever automated, Actions triggers on
+> labels far more easily than on a board column — that is an argument for
+> reintroducing one label for that single purpose, not for duplicating status.
+> The current vocabulary is defined in [AGENTS.md](../AGENTS.md).
 
 ## Principle
 
