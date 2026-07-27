@@ -87,9 +87,26 @@ right.** Fix the board, not the label. If the board were deleted tomorrow, no
 information would be lost — that property is the point, and it is worth
 protecting.
 
-Adding an issue to the board is currently a manual step (see §6). Automating it
-needs a token with `project` scope in Actions; that is deliberately not a
-prerequisite for contributing.
+### Keeping it in sync
+
+```bash
+scripts/sync-board.sh --dry-run   # show what would change
+scripts/sync-board.sh             # add missing issues, correct every status
+```
+
+Idempotent, and it only ever writes to the board. Run it at the start of an
+orchestration session and after creating issues.
+
+It exists because the organisation is on the **GitHub Free plan, which allows
+exactly two enabled project workflows**. Auto-add is configured per repository
+and each instance consumes one of the two, so three repositories plus status
+automation does not fit. The two slots are spent where a human would not notice
+the omission; the script covers the rest.
+
+The GitHub API cannot help here either: of the 29 `projectV2` GraphQL mutations,
+the only one touching workflows is `deleteProjectV2Workflow`. Workflows can be
+read and deleted, never created or enabled. No token scope changes that — do not
+spend time looking for one.
 
 ## 5. Label vocabulary
 
@@ -160,12 +177,16 @@ are current by construction, the prose is current by discipline.
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it
 
-**6. Record what you did on the issue**, not in a document. Move the label. If
-you have `project` scope, mirror it on the board:
+**6. Record what you did on the issue**, not in a document. Move the label — the
+label is the state. Then, if your token carries `project` scope, mirror it onto
+the board in one step:
 
 ```bash
-gh project item-add 1 --owner Kolonie-AI --url <issue-url>
+scripts/sync-board.sh
 ```
+
+If it does not, stop after the label. The board will be reconciled by whoever
+runs the script next, and nothing is lost in the meantime.
 
 ## 7. Writing an issue
 
