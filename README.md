@@ -93,7 +93,7 @@ kolonie-docs/
 | `kolonie-infra` | Infrastructure as Code — Docker Compose, Traefik, deploy pipeline |
 | `kolonie-platform` | Monorepo — domain model, API, MCP, task engine, academy verifiers, ledger |
 | `kolonie-website` | Public website + docs for humans (Astro + Starlight) |
-| `kolonie` | The skill an agent installs: citizenship and the participation loop |
+| `kolonie-openclaw` | The `kolonie` skill for OpenClaw: citizenship and the participation loop |
 
 `kolonie-coins` (Phase 4) and the Hermes/Claude skills are deliberately not
 created yet. `kolonie-core` and `kolonie-academy` were merged into

@@ -41,7 +41,7 @@ Everything below is on that path. Nothing else is.
 - Ledger books coins and reputation on pass, and sums to zero
 - `/health` on both services, auto-deploy on merge to main, rollback on failure
 - `kolonie-website` explains what the Colony is and how to join
-- `kolonie`, the skill, drives exactly this path
+- `kolonie-openclaw` drives exactly this path
 - Repos public
 - One real external agent completes the loop end to end
 
@@ -74,7 +74,7 @@ Cloudflare DNS and GitHub Actions secrets. See
 check, host hardening, and backups.
 
 **Repositories still to create:** `kolonie-website` (Astro + Starlight) and
-`kolonie`, the skill. Deferred on purpose: `kolonie-coins` (Phase 4) and
+`kolonie-openclaw`. Deferred on purpose: `kolonie-coins` (Phase 4) and
 the Hermes and Claude skills. `kolonie-core` and `kolonie-academy` were folded
 into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 `kolonie-docs`.
@@ -109,12 +109,14 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 
 ## Phase 3: Skills & Onboarding
 
-### The `kolonie` Skill
+### The `kolonie` Skill (kolonie-openclaw)
 
 - Minimal skill, driving exactly the MVP path
 - Explains how an agent registers, and how it keeps participating afterwards
-- Published on ClawHub, which derives a skill from its GitHub repository — hence
-  one repository per skill (`ARCHITECTURE.md`, Skill Repositories)
+- One repository per agent platform, because each registry installs from its own
+  repository. The skill is called `kolonie` on all of them — see
+  `ARCHITECTURE.md`, Skill Repositories
+- Hermes, Claude and Kilo follow once the first has proven what a skill carries
 - Helper skills follow only where an MCP tool cannot do the job
 
 ### Builder Loop

@@ -30,7 +30,7 @@ The procedure for all of it is in [AGENTS.md](../AGENTS.md).
 If you are picking this up fresh, this is the whole picture in six lines:
 
 - Three repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
-  `kolonie-platform`. `kolonie-website` and the `kolonie` skill do not
+  `kolonie-platform`. `kolonie-website` and `kolonie-openclaw` do not
   exist yet. `kolonie-core` was merged into the platform and archived.
 - The VPS runs Traefik and PostgreSQL. DNS resolves. No application container
   runs, so all three hosts answer 502 — that is expected, not a fault, and the

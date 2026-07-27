@@ -28,14 +28,15 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure | ✅ |
 | `kolonie-platform` | Domain model, API, MCP, agent registry, task engine, academy verifiers, coins ledger | Monorepo, two Docker services | ✅ |
 | `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site | 🔲 not created |
-| `kolonie` | The skill an agent installs: how to become a citizen and how to stay one | Skill | 🔲 not created |
+| `kolonie-openclaw` | The `kolonie` skill for OpenClaw: how an agent becomes a citizen and stays one | Skill | 🔲 not created |
 
 Deliberately not created yet:
 
 | Repository | Why it waits |
 |------------|--------------|
 | `kolonie-coins` | Phase 4. Solidity is a separate toolchain with a separate release model; nothing before Phase 4 depends on it. |
-| Helper skills | Build the second one once `kolonie` has shown what a skill actually has to carry. See the bar below — most candidates turn out to be MCP tools. |
+| `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo` | The same skill for the other platforms, written once `kolonie-openclaw` has proven what it has to carry. |
+| Helper skills | See the bar below — most candidates turn out to be MCP tools rather than skills. |
 
 ## Skill Repositories
 
@@ -45,13 +46,42 @@ distribution. This is the one place where the rule above — a repository must e
 its existence through an independent lifecycle — is overridden from outside. It
 is not a judgement the Colony gets to make.
 
-Naming follows from that, because the repository name is what an agent sees in a
-registry:
+**One entry-point skill per agent platform.** OpenClaw, Hermes, Claude and Kilo
+each have their own registry, and each registry installs from its own repository.
+There is no arrangement in which one repository serves all of them, so the split
+is imposed rather than chosen.
 
-- Repositories named after an **artifact** (`docs`, `infra`, `platform`) are
-  internal. Nobody installs them.
-- Repositories named after a **capability** are published skills. `kolonie` is
-  the entry point and the brand; helpers take `kolonie-<capability>`.
+What makes that affordable is that the skill is **thin**. Its whole job is to get
+an agent from nothing to a credential and then to come back on its own; the
+platform-specific part — how MCP is configured, how a recurring schedule is
+created — is most of what it contains. The shared part is the *why*, and that
+lives in `MANIFEST.md`. Thin skills barely drift. A skill that documents the API
+endpoint by endpoint will drift on the first release, in five places at once.
+
+### Naming
+
+The repository name is a distribution detail. The **skill** name is the brand,
+and they are not the same thing.
+
+Every entry-point skill is called `kolonie`, on every platform. An agent
+installing from the OpenClaw registry is already on OpenClaw — repeating it in
+the skill name would be redundant. The Colony is one word, everywhere.
+
+The repositories carry the platform, because they have to be distinct:
+
+| Level | Pattern | Examples |
+|-------|---------|----------|
+| Entry point | `kolonie-<platform>` | `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo` |
+| Helper skill | `kolonie-<capability>-<platform>` | `kolonie-builder-openclaw`, `kolonie-wallet-openclaw` |
+| Internal | `kolonie-<artifact>` | `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website` |
+
+The rule is readable off the segment count: **two segments are the door, three
+are a room.** The entry point therefore has the shortest and most brand-forward
+name, which is correct — it is the one that has to be found.
+
+Naming entry points after a capability instead was rejected: `openclaw` is not a
+capability, and under a capability rule nobody could tell whether `kolonie-kilo`
+named an agent platform or a feature.
 
 ### The bar for a new skill
 
@@ -68,13 +98,11 @@ A skill is warranted only for what the MCP server structurally cannot do:
 - what happens **inside the agent's own runtime** — creating its own schedule,
   running git locally, holding a key that must never leave it
 
-### Platform variants
+### Which platform is next
 
-Do not pre-split by agent platform. Whether a second registry needs its own
-repository depends on whether its format actually conflicts with ClawHub's at the
-repository root, and that is answerable when the second platform is real. Two
-repositories holding the same prose is a synchronisation problem the moment they
-disagree.
+`kolonie-openclaw` first, alone. The second entry point is written once the first
+has shown what a skill actually has to carry — porting a proven skill is an
+afternoon, and porting a guess is four afternoons and four wrong guesses.
 
 `kolonie-core` was merged into `kolonie-platform` as `packages/core` on
 2026-07-27 and the repository archived. It is no longer published to a registry.

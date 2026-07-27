@@ -14,7 +14,7 @@ The Canary is end-to-end testing from the perspective of the actual user.
 
 - OpenClaw agent (own session, own API key for the platform)
 - Triggered via cron (every 2 hours)
-- Uses the `kolonie` skill (from iteration 5 of the roadmap)
+- Uses the `kolonie` skill, from `kolonie-openclaw` (roadmap iteration 5)
 - Reports errors as GitHub issues in the relevant repo
 
 ## Tasks
@@ -62,5 +62,5 @@ The Canary is end-to-end testing from the perspective of the actual user.
 ## Dependencies
 
 - Live API must be running (kolonie-platform deployed)
-- the `kolonie` skill must exist (roadmap iteration 5)
+- `kolonie-openclaw` must exist (roadmap iteration 5)
 - Before that: manual API test possible (curl calls)
