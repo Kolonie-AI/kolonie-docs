@@ -58,6 +58,27 @@ Two consequences that look like exceptions but are not:
 - `state/STATUS.md` records decisions and their reasoning. A decision is a fact
   about the past, not an open task.
 
+### The test for what belongs in STATUS.md
+
+The board answers **where work stands**. A document may answer **what exists and
+why**. So before writing a sentence into `state/STATUS.md`, ask:
+
+> Would this sentence still be true if every issue moved to a different column
+> tomorrow?
+
+If yes, it is a fact about the world — *"`packages/db` has five tables and a
+deferred trigger that enforces double entry"* — and it belongs. If no, it is the
+board's answer written down a second time — *"three endpoints are in Ready"* —
+and it will be wrong within a day. Link to the board instead; the query at the
+top of the file is always current, and a sentence never is.
+
+This is easy to get wrong while believing you are following the rule, because
+restating the board reads like helpful context. It is the same duplication
+`docs/decisions.md` D-002 rejected for the coin ledger, and the same one that
+made status labels and board columns disagree until the labels were deleted.
+
+The rule applies to **every** `STATUS.md` in the project, not only this one.
+
 ### Where a new issue belongs
 
 | Kind of work | Repository |

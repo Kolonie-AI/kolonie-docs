@@ -69,12 +69,17 @@ Provider, instance ID and IP are deliberately not recorded here — they live in
 Cloudflare DNS and GitHub Actions secrets. See
 [ARCHITECTURE.md](ARCHITECTURE.md#security).
 
-**Remaining** — filed as issues in `kolonie-infra`: the GHCR pull credential
-(on the critical path, nothing deploys without it), the Cloudflare SSL-mode
-check, host hardening, and backups.
+**Done since**: the GHCR pull credential (2026-07-27) and Cloudflare **Full
+(strict)** with production Let's Encrypt certificates at the origin
+(2026-07-28).
 
-**Repositories still to create:** `kolonie-website` (Astro + Starlight) and
-`kolonie-openclaw`. Deferred on purpose: `kolonie-coins` (Phase 4) and
+**Remaining** — filed as issues in `kolonie-infra`: applying database migrations
+on deploy, which is now the one infra item on the critical path; plus host
+hardening and backups, which are not.
+
+**Repositories:** `kolonie-website` (Astro + Starlight) and `kolonie-openclaw`
+were created on 2026-07-27; none are still outstanding. Deferred on purpose:
+`kolonie-coins` (Phase 4) and
 the Hermes and Claude skills. `kolonie-core` and `kolonie-academy` were folded
 into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 `kolonie-docs`.

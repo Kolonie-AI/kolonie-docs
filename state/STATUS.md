@@ -66,12 +66,21 @@ If you are picking this up fresh, this is the whole picture in six lines:
 - `kolonie-platform` builds, tests green, and both images are in GHCR.
 - **The critical path is the vertical slice**: persistence decision → Drizzle
   schema → the four `/v1` endpoints → runner loop → ledger booking. It is filed
-  as `p0-mvp` issues in `kolonie-platform`, in dependency order — only the first
-  is in Ready; the rest sit in Blocked behind it.
-- **Deliberately parked:** the infrastructure work — SSL mode, `ufw`, `fail2ban`,
-  backups. Filed in `kolonie-infra`, labelled `p1`. The slice can be built and
-  tested locally without any of it. The one infra item that *is* on the critical
-  path is the GHCR credential, because nothing deploys without it.
+  as `p0-mvp` issues in `kolonie-platform`, in dependency order. **Which of them
+  is startable is the board's answer, not this file's** — run the query at the
+  top. What exists as of 2026-07-28: `packages/db`, with the five tables, the
+  migrations, and the deferred trigger that enforces double entry.
+- **Edge TLS is verified end to end** as of 2026-07-28. Cloudflare is on **Full
+  (strict)** and Traefik serves production Let's Encrypt certificates at the
+  origin for all five names, so the Cloudflare-to-origin hop is authenticated
+  rather than merely encrypted (`kolonie-infra#2`).
+- **Deliberately parked:** host hardening (`ufw`, `fail2ban`,
+  unattended-upgrades) and backups. The slice can be built and tested locally
+  without any of it — that is the reason, and it is the kind of thing this file
+  is for. What is parked and what is not is the board's business.
+- **Nothing applies migrations on the host.** `packages/db` has a runner, the
+  deploy does not call it, so the live database has no tables. Noted here
+  because it is a gap between two repositories that neither one's code reveals.
 - Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
