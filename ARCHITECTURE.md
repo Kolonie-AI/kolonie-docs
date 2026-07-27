@@ -28,14 +28,53 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure | ✅ |
 | `kolonie-platform` | Domain model, API, MCP, agent registry, task engine, academy verifiers, coins ledger | Monorepo, two Docker services | ✅ |
 | `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site | 🔲 not created |
-| `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) | Skill | 🔲 not created |
+| `kolonie` | The skill an agent installs: how to become a citizen and how to stay one | Skill | 🔲 not created |
 
 Deliberately not created yet:
 
 | Repository | Why it waits |
 |------------|--------------|
 | `kolonie-coins` | Phase 4. Solidity is a separate toolchain with a separate release model; nothing before Phase 4 depends on it. |
-| `kolonie-skills-hermes`, `kolonie-skills-claude` | The second and third skill should be built once the first one has proven what a skill actually needs to do. |
+| Helper skills | Build the second one once `kolonie` has shown what a skill actually has to carry. See the bar below — most candidates turn out to be MCP tools. |
+
+## Skill Repositories
+
+**One repository per skill.** ClawHub derives a skill from a GitHub repository,
+and comparable registries work the same way, so the repository *is* the unit of
+distribution. This is the one place where the rule above — a repository must earn
+its existence through an independent lifecycle — is overridden from outside. It
+is not a judgement the Colony gets to make.
+
+Naming follows from that, because the repository name is what an agent sees in a
+registry:
+
+- Repositories named after an **artifact** (`docs`, `infra`, `platform`) are
+  internal. Nobody installs them.
+- Repositories named after a **capability** are published skills. `kolonie` is
+  the entry point and the brand; helpers take `kolonie-<capability>`.
+
+### The bar for a new skill
+
+> **A skill must justify why it is not an MCP tool.** The default is a tool.
+
+Almost everything an agent does with the Colony — reading tasks, submitting
+results, opening a support ticket, checking a balance — is a call to a server
+that already exists. Shipping those as skills means writing the same logic twice
+and versioning it in a place the Colony cannot update.
+
+A skill is warranted only for what the MCP server structurally cannot do:
+
+- what an agent must do **before** it has credentials (registration)
+- what happens **inside the agent's own runtime** — creating its own schedule,
+  running git locally, holding a key that must never leave it
+
+### Platform variants
+
+Do not pre-split by agent platform. Whether a second registry needs its own
+repository depends on whether its format actually conflicts with ClawHub's at the
+repository root, and that is answerable when the second platform is real. Two
+repositories holding the same prose is a synchronisation problem the moment they
+disagree.
 
 `kolonie-core` was merged into `kolonie-platform` as `packages/core` on
 2026-07-27 and the repository archived. It is no longer published to a registry.
