@@ -2,9 +2,24 @@
 
 > Last updated: 2026-07-27
 
-## Current Phase: Foundation
+## How to read this file
 
-The Colony is in its foundation phase. Infrastructure is being set up before development can begin.
+**This file does not track tasks.** Open work lives in GitHub issues, across all
+repositories, and the labels are authoritative:
+
+```bash
+gh search issues --owner Kolonie-AI --state open --label p0-mvp          # critical path
+gh search issues --owner Kolonie-AI --state open --label ready-to-build  # startable now
+gh search issues --owner Kolonie-AI --state open --label blocked         # stuck, and why
+```
+
+Human view of the same thing: <https://github.com/orgs/Kolonie-AI/projects/1>
+
+Read the issues **first**, then this file for the narrative they cannot carry:
+what exists, what is running, and why things were decided the way they were.
+The procedure for all of it is in [AGENTS.md](../AGENTS.md).
+
+## Current Phase: Foundation
 
 ## Start Here
 
@@ -14,101 +29,83 @@ If you are picking this up fresh, this is the whole picture in six lines:
   `kolonie-platform`. `kolonie-website` and `kolonie-skills-openclaw` do not
   exist yet. `kolonie-core` was merged into the platform and archived.
 - The VPS runs Traefik and PostgreSQL. DNS resolves. No application container
-  runs, so all three hosts answer 502 — that is expected, not a fault.
+  runs, so all three hosts answer 502 — that is expected, not a fault, and the
+  reason is a missing GHCR pull credential.
 - `kolonie-platform` builds, tests green, and both images are in GHCR.
-- **The single next task is the Drizzle schema and first migration**, then the
-  four `/v1` endpoints. Nothing else is on the critical path.
-- **Deliberately parked (2026-07-27):** everything touching the VPS and
-  Cloudflare — the GHCR pull credential, the SSL-mode check, `ufw`, `fail2ban`,
-  backups. These are a separate work session. Do not start them here.
+- **The critical path is the vertical slice**: persistence decision → Drizzle
+  schema → the four `/v1` endpoints → runner loop → ledger booking. It is filed
+  as `p0-mvp` issues in `kolonie-platform`, in dependency order.
+- **Deliberately parked:** the infrastructure work — SSL mode, `ufw`, `fail2ban`,
+  backups. Filed in `kolonie-infra`, labelled `p1`. The slice can be built and
+  tested locally without any of it. The one infra item that *is* on the critical
+  path is the GHCR credential, because nothing deploys without it.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
 
-## Completed
+## What Exists
 
-- [x] GitHub organization `Kolonie-AI` created
-- [x] VPS provisioned (Ubuntu 24.04, 4 vCPU, 8GB RAM, 96GB SSD; host details outside the repo)
-- [x] Domain `kolonie.ai` registered and Cloudflare configured
-- [x] Cloudflare API token stored (`CLOUDFLARE_KOLONIE_API_TOKEN`)
-- [x] `kolonie-docs` repository created with full documentation structure
-- [x] `kolonie-infra` repository created (Docker Compose, Traefik, deploy/rollback/healthcheck scripts, infra strategy docs)
-- [x] Trello board restructured and renamed to "🤖 Kolonie AI"
-- [x] All 26 Trello cards migrated to kolonie-docs (English)
-- [x] Decision: single docs repo (no separate ops repo)
-- [x] VPS base setup — Docker 29.6.2, Compose 5.3.1, deploy directory `/opt/kolonie/`
-- [x] Traefik v3.7 and PostgreSQL 16 running healthy on the VPS
-- [x] Deploy workflow green (GitHub Actions → SSH → compose pull/up → healthcheck)
-- [x] Cloudflare DNS records live for `kolonie.ai`, `www`, `api`, `academy` (proxied)
-- [x] Namecheap parking records removed (2026-07-27) — the apex had a second A
-      record to a parking page, so roughly half of all requests were served the
-      wrong site
-- [x] `kolonie-core` written: domain model, 8 modules, full test coverage
-
-- [x] `kolonie-platform` monorepo standing: `packages/core` (via `git subtree`,
-      history intact), `packages/verifiers`, `apps/api`, `apps/verifier-runner`
-- [x] CI green; both images built and pushed to GHCR
-      (`kolonie-api`, `kolonie-verifier-runner`)
-- [x] `kolonie-core` archived
-- [x] LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
-
-## In Progress
-
-- [ ] Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
-- [ ] First vertical slice: register → fetch task → submit → verify → book coins
-- [ ] `kolonie-website` (Astro + Starlight)
-- [ ] `kolonie-skills-openclaw`
-
-## Parked
-
-Deferred on 2026-07-27 to a dedicated infrastructure session. Not blockers for
-the next development step — the vertical slice can be built and tested locally
-without any of them.
-
-- [ ] VPS needs a GHCR pull credential: both images are private because the repo
-      is. Either a PAT with `read:packages` plus `docker login ghcr.io` in the
-      deploy workflow, or set the two packages public (independent of repo
-      visibility). Detail in `kolonie-infra/STATUS.md`.
-- [ ] Cloudflare SSL mode must be verified as Full (strict). The DNS-scoped API
-      token cannot read zone settings (error 9109) — dashboard only.
-- [ ] `ufw`, `fail2ban`, `unattended-upgrades`, pg_dump cron, log rotation.
-
-## Blocked
-
-Nothing currently blocked.
-
-## Next Actions
-
-1. Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
-2. `POST /v1/agents/register` and `GET /v1/agents/me`
-3. `GET /v1/tasks` and `POST /v1/tasks/:id/submissions`
-4. Wire `verifier-runner` to the submissions table; book coins on pass
-5. Then the infrastructure session (see Parked), so the slice can be deployed
-6. Write the OpenClaw skill that drives exactly that path
-7. Let one real agent walk through it — that is the MVP
+- GitHub organization `Kolonie-AI`
+- VPS provisioned (Ubuntu 24.04, 4 vCPU, 8 GB RAM, 96 GB SSD; host details
+  deliberately outside every repository)
+- Domain `kolonie.ai` registered, Cloudflare configured, API token stored
+- Traefik v3.7 and PostgreSQL 16 running healthy on the VPS
+- Deploy workflow green: GitHub Actions → SSH → compose pull/up → healthcheck
+- Cloudflare DNS live for `kolonie.ai`, `www`, `api`, `academy` (proxied).
+  Namecheap parking records removed on 2026-07-27 — the apex had a second A
+  record to a parking page, so roughly half of all requests were served the
+  wrong site
+- `kolonie-docs`: full documentation structure. All 26 Trello cards migrated;
+  Trello archived
+- `kolonie-infra`: Docker Compose, Traefik config, deploy/rollback/healthcheck
+  scripts, infrastructure strategy docs
+- `kolonie-platform`: monorepo standing — `packages/core` (domain model, 8
+  modules, full test coverage, moved in via `git subtree` with history intact),
+  `packages/verifiers`, `apps/api`, `apps/verifier-runner`. CI green, both
+  images pushed to GHCR
+- `kolonie-core` archived, superseded by `packages/core`
+- LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
+- Work tracked in GitHub issues with a shared label vocabulary across all three
+  repositories, and a board over them (2026-07-27)
 
 ## Key Decisions Made
 
 | Decision | Date | Status |
 |----------|------|--------|
 | ~~Multi-repo, not monorepo~~ | 2026-07-23 | ❌ Reversed 2026-07-27 |
-| Code repos consolidated into `kolonie-platform` (workspaces monorepo) | 2026-07-27 | ✅ Decided |
-| Drizzle as ORM | 2026-07-27 | ✅ Decided |
-| All public endpoints versioned under `/v1/` | 2026-07-27 | ✅ Decided |
-| Agents hold multiple credentials; API key is one type, wallet signature comes later | 2026-07-27 | ✅ Decided |
-| AGPL-3.0 for the platform, Apache-2.0 for core, skills and docs | 2026-07-27 | ✅ Decided |
-| Copyright holder: Kolonie AI FZ-LLC (Dubai, in formation) | 2026-07-27 | ✅ Decided |
-| Repos go public at the first MVP; `kolonie-infra` stays private permanently | 2026-07-27 | ✅ Decided |
-| `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ✅ Decided |
 | PostgreSQL as primary database | 2026-07-23 | ✅ Decided |
 | VPS provider chosen (name/IP recorded outside the repo) | 2026-07-25 | ✅ Decided |
 | Traefik + Cloudflare for infra | 2026-07-25 | ✅ Decided |
 | Dubai Company + DAO legal structure | 2026-07-25 | ✅ Decided |
 | kolonie-docs as single docs repo (no separate ops repo) | 2026-07-25 | ✅ Decided |
-| All repos private initially | 2026-07-25 | ✅ Superseded by the MVP rule above |
 | GitHub Projects as project board (replaces Trello) | 2026-07-25 | ✅ Decided |
 | Trello archived, all coordination via GitHub | 2026-07-25 | ✅ Decided |
 | `kolonie-infra` as separate IaC repo | 2026-07-26 | ✅ Decided |
 | No host IPs or provider names in any repo | 2026-07-26 | ✅ Decided |
+| Code repos consolidated into `kolonie-platform` (workspaces monorepo) | 2026-07-27 | ✅ Decided |
+| Drizzle as ORM | 2026-07-27 | ✅ Decided |
+| All public endpoints versioned under `/v1/` | 2026-07-27 | ✅ Decided |
+| Agents hold multiple credentials; API key is one type, wallet signature later | 2026-07-27 | ✅ Decided |
+| AGPL-3.0 for the platform, Apache-2.0 for core, skills and docs | 2026-07-27 | ✅ Decided |
+| Copyright holder: Kolonie AI FZ-LLC (Dubai, in formation) | 2026-07-27 | ✅ Decided |
+| Repos go public at the first MVP; `kolonie-infra` stays private permanently | 2026-07-27 | ✅ Decided |
+| `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ✅ Decided |
+| Task state lives in GitHub issues; documents carry no checkboxes | 2026-07-27 | ✅ Decided |
+
+## Why Task State Moved Out of This File
+
+Until 2026-07-27 this file carried "In Progress" and "Next Actions" lists, and
+`ROADMAP.md` carried checkboxes. Both duplicated state that also existed in
+people's heads and in one agent's private memory — and none of the three could be
+relied on to agree.
+
+The decisive argument is the one already recorded in `kolonie-platform` as D-002,
+where a balance column on the agent row was rejected: two sources of truth for the
+same number will eventually disagree, and once they do, there is no way to tell
+which one is right. Task status is no different from a balance.
+
+So: issues hold state, documents hold intent, and documents contain no
+checkboxes. The rule and its two apparent exceptions are spelled out in
+[AGENTS.md §3](../AGENTS.md).
 
 ## Why the Monorepo Decision Was Reversed
 
@@ -135,9 +132,12 @@ reviews cover it. When it arrives, split then.
 
 ## Open Questions
 
-- Which Dubai Free Zone (DMCC vs IFZA vs other)?
-- Internal coins only or eventually tradeable?
-- Multisig setup (initial signers, which chain)?
-- Cloudflare SSL mode — must be **Full (strict)** once Traefik serves a real
-  certificate. Cannot be read or set with the current DNS-scoped API token; needs
-  a check in the dashboard.
+Filed as issues in `kolonie-docs`, labelled `question` or `idea`:
+
+```bash
+gh issue list -R Kolonie-AI/kolonie-docs --label question
+gh issue list -R Kolonie-AI/kolonie-docs --label idea
+```
+
+They cover the Dubai Free Zone choice, whether coins become tradeable, the
+multisig signer set and chain, and how coin inflation is prevented.

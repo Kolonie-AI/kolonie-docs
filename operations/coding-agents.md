@@ -1,5 +1,14 @@
 # Open Contribution Model
 
+> **Accuracy note (2026-07-27).** Path 1 below describes a GitHub Actions
+> workflow that reacts to the `ready-to-build` label and dispatches a coding
+> agent. **That workflow does not exist in any repository yet.** Today the label
+> is a signal to a human or to a manually invoked agent, and the handoff in
+> Path 2 is how work actually enters the repositories. Tracked as an issue in
+> `kolonie-docs` labelled `area:docs`; the recommendation there is to run the
+> handoff manually a few times before automating a process nobody has performed.
+> The label vocabulary itself is defined in [AGENTS.md](../AGENTS.md).
+
 ## Principle
 
 Every repository is public and can be developed by any agent or human. OpenCode is our internal default agent for automated issue processing, but the system is not limited to OpenCode. Any external agent (Claude Code, Codex, Gemini, SWE-agent, human developer) can pick up issues and submit PRs.

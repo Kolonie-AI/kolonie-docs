@@ -2,145 +2,120 @@
 
 ## Purpose
 
-The orchestrator coordinates development across all Colony repositories: breaking roadmaps into issues, coordinating PRs, triggering reviews, merging, and checking iteration gates.
+Orchestration coordinates development across all Colony repositories: turning the
+roadmap into issues, handing them to agents, reviewing what comes back, merging,
+and keeping the repositories coherent.
 
 ## Key Principle
 
-Orchestration is repo-driven, not agent-bound. The procedures live in this repository. Any agent (OpenClaw, Claude Code, Codex, human) can clone this repo and take over orchestration. This eliminates the single point of failure.
+**Orchestration is repo-driven, not agent-bound.** The procedures live in this
+repository and the state lives in GitHub issues. Any agent — OpenClaw, Claude
+Code, Codex — or any human can take over with a GitHub token and one sentence of
+instruction. This eliminates the single point of failure.
+
+Whether that is actually true is tracked as an issue and tested, not assumed.
+
+## Where State Lives
+
+| | Holds | Read it with |
+|---|---|---|
+| **GitHub issues** | Every open task, idea and question. The truth | `gh search issues --owner Kolonie-AI --state open` |
+| **Labels** | Status, priority, area. Authoritative | `--label ready-to-build`, `--label p0-mvp` |
+| **[Project board](https://github.com/orgs/Kolonie-AI/projects/1)** | A view for humans. Holds nothing unique | `gh project item-list 1 --owner Kolonie-AI` |
+| **`state/STATUS.md`** | Narrative: what exists, what runs, what was decided and why | Read after the issues |
+| **`ROADMAP.md`** | Phase order and the MVP definition of done | Read once; it changes rarely |
+
+Nothing that belongs in an issue may be duplicated into a document. The full
+rules, the label vocabulary and the literal commands are in
+[AGENTS.md](../AGENTS.md) — that file is the entry point for a new orchestrator.
+This one describes what to do once you are oriented.
 
 ## The Orchestration Loop
 
 ```
-1. Read this repo, AGENTS.md
-2. Read state/STATUS.md: when was last orchestration, by whom?
-3. Locking check: is there an open issue with label "orchestrating"?
-   - If yes and younger than 1 hour: do nothing, try later
-   - If older than 1 hour or not present: take over
-4. Set lock: create issue with label "orchestrating" + timestamp
-5. Read ROADMAP.md
-6. Check all repos via GitHub API:
-   - Open issues, open PRs, CI status
-7. Determine next action:
-   - PR waiting on review with green CI? → Trigger review
-   - PR approved? → Merge
-   - No issue in progress? → Create next issue from roadmap
-   - Canary bugs open? → Create fix issues (priority over new features)
-8. Update state/STATUS.md: what was done, what comes next
-9. Close lock issue
+1. Read AGENTS.md in this repository
+2. List open issues across all repos, by label:
+     p0-mvp         → what is on the critical path
+     ready-to-build → what can be started right now
+     blocked        → what is stuck, and why
+3. Read state/STATUS.md for the narrative — after the issues, not before
+4. Check the repositories: open PRs, CI status
+5. Decide the next action, in this order of precedence:
+     a. A blocked issue whose blocker is resolved     → unblock it
+     b. A p0-mvp issue that is ready-to-build         → hand off or take it
+     c. A p0-mvp issue blocked only by a missing spec → write the spec
+     d. Nothing on the critical path is actionable    → say so; do not invent work
+6. Record the outcome on the issue. Move the label
+7. Update state/STATUS.md only if the narrative changed —
+   never to record task progress
 ```
 
-## Locking Mechanism
+## Concurrent Orchestrators
 
-Prevents two agents from orchestrating simultaneously:
-- Agent creates a GitHub issue with label `orchestrating`
-- Issue title: "Orchestration run - <timestamp>"
-- Issue body: agent name, start time, planned actions
-- Other agents see the issue and wait
-- After completion: issue is closed
-- If issue older than 1 hour and not closed: considered stale, another agent takes over
+Today there is one maintainer and one managing agent, and a coordination protocol
+would cost more than it saves. When a second orchestrator appears, the mechanism
+is the `in-progress` label: an issue carrying it is claimed, and the claiming
+agent names itself in a comment.
 
-Alternative: GitHub Project Board as state machine. Issues move through columns: Backlog → Ready → In Progress → In Review → Done. Every agent checks the column before acting.
-
-## How an External Agent Becomes Orchestrator
-
-### Example: Claude Code
-1. Developer says to Claude Code: "Clone kolonie/kolonie-docs and orchestrate"
-2. Claude Code clones the repo
-3. Reads AGENTS.md and this file
-4. Follows the loop step by step
-5. Clones/reads other repos via GitHub API to check status
-6. Creates issues, triggers reviews, merges PRs
-7. Updates state/STATUS.md
-
-### Example: Human
-1. Human reads this file
-2. Checks GitHub Project Board
-3. Follows the same procedures manually
-4. Or: human creates own issues and PRs directly
-
-Both follow the same procedures, both produce the same output.
-
-## Coordination via GitHub Issues
-
-Development is coordinated through GitHub issues in each repository:
-- Each issue has clear acceptance criteria
-- Issues are labeled: `ready-to-build`, `in-review`, `blocked`
-- Coding agents pick up `ready-to-build` issues
-- Reviewer agent handles `in-review` issues
+An earlier version of this document specified a locking protocol with a dedicated
+`orchestrating` issue and a one-hour staleness timeout. That is a real solution to
+a problem the Colony does not have yet. Introduce it when two agents actually
+collide — a protocol nobody has needed is a protocol nobody has tested.
 
 ## Procedures
 
-### Create Issues from Roadmap
-- Read ROADMAP.md
-- Take the next unchecked item
-- Break it into small, actionable GitHub issues
-- Each issue: goal, context, acceptance criteria, affected files, test requirements, definition of done
-- Label: `ready-to-build`
+### Turning the Roadmap into Issues
 
-### Review PRs
-- Read the linked issue (Fixes #X)
-- Check: are all acceptance criteria met?
-- Check: are tests present and passing?
-- Check: does the code use `packages/core` types correctly?
-- Check: do the workspace packages still typecheck together? (`npm run check` at the repo root covers this — it is no longer a manual cross-repo step)
-- Approve or request changes
+- Read `ROADMAP.md` and take the next item on the critical path
+- Break it into issues small enough that one agent finishes one in one sitting
+- Write each to the standard in [AGENTS.md §7](../AGENTS.md): goal, context with
+  the deciding document quoted, blockers, acceptance criteria, definition of done
+- Label `area:*`, one of `p0-mvp`/`p1`/`p2`, and `ready-to-build` **only** if an
+  agent that has never seen the project could pick it up unaided
 
-### Merge PRs
-- Only after CI is green and review is approved
-- Merge to main triggers auto-deploy
-- No force-push on main
+### Reviewing PRs
+
+- Read the linked issue. Are all acceptance criteria met?
+- Are tests present, and is at least one of them a rejection case?
+- Does the code use `packages/core` types rather than redeclaring shapes?
+- Does the whole workspace still typecheck? `npm run check` at the repository
+  root covers this — it is no longer a cross-repo step
+- Approve, or request changes with specifics
+
+See [review-guidelines.md](review-guidelines.md).
+
+### Merging
+
+- Only when CI is green and the review is approved
+- Merge to `main` triggers auto-deploy
+- No force-push on `main`
 
 ### Deploy Check
-- After merge: GitHub Actions builds and deploys
-- Health check endpoint called (/health)
-- If health check fails: automatic rollback to previous image
-- Log failure as GitHub issue
 
-### Health Check
-- Every service exposes /health endpoint
-- Returns 200 OK when service is ready
-- Checked after every deployment
-- Uptime monitoring via simple script or Uptime-Kuma
-
-### Canary Run
-- Triggered via cron (every 2 hours)
-- OpenClaw agent registers, walks through academy, reports bugs
-- See [canary-testing.md](canary-testing.md)
+- GitHub Actions builds and deploys on merge
+- `/health` is called; failure triggers automatic rollback to the previous image
+- A failed deploy becomes an issue, labelled `area:infra`
 
 ### Iteration Gates
-Before starting the next iteration:
-1. Cross-repo coherence check — are all repos compatible?
-2. Canary bugs check — any blocking bugs?
-3. Only when green: start next iteration
+
+Before starting the next phase:
+
+1. No open `p0-mvp` issue from the current phase
+2. No open `blocked` issue whose blocker has quietly been resolved
+3. `state/STATUS.md` matches what the issues say
 
 ## Canary Feedback Loop
 
-The canary agent tests the platform every 2 hours:
-- Registers on the platform
-- Walks through academy levels
-- Reports bugs as GitHub issues
-- Labels: `canary-bug`, `performance`
-
-See [canary-testing.md](canary-testing.md) for details.
-
-## Reviewer Agent
-
-Automated code review for every PR:
-- Reads linked issue and checks acceptance criteria
-- Checks architecture compliance (`packages/core` types)
-- Checks cross-repo coherence
-- Approve, request changes, or auto-approve for trivial PRs
-
-See [review-guidelines.md](review-guidelines.md) for details.
-
-## Status Tracking
-
-Current project status is maintained in [state/STATUS.md](../state/STATUS.md). This file is updated at the end of each orchestration cycle.
+A canary agent testing the platform every two hours is described in
+[canary-testing.md](canary-testing.md). It is **not** part of the current loop:
+`ROADMAP.md` places it explicitly outside the MVP, because operating a system is
+not the same as having one. Revisit once a real agent has completed the loop once.
 
 ## See Also
 
-- [Roadmap](../ROADMAP.md) — what to build
-- [Coding Agents](coding-agents.md) — how contributions work
+- [AGENTS.md](../AGENTS.md) — the entry point, label vocabulary, literal commands
+- [Roadmap](../ROADMAP.md) — what to build and in which order
+- [Coding Agents](coding-agents.md) — how contributions enter the repositories
 - [Review Guidelines](review-guidelines.md) — how to review
-- [Deployment](deployment.md) — how to deploy
-- [Canary Testing](canary-testing.md) — how we test with real agents
+- [Deployment](deployment.md) — how deployment works
+- [Status](../state/STATUS.md) — the narrative snapshot

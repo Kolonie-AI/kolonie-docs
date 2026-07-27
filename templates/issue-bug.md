@@ -1,5 +1,9 @@
 # Issue Template: Bug
 
+> These are reference copies for other repositories to adopt. The live
+> templates for this repository are in `.github/ISSUE_TEMPLATE/`, and the
+> standard an issue must meet is defined in [AGENTS.md](../AGENTS.md) §7.
+
 ## Summary
 
 <!-- Brief description of the bug -->
