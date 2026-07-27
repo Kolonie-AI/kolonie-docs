@@ -32,9 +32,26 @@ If you are picking this up fresh, this is the whole picture in six lines:
 - Three repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
   `kolonie-platform`. `kolonie-website` and `kolonie-openclaw` do not
   exist yet. `kolonie-core` was merged into the platform and archived.
-- The VPS runs Traefik and PostgreSQL. DNS resolves. No application container
-  runs, so all three hosts answer 502 — that is expected, not a fault, and the
-  reason is a missing GHCR pull credential.
+- The VPS runs Traefik and PostgreSQL. DNS resolves, now including
+  `mcp.kolonie.ai`. No application container runs, so every host answers 502 —
+  that is expected, not a fault. The reason is that the deploy cannot read the
+  application images from GHCR.
+- **The GHCR images stay private.** Making the packages public was decided and
+  then withdrawn: the organisation blocks it, and the block is right. The images
+  carry no secrets, but they carry the built source of `kolonie-platform`, which
+  is deliberately private until the repositories go public at MVP. "No secrets"
+  is the wrong test. Instead the deploy authenticates with the workflow's own
+  `GITHUB_TOKEN`, forwarded over SSH — it expires with the job, so nothing
+  long-lived sits on the host, and the mechanism is deleted rather than migrated
+  when the repos go public. Decided 2026-07-27, see `kolonie-infra#1`.
+- **The deploy pipeline had never once succeeded**, and nobody had noticed
+  because the failure was read as the known GHCR problem. It was not:
+  `/opt/kolonie/.env` defines `CLOUDFLARE_API_TOKEN`, while `docker-compose.yml`
+  required `CLOUDFLARE_DNS_API_TOKEN` and marked it mandatory — so Compose died
+  during interpolation, before pulling anything, for the whole file rather than
+  for Traefik alone. Fixed 2026-07-27 (`kolonie-infra#7`); the first green
+  deploy in the project's history followed. The host is now inspected with the
+  read-only `Diagnose VPS` workflow rather than reasoned about from a distance.
 - `kolonie-platform` builds, tests green, and both images are in GHCR.
 - **The critical path is the vertical slice**: persistence decision → Drizzle
   schema → the four `/v1` endpoints → runner loop → ledger booking. It is filed
