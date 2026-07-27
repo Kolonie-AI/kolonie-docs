@@ -3,10 +3,14 @@
 ## How to read this file
 
 This file defines **what to build and in which order**. It does not track
-progress — that lives in GitHub issues, labelled `p0-mvp`, `p1` and `p2`:
+progress. Progress is GitHub issues: priority is the `p0-mvp` / `p1` / `p2`
+label, and status is the column the issue sits in on the
+[board](https://github.com/orgs/Kolonie-AI/projects/1).
 
 ```bash
-gh search issues --owner Kolonie-AI --state open --label p0-mvp
+# on the critical path and startable right now
+gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 There are deliberately no checkboxes here. A checkbox in a document is state in
