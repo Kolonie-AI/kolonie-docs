@@ -23,7 +23,7 @@ The Colony is in its foundation phase. Infrastructure is being set up before dev
 
 - [ ] VPS base setup (Docker, fail2ban, ufw, non-root user)
 - [ ] Cloudflare DNS + Traefik reverse proxy
-- [ ] Remaining repos scaffolded (core, backend, frontend, coins, academy, skills)
+- [ ] Remaining repos scaffolded (core, platform, website, coins, academy, skills)
 
 ## Blocked
 

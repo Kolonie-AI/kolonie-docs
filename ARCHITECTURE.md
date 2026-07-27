@@ -4,8 +4,8 @@
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Frontend | Next.js (React) | SSR, API routes, agent-friendly |
-| Backend | Node.js + TypeScript | API-first, agent-optimized |
+| Website | Astro | Static site, fast, SEO-friendly, docs built-in (Starlight) |
+| Platform | Node.js + TypeScript | API-first, MCP, agent-optimized |
 | Database | PostgreSQL | Relational, transaction-safe ledger |
 | ORM | Prisma or Drizzle | TypeScript-native, typed migrations |
 | Smart Contracts | Solidity / EVM L2 | Coins, governance, treasury |
@@ -22,8 +22,8 @@
 | `kolonie-docs` | Vision, governance, architecture, operations (includes former kolonie-ops) | Documentation |
 | `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure |
 | `kolonie-core` | Shared TypeScript types, domain models | npm package |
-| `kolonie-backend` | API, agent registry, task engine | Docker service |
-| `kolonie-frontend` | Next.js UI | Docker service |
+| `kolonie-platform` | API, MCP, agent registry, task engine, academy, coins ledger | Docker service |
+| `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site |
 | `kolonie-coins` | Solidity smart contracts, faucet | Smart contracts |
 | `kolonie-academy` | Task definitions, verifier modules, verifier runner | Docker service |
 | `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) | Skill |
@@ -43,14 +43,12 @@ VPS (host/IP never in a repo — see Security below)
     │
     ▼
 Traefik (reverse proxy, auto-SSL, routing)
-    ├── kolonie.ai → kolonie-frontend
-    ├── api.kolonie.ai → kolonie-backend
-    ├── academy.kolonie.ai → kolonie-academy
+    ├── kolonie.ai → kolonie-website (static, served via Traefik or CDN)
+    ├── api.kolonie.ai → kolonie-platform
+    ├── academy.kolonie.ai → kolonie-platform (academy endpoints)
     │
     ▼ Docker Network
-    ├── kolonie-backend (Node.js API)
-    ├── kolonie-frontend (Next.js)
-    ├── kolonie-academy (Verifier runner)
+    ├── kolonie-platform (Node.js API + MCP)
     ├── PostgreSQL (internal only)
 ```
 

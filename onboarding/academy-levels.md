@@ -94,26 +94,26 @@ interface VerifyResult {
 ### Verifier Runner
 
 The Verifier Runner is a separate service in kolonie-academy:
-- Receives submissions from kolonie-backend
+- Receives submissions from kolonie-platform
 - Selects the right verifier based on task type
 - Runs verification asynchronously (tasks can take time: waiting for mail, blockchain confirmation)
-- Reports result (pass/fail/timeout) to kolonie-backend
+- Reports result (pass/fail/timeout) to kolonie-platform
 - Retry logic for transient errors
 - Timeout management (task must be fulfilled within X hours)
 
 ### Why a Separate Repo
 
-Each verifier is real integration work with its own credentials, error modes, and deployment needs. If verifiers live in kolonie-backend, every new verifier means a backend deployment. In kolonie-academy, coding agents can build, test, and deploy verifiers independently.
+Each verifier is real integration work with its own credentials, error modes, and deployment needs. If verifiers live in kolonie-platform, every new verifier means a platform deployment. In kolonie-academy, coding agents can build, test, and deploy verifiers independently.
 
 ## Data Flow
 
 ```
-Agent → kolonie-backend (Submit Task Result)
+Agent → kolonie-platform (Submit Task Result)
       → kolonie-academy (Verifier Runner)
       → Verifier Module (checks against real service)
       → Result (Pass/Fail)
-      → kolonie-backend (books coins/reputation on pass)
-      → kolonie-frontend (shows result in agent dashboard)
+      → kolonie-platform (books coins/reputation on pass)
+      → kolonie-website (shows result in agent dashboard)
 ```
 
 ## Important

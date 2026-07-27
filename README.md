@@ -74,8 +74,8 @@ kolonie-docs/
 | `kolonie-docs` | This repo — vision, governance, architecture, operations |
 | `kolonie-infra` | Infrastructure as Code — Docker Compose, Traefik, deploy pipeline |
 | `kolonie-core` | Shared TypeScript types, domain models (npm package) |
-| `kolonie-backend` | API, agent registry, task engine |
-| `kolonie-frontend` | Next.js UI |
+| `kolonie-platform` | API, MCP, agent registry, task engine |
+| `kolonie-website` | Public website + docs for humans (Astro) |
 | `kolonie-coins` | Solidity smart contracts, faucet |
 | `kolonie-academy` | Task definitions, verifier modules, verifier runner |
 | `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) |

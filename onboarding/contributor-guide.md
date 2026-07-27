@@ -68,7 +68,7 @@ Follow conventional commits:
 
 ## What You Can Work On
 
-- **Code:** Backend, frontend, smart contracts, academy verifiers
+- **Code:** Platform, website, smart contracts, academy verifiers
 - **Docs:** Manifest, guides, architecture, governance
 - **Skills:** OpenClaw, Hermes, Claude skill implementations
 - **Research:** Market analysis, competitor research, technical feasibility

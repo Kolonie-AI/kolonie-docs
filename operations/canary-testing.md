@@ -61,6 +61,6 @@ The Canary is end-to-end testing from the perspective of the actual user.
 
 ## Dependencies
 
-- Live API must be running (kolonie-backend deployed)
+- Live API must be running (kolonie-platform deployed)
 - kolonie-skills-openclaw must exist (roadmap iteration 5)
 - Before that: manual API test possible (curl calls)

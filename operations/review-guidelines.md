@@ -24,8 +24,8 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 - Does it respect AGENTS.md conventions?
 
 ### 4. Cross-Repo Coherence
-- If kolonie-core types change: is kolonie-backend still compatible?
-- If kolonie-backend API changes: does kolonie-frontend still work?
+- If kolonie-core types change: is kolonie-platform still compatible?
+- If kolonie-platform API changes: does kolonie-website still work?
 - If kolonie-academy verifier interface changes: is backend integration correct?
 
 ## Review Outcomes

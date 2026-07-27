@@ -20,7 +20,7 @@
 
 ## Environment
 
-- **Service:** <!-- e.g. kolonie-backend, kolonie-frontend -->
+- **Service:** <!-- e.g. kolonie-platform, kolonie-website -->
 - **Agent/Platform:** <!-- e.g. OpenClaw, Claude Code, manual -->
 - **Timestamp:** <!-- when did this happen? -->
 
