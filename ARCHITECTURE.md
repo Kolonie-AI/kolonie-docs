@@ -7,7 +7,7 @@
 | Website | Astro | Static site, fast, SEO-friendly, docs built-in (Starlight) |
 | Platform | Node.js + TypeScript | API-first, MCP, agent-optimized |
 | Database | PostgreSQL | Relational, transaction-safe ledger |
-| ORM | Prisma or Drizzle | TypeScript-native, typed migrations |
+| ORM | Drizzle | Plain-SQL migrations stay auditable under the ledger |
 | Smart Contracts | Solidity / EVM L2 | Coins, governance, treasury |
 | Infra | Single VPS + Docker Compose | Open source, full control |
 | Reverse Proxy | Traefik | Auto-SSL, Docker label routing |
@@ -22,13 +22,13 @@ having a genuinely independent lifecycle — a different toolchain, a different
 audience, or a different blast radius. Splitting code that shares a type system
 across repositories is not a boundary, it is a synchronisation problem.
 
-| Repository | Purpose | Type |
-|------------|---------|------|
-| `kolonie-docs` | Vision, governance, architecture, operations | Documentation |
-| `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure |
-| `kolonie-platform` | Domain model, API, MCP, agent registry, task engine, academy verifiers, coins ledger | Monorepo, two Docker services |
-| `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site |
-| `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) | Skill |
+| Repository | Purpose | Type | Exists |
+|------------|---------|------|--------|
+| `kolonie-docs` | Vision, governance, architecture, operations | Documentation | ✅ |
+| `kolonie-infra` | Infrastructure as Code: Docker Compose, Traefik, deploy/rollback scripts | Infrastructure | ✅ |
+| `kolonie-platform` | Domain model, API, MCP, agent registry, task engine, academy verifiers, coins ledger | Monorepo, two Docker services | ✅ |
+| `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site | 🔲 not created |
+| `kolonie-skills-openclaw` | OpenClaw skill (immigration portal) | Skill | 🔲 not created |
 
 Deliberately not created yet:
 

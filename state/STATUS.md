@@ -6,6 +6,24 @@
 
 The Colony is in its foundation phase. Infrastructure is being set up before development can begin.
 
+## Start Here
+
+If you are picking this up fresh, this is the whole picture in six lines:
+
+- Three repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
+  `kolonie-platform`. `kolonie-website` and `kolonie-skills-openclaw` do not
+  exist yet. `kolonie-core` was merged into the platform and archived.
+- The VPS runs Traefik and PostgreSQL. DNS resolves. No application container
+  runs, so all three hosts answer 502 — that is expected, not a fault.
+- `kolonie-platform` builds, tests green, and both images are in GHCR.
+- **The single next task is the Drizzle schema and first migration**, then the
+  four `/v1` endpoints. Nothing else is on the critical path.
+- **Deliberately parked (2026-07-27):** everything touching the VPS and
+  Cloudflare — the GHCR pull credential, the SSL-mode check, `ufw`, `fail2ban`,
+  backups. These are a separate work session. Do not start them here.
+- Read `ROADMAP.md` for the phase order and the MVP definition; read
+  `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
+
 ## Completed
 
 - [x] GitHub organization `Kolonie-AI` created
@@ -37,9 +55,22 @@ The Colony is in its foundation phase. Infrastructure is being set up before dev
 
 - [ ] Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
 - [ ] First vertical slice: register → fetch task → submit → verify → book coins
-- [ ] VPS must authenticate to GHCR before it can pull the private images
 - [ ] `kolonie-website` (Astro + Starlight)
 - [ ] `kolonie-skills-openclaw`
+
+## Parked
+
+Deferred on 2026-07-27 to a dedicated infrastructure session. Not blockers for
+the next development step — the vertical slice can be built and tested locally
+without any of them.
+
+- [ ] VPS needs a GHCR pull credential: both images are private because the repo
+      is. Either a PAT with `read:packages` plus `docker login ghcr.io` in the
+      deploy workflow, or set the two packages public (independent of repo
+      visibility). Detail in `kolonie-infra/STATUS.md`.
+- [ ] Cloudflare SSL mode must be verified as Full (strict). The DNS-scoped API
+      token cannot read zone settings (error 9109) — dashboard only.
+- [ ] `ufw`, `fail2ban`, `unattended-upgrades`, pg_dump cron, log rotation.
 
 ## Blocked
 
@@ -47,12 +78,13 @@ Nothing currently blocked.
 
 ## Next Actions
 
-1. Give the VPS a GHCR pull credential, then deploy with `--profile full`
-2. Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
-3. Ship the vertical slice behind `api.kolonie.ai/v1/`
-4. Write the OpenClaw skill that drives exactly that path
-5. Let one real agent walk through it — that is the MVP
-6. Then: website, go public, canary loop, orchestrator
+1. Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
+2. `POST /v1/agents/register` and `GET /v1/agents/me`
+3. `GET /v1/tasks` and `POST /v1/tasks/:id/submissions`
+4. Wire `verifier-runner` to the submissions table; book coins on pass
+5. Then the infrastructure session (see Parked), so the slice can be deployed
+6. Write the OpenClaw skill that drives exactly that path
+7. Let one real agent walk through it — that is the MVP
 
 ## Key Decisions Made
 
