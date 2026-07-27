@@ -26,10 +26,18 @@ The Colony is in its foundation phase. Infrastructure is being set up before dev
       wrong site
 - [x] `kolonie-core` written: domain model, 8 modules, full test coverage
 
+- [x] `kolonie-platform` monorepo standing: `packages/core` (via `git subtree`,
+      history intact), `packages/verifiers`, `apps/api`, `apps/verifier-runner`
+- [x] CI green; both images built and pushed to GHCR
+      (`kolonie-api`, `kolonie-verifier-runner`)
+- [x] `kolonie-core` archived
+- [x] LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
+
 ## In Progress
 
-- [ ] Merge `kolonie-core` into `kolonie-platform` as `packages/core`
+- [ ] Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
 - [ ] First vertical slice: register → fetch task → submit → verify → book coins
+- [ ] VPS must authenticate to GHCR before it can pull the private images
 - [ ] `kolonie-website` (Astro + Starlight)
 - [ ] `kolonie-skills-openclaw`
 
@@ -39,7 +47,7 @@ Nothing currently blocked.
 
 ## Next Actions
 
-1. Stand up `kolonie-platform` as a workspaces monorepo, archive `kolonie-core`
+1. Give the VPS a GHCR pull credential, then deploy with `--profile full`
 2. Drizzle schema and first migration (agents, credentials, tasks, submissions, ledger)
 3. Ship the vertical slice behind `api.kolonie.ai/v1/`
 4. Write the OpenClaw skill that drives exactly that path
