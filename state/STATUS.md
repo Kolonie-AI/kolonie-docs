@@ -74,6 +74,19 @@ If you are picking this up fresh, this is the whole picture in six lines:
   (strict)** and Traefik serves production Let's Encrypt certificates at the
   origin for all five names, so the Cloudflare-to-origin hop is authenticated
   rather than merely encrypted (`kolonie-infra#2`).
+- **The site was down for about half an hour on 2026-07-28**, and the shape of
+  it is worth keeping. A container had been reporting itself unhealthy for days
+  while serving every request correctly — its health check asked for
+  `localhost`, which resolves to both `127.0.0.1` and `::1`, and the server
+  listened on IPv4 only. Nothing read that status except the deploy script, so
+  nothing complained. Then a **documentation-only** commit triggered a deploy,
+  the deploy believed the stale status, and the rollback deleted every
+  application container because its snapshot had been written without the
+  profile arguments and `--remove-orphans` classified them as orphans.
+  Three faults, none of which was dangerous alone. The lesson is not any one of
+  them: it is that a wrong-but-ignored signal is a loaded gun, because
+  everything downstream treats it as true. Fixed; the remainder is filed as
+  `kolonie-infra#11`, `#12` and `#13`.
 - **Deliberately parked:** host hardening (`ufw`, `fail2ban`,
   unattended-upgrades) and backups. The slice can be built and tested locally
   without any of it — that is the reason, and it is the kind of thing this file
