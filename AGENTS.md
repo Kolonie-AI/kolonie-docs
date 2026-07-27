@@ -191,6 +191,20 @@ An issue that does not meet this bar stays in Backlog or Blocked. Do not move
 something to Ready to make the board look better; a badly specified issue costs
 more than an unwritten one.
 
+### Name capabilities, not tools
+
+A criterion that names a tool — *"tests run under `docker-compose.dev.yml`"* —
+quietly moves part of the definition of done onto whichever machine happens to
+run it. An agent in a sandbox without a Docker socket then cannot tell whether
+its change is correct, which is the failure this whole file exists to prevent,
+one layer down.
+
+Write the capability and let the caller supply it: *"against a real PostgreSQL 16,
+reached through `DATABASE_URL`"*. If a criterion cannot be stated without naming
+a tool, what is meant is a capability, and the capability is what belongs in the
+issue. The rule and its consequences for CI are in
+[operations/testing.md](operations/testing.md).
+
 ## 8. Confirm with the maintainer before
 
 - Creating, deleting, or changing the visibility of a repository

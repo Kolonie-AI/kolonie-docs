@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-07-27
+> Last updated: 2026-07-28
 
 ## How to read this file
 
@@ -126,6 +126,7 @@ If you are picking this up fresh, this is the whole picture in six lines:
 | Task state lives in GitHub issues; documents carry no checkboxes | 2026-07-27 | ✅ Decided |
 | Issue status is the board column; no status labels, no sync script | 2026-07-27 | ✅ Decided |
 | GitHub Team plan, so the board's built-in workflows maintain it | 2026-07-27 | ✅ Decided |
+| Tests reach backing services by environment variable, never by tool; CI is the gate | 2026-07-28 | ✅ Decided |
 
 ## Why Task State Moved Out of This File
 

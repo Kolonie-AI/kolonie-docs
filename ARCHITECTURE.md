@@ -206,7 +206,11 @@ GitHub Actions on merge to `main`:
 5. Health check
 6. Rollback on failure
 
-No staging environment. Only live on VPS. Local development via `docker-compose.dev.yml`.
+No staging environment. Only live on VPS. `docker-compose.dev.yml` brings the
+whole stack up locally and is the convenient way to develop against it — but it
+is a convenience, not a requirement. Tests reach backing services through
+documented environment variables, so that a green run does not depend on which
+tools a given machine has. See [operations/testing.md](operations/testing.md).
 
 Compose files, Traefik config and the deploy/rollback/healthcheck scripts live in `kolonie-infra`. See [operations/deployment.md](operations/deployment.md) for the process.
 

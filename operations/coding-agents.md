@@ -17,7 +17,17 @@
 
 ## Principle
 
-Every repository is public and can be developed by any agent or human. OpenCode is our internal default agent for automated issue processing, but the system is not limited to OpenCode. Any external agent (Claude Code, Codex, Gemini, SWE-agent, human developer) can pick up issues and submit PRs.
+Every repository is developable by any agent or human — the process assumes no
+privileged position and no private knowledge. Any external agent (Claude Code,
+Codex, Gemini, SWE-agent, human developer) can pick up an issue and submit a PR.
+
+**The repositories are not public yet.** All five are private until the first
+MVP, at which point `kolonie-docs`, `kolonie-platform`, `kolonie-website` and
+`kolonie-openclaw` open and `kolonie-infra` stays private permanently — decided
+2026-07-27, tracked as the tripwire issue `kolonie-docs#6`. Until then "open
+contribution" describes how the process is built, not who can currently reach it.
+The distinction matters: it is why the process must already work for a stranger,
+and why nothing here may assume access that only an org member has.
 
 ## Two Ways Work Enters Repos
 
@@ -68,7 +78,7 @@ Each repo has an AGENTS.md that tells every coding agent:
 - What the architecture looks like (reads `packages/core` for types)
 - Where dependencies lie (other repos, kolonie-docs)
 - What is forbidden (no force-push on main, no secrets in code)
-- How tests run (Vitest, which commands)
+- How tests run (Vitest, which commands, which environment variables)
 - What the PR check includes (Lint, Typecheck, Tests, Build)
 - How to create a PR (branch naming, PR template)
 
@@ -77,8 +87,9 @@ AGENTS.md is the "constitution" for every coding agent. It must be so good that 
 ## CONTRIBUTING.md (per Repository)
 
 For human contributors:
-- How to start the repo locally (docker-compose dev)
-- How to run tests
+- How to start the repo locally, and what is genuinely required to do so
+- How to run tests, and which environment variables the ones with a backing
+  service need — see [testing.md](testing.md)
 - How to create a PR
 - What conventions apply
 - How to suggest issues

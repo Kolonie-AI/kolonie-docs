@@ -21,17 +21,27 @@ cd <repo-name>
 # Install dependencies
 npm install
 
-# Run the full stack locally (Traefik, PostgreSQL, services)
-# Compose files live in kolonie-infra:
-#   git clone https://github.com/Kolonie-AI/kolonie-infra.git
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Run tests
-npm test
-
-# Run linting
-npm run lint
+# Everything the repository checks, in one command — the same one CI runs
+npm run check
 ```
+
+You do **not** need Docker to work on most of the codebase. Unit tests carry no
+infrastructure and run anywhere.
+
+Tests that need a database read `DATABASE_URL` and do not care where it points.
+Any PostgreSQL 16 will do — the full local stack is one way to get one:
+
+```bash
+git clone https://github.com/Kolonie-AI/kolonie-infra.git
+cd kolonie-infra && docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+That also starts Traefik, the API, the verifier-runner and the website, which is
+worth it when you are developing against the running system and overkill when you
+only want to run a migration. If you skip it, the database-backed tests skip too
+and tell you which variable to set; CI runs them either way, and CI is what
+decides whether your PR is green. The reasoning is in
+[operations/testing.md](../operations/testing.md).
 
 ## Branch Naming
 
@@ -52,7 +62,7 @@ Follow conventional commits:
 1. Create a branch from `main`
 2. Write tests first (TDD)
 3. Implement until tests pass
-4. Run locally: `npm run lint && npm run typecheck && npm test`
+4. Run locally: `npm run check` — the repository's single check command, the same one CI runs
 5. Push branch and create PR against `main`
 6. Fill out the PR template
 7. Wait for CI and review
@@ -63,7 +73,7 @@ Follow conventional commits:
 - No `any` without justification
 - Error handling: no swallowed errors
 - Secrets via environment variables, never in code
-- Docker for services, not native installation
+- Deployed services run in containers — nothing is installed natively on the host
 - Dependencies in `package.json`, not inline installed
 
 ## What You Can Work On
