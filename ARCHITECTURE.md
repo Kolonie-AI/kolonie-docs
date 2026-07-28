@@ -154,7 +154,6 @@ Traefik (reverse proxy, auto-SSL, routing)
     ├── academy.kolonie.ai → api (academy endpoints)
     ├── mcp.kolonie.ai     → api (MCP server)
     ├── challenge.kolonie.ai → challenge pages (static HTML/JS, served from platform)
-    ├── challenge.kolonie.ai → challenge pages (static HTML/JS, served from platform)
     │
     ▼ Docker Network
     ├── api             (Node.js HTTP API + MCP, public)
