@@ -189,10 +189,40 @@ current by construction, the prose is current by discipline.
 2. A `p0-mvp` issue in Ready → hand it off or take it
 3. A `p0-mvp` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
-   inventing work off it
+   inventing work off it. **Filing something you discovered is not inventing
+   work** — that is step 7. Inventing work is manufacturing tasks off the
+   critical path because nothing is actionable; recording a defect you tripped
+   over is the opposite, it is refusing to let the path lose information
 
 **6. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
+
+**7. Before the turn ends, deposit what you learned.**
+
+Work produces two things: the change you were asked for, and everything you
+found out on the way. The second is the one that gets lost, because steps 1–6
+all assume an issue that already exists. A finding that belongs to no open issue
+has no home in this loop until you give it one.
+
+So for each thing you know now and did not know when the turn started:
+
+| | Where it goes |
+|---|---|
+| The next agent would have to rediscover it | **An issue, now — before you report** |
+| It is a settled fact about what exists or why | **`state/STATUS.md`** |
+| Neither | Say it and let it go |
+
+**An Inbox issue of three sentences is a complete and correct answer.** No spec,
+no acceptance criteria, no labels beyond `area:`. The bar in §7 applies to
+**Ready** — to what someone can pick up unaided — not to what is allowed to
+exist. A finding parked in Inbox costs nothing and can be sharpened later by
+anyone. A finding that exists only in a chat transcript is gone the moment the
+session ends, and the next agent pays for it twice: once to rediscover it, and
+once more because it now looks new.
+
+This step is easy to skip precisely when it matters most — after a long piece of
+work, when the findings feel like context for the human rather than state for the
+project. That feeling is the failure mode, not an exception to it.
 
 ## 7. Writing an issue
 
@@ -235,6 +265,16 @@ issue. The rule and its consequences for CI are in
 - Merging to `main` in a repository you were not asked to work in
 
 Everything else: act, then report.
+
+**Report means the issue or the document.** A message to the maintainer
+summarises what is already written down; it is never the place a finding first
+exists, because it is the one channel that does not survive the session. The
+maintainer is not a storage medium, and neither is a transcript.
+
+If the maintainer has to ask *"should that be an issue?"*, the answer was yes and
+the process has already failed. That is the same class of defect as having to ask
+a follow-up question after reading this file — see the note at the top. It
+happened on 2026-07-28 and is what §6 step 7 was added for.
 
 ## 9. Red lines
 

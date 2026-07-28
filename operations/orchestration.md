@@ -46,10 +46,20 @@ do once you are oriented.
      b. A p0-mvp issue in Ready                       → hand off or take it
      c. A p0-mvp issue blocked only by a missing spec → write the spec, → Ready
      d. Nothing on the critical path is actionable    → say so; do not invent work
+        (filing what you discovered is not inventing work — that is step 8)
 6. Comment the outcome on the issue. Move the item to the column that is now true
 7. Update state/STATUS.md only if the narrative changed —
    never to record task progress
+8. Deposit what you learned, before reporting to anyone:
+     would the next agent have to rediscover it?  → an issue, now
+     is it a settled fact about what exists/why?  → state/STATUS.md
+     neither                                     → say it and let it go
 ```
+
+Step 8 is the one that is skipped, and it is skipped hardest after a long piece
+of work — exactly when the most has been learned. An Inbox issue of three
+sentences discharges it; see [AGENTS.md §6](../AGENTS.md), which carries the full
+rule and the reason it had to be written down.
 
 ## Concurrent Orchestrators
 
