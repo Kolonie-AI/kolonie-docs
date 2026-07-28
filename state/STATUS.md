@@ -305,7 +305,14 @@ If you are picking this up fresh, this is the whole picture in six lines:
 - Domain `kolonie.ai` registered, Cloudflare configured, API token stored
 - Traefik v3.7 and PostgreSQL 16 running healthy on the VPS
 - Deploy workflow green: GitHub Actions → SSH → pull → pin → migrate → seed →
-  compose up → healthcheck. Since 2026-07-28 nothing runs from a mutable tag: the
+  compose up → healthcheck. It takes a `service` and a `version` since
+  2026-07-29, so a deploy can be told which build to ship rather than always
+  taking `:latest`; a push to `kolonie-infra` that touches only documentation no
+  longer deploys at all, and `--remove-orphans` is withheld whenever the compose
+  view is incomplete — a single-service deploy, or an image the deploying token
+  could not read. A merge in `kolonie-platform` still does not reach the host:
+  the cross-repository trigger is blocked on a repository-visibility decision
+  (`kolonie-infra#14`). Since 2026-07-28 nothing runs from a mutable tag: the
   deploy resolves `:latest` to the digest the registry served and records it in
   `state/deployed.env` after the health check passes, so a rollback returns to a
   build that is known to have answered rather than pulling the failed one again
