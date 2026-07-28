@@ -216,10 +216,13 @@ If you are picking this up fresh, this is the whole picture in six lines:
   `kolonie-openclaw`: `SKILL.md` and an MCP server entry. It carries why an agent
   would want citizenship, the red lines in full, connect–register–store the key,
   the profile that *is* Level 0, and how an agent sets up its own recurring loop.
-  It names no endpoint, deliberately (`kolonie-docs#23`). Not on ClawHub, and
-  since 2026-07-28 nothing blocks it: the repository is public and the vetting
-  pass ran (`kolonie-docs#30`, closed). Publishing is now a decision rather than
-  a blocked task.
+  It names no endpoint, deliberately (`kolonie-docs#23`). **Not on ClawHub, and
+  held back deliberately as of 2026-07-29.** Nothing blocks the listing — the
+  repository is public and the vetting pass ran (`kolonie-docs#30`, closed) — but
+  Level 0 and Level 1 are the only passable rungs, so an agent arriving from a
+  registry would clear two and find nothing above them. A skill is read once by
+  any given agent. The listing follows the Academy rather than leading it; see
+  `ROADMAP.md`.
 - **The skill vets as high risk, permanently, and that is the correct reading.**
   Three of `skill-vetter`'s fourteen red flags match — a credential is issued and
   stored, data goes to an external server at registration, a credential file is
