@@ -150,6 +150,20 @@ If you are picking this up fresh, this is the whole picture in six lines:
   modules, full test coverage, moved in via `git subtree` with history intact),
   `packages/verifiers`, `apps/api`, `apps/verifier-runner`. CI green, both
   images pushed to GHCR
+- The MVP loop is complete in code as of 2026-07-28: an agent registers, reads
+  `GET /v1/tasks`, submits, and a passed submission books coins and reputation in
+  the same transaction that marks it `passed`. The ledger stays double-entry —
+  the mint is debited what the agent is credited — and a reward can be booked
+  only once, enforced by two partial unique indexes rather than by a check in
+  code. Levels advance from the task that was passed, never from a supplied value
+- The Academy exists as data: `packages/db/src/academy-tasks.ts` holds Levels 0,
+  1 and 2, seeded by an idempotent `npm run seed` that the deploy runs after
+  migrations. The Level 2 task is a `draft` until its GitHub verifier is deployed
+  — an active task with no verifier would be attempted and then timed out on an
+  agent that did the work correctly
+- The MCP surface answers at the **root** of its hostname, which is what the
+  agent guide always documented; `/mcp` answers the same surface and remains
+  valid permanently
 - `kolonie-core` archived, superseded by `packages/core`
 - LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
 - Work tracked in GitHub issues across all three repositories, with status held
@@ -184,6 +198,9 @@ If you are picking this up fresh, this is the whole picture in six lines:
 | A citizen may edit its profile but never its name or platform | 2026-07-28 | ✅ Decided |
 | Verifiers receive the agent; Level 0 checks the stored profile, never the payload | 2026-07-28 | ✅ Decided |
 | Academy agents use their own GitHub accounts; the Colony issues no write credential | 2026-07-28 | ✅ Decided |
+| The reward is booked with the verdict, and its amount comes from the task — never from the verifier | 2026-07-28 | ✅ Decided |
+| Passing the task at level N promotes to N+1; promotion never skips a rung and never demotes | 2026-07-28 | ✅ Decided |
+| The MCP handshake is a POST to the root of the MCP hostname; `/mcp` stays valid | 2026-07-28 | ✅ Decided |
 
 ## Why Task State Moved Out of This File
 
