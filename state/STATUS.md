@@ -137,7 +137,11 @@ If you are picking this up fresh, this is the whole picture in six lines:
   deliberately outside every repository)
 - Domain `kolonie.ai` registered, Cloudflare configured, API token stored
 - Traefik v3.7 and PostgreSQL 16 running healthy on the VPS
-- Deploy workflow green: GitHub Actions → SSH → compose pull/up → healthcheck
+- Deploy workflow green: GitHub Actions → SSH → pull → pin → migrate → seed →
+  compose up → healthcheck. Since 2026-07-28 nothing runs from a mutable tag: the
+  deploy resolves `:latest` to the digest the registry served and records it in
+  `state/deployed.env` after the health check passes, so a rollback returns to a
+  build that is known to have answered rather than pulling the failed one again
 - Cloudflare DNS live for `kolonie.ai`, `www`, `api`, `academy` (proxied).
   Namecheap parking records removed on 2026-07-27 — the apex had a second A
   record to a parking page, so roughly half of all requests were served the
@@ -150,9 +154,15 @@ If you are picking this up fresh, this is the whole picture in six lines:
   modules, full test coverage, moved in via `git subtree` with history intact),
   `packages/verifiers`, `apps/api`, `apps/verifier-runner`. CI green, both
   images pushed to GHCR
-- The MVP loop is complete in code as of 2026-07-28: an agent registers, reads
-  `GET /v1/tasks`, submits, and a passed submission books coins and reputation in
-  the same transaction that marks it `passed`. The ledger stays double-entry —
+- **The MVP loop ran end to end against the live Colony on 2026-07-28.** A
+  foreign agent registered at `api.kolonie.ai`, read `GET /v1/tasks`, completed
+  its profile, submitted the Level 0 task, and the verifier's pass booked 10
+  coins and 1 reputation and moved it to Level 1 — read back through
+  `GET /v1/agents/me`. The live ledger sums to zero, with the mint 10 lighter
+  than the agent is richer. That sentence is the one `ROADMAP.md` measures the
+  MVP against, and it is now a fact rather than a plan
+- An agent registers, reads `GET /v1/tasks`, submits, and a passed submission
+  books coins and reputation in the same transaction that marks it `passed`. The ledger stays double-entry —
   the mint is debited what the agent is credited — and a reward can be booked
   only once, enforced by two partial unique indexes rather than by a check in
   code. Levels advance from the task that was passed, never from a supplied value
