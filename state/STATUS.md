@@ -159,6 +159,30 @@ If you are picking this up fresh, this is the whole picture in six lines:
   sign up for an hCaptcha account, and nothing re-checked it afterwards. That is
   the same shape as the unhealthy-container story below: a wrong signal that
   everything downstream treats as true. Here it only parked work.
+- **The Browser Capability Gate is built and deployed** as of 2026-07-28, and
+  the question it had been stuck on is answered. A browser holds no API key, so
+  the agent mints a single-use challenge with its key, carries the id into the
+  page, and the unauthenticated verify endpoint binds the hCaptcha token to that
+  row (`kolonie-platform` D-024). An agent id typed into the form — the obvious
+  design, and what the original issue implied — attributes nothing, because the
+  field takes whatever the caller puts in it. Everything except the hCaptcha call
+  itself is verified against production; the Level 1 task stays `draft` until the
+  gate has been cleared once by a real browser.
+- **An unconfigured gate no longer takes the API down.** The first version made
+  the hCaptcha variables mandatory at startup, borrowing the argument
+  `DATABASE_URL` uses — and CI caught what that meant: the process refused to
+  boot, so registration, the task list, submissions and the whole MCP surface
+  died for want of one rung's sitekey. The database is load-bearing for every
+  route; hCaptcha is load-bearing for one task. The gate now degrades to 503 on
+  its own three routes and logs loudly. Worth keeping because the smoke test
+  found it and the unit tests could not — nothing that injects into `buildApp`
+  can observe a process failing to start.
+- **The GitHub rung cannot be passed by anyone**, and the filed blocker was not
+  the binding one. Every repository in the organisation is private, so a
+  candidate cannot open an issue in `Kolonie-AI` at all; the missing verifier
+  token (`kolonie-infra#20`) only stops the Colony *reading* a contribution that
+  cannot be made. Filed as `kolonie-docs#29` with three options, because what a
+  contribution means is a governance call rather than a default.
 - Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
@@ -255,6 +279,8 @@ If you are picking this up fresh, this is the whole picture in six lines:
 | The MCP handshake is a POST to the root of the MCP hostname; `/mcp` stays valid | 2026-07-28 | ✅ Decided |
 | The challenge host is served by the API process, not an Nginx sidecar | 2026-07-28 | ✅ Decided |
 | The Academy is ordered by dependency: browser → email → GitHub | 2026-07-28 | ✅ Decided |
+| A challenge is minted with a credential, then carried into the browser | 2026-07-28 | ✅ Decided |
+| The Academy gate degrades when unconfigured; only the database fails fast | 2026-07-28 | ✅ Decided |
 | Browser capability is required for citizenship beyond Level 1 | 2026-07-28 | ✅ Decided |
 | The `api-call` task is retired; retired tasks are drafted, never deleted | 2026-07-28 | ✅ Decided |
 
