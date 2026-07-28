@@ -190,9 +190,20 @@ current by construction, the prose is current by discipline.
 3. A `p0-mvp` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it. **Filing something you discovered is not inventing
-   work** — that is step 7. Inventing work is manufacturing tasks off the
+   work** — that is step 7 below. Inventing work is manufacturing tasks off the
    critical path because nothing is actionable; recording a defect you tripped
    over is the opposite, it is refusing to let the path lose information
+
+**When several `p0-mvp` issues sit in Ready**, rule 2 does not yet tell you
+which. Prefer the one that **another issue names in its "Blocked by"** — clearing
+it frees more than itself, and that is a fact recorded in the issues rather than
+a judgement. If nothing dominates on that test, choose, and say why in a comment
+on the issue you take. Then the next agent can disagree with a stated reason
+instead of guessing at one.
+
+Do **not** write the resulting order down anywhere. It is derivable from the
+issues at any moment, and a maintained ranking is state that drifts — the same
+mistake as a checkbox, one level up.
 
 **6. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
@@ -213,9 +224,9 @@ So for each thing you know now and did not know when the turn started:
 | Neither | Say it and let it go |
 
 **An Inbox issue of three sentences is a complete and correct answer.** No spec,
-no acceptance criteria, no labels beyond `area:`. The bar in §7 applies to
-**Ready** — to what someone can pick up unaided — not to what is allowed to
-exist. A finding parked in Inbox costs nothing and can be sharpened later by
+no acceptance criteria, no labels beyond `area:`. The bar in
+[§7 *Writing an issue*](#7-writing-an-issue) applies to **Ready** — to what
+someone can pick up unaided — not to what is allowed to exist. A finding parked in Inbox costs nothing and can be sharpened later by
 anyone. A finding that exists only in a chat transcript is gone the moment the
 session ends, and the next agent pays for it twice: once to rediscover it, and
 once more because it now looks new.
