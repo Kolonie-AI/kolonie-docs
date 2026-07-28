@@ -2,23 +2,37 @@
 
 ## Strategy
 
-GitHub Actions on merge to `main`. Build → push → deploy → health check → rollback on failure.
+GitHub Actions. Build → push → deploy → health check.
 
 The executable side of this — `docker-compose.yml`, Traefik config, `scripts/deploy.sh`, `scripts/rollback.sh`, `scripts/healthcheck.sh` and the Actions workflow — lives in `kolonie-infra`. This document describes the process; `kolonie-infra` is the source of truth for the implementation.
 
 ## Pipeline
 
+**This is two pipelines, in two repositories, and they are not connected to each other yet.** An earlier version of this document described the nine steps below as one chain running on merge to `main`. They are not one chain, and writing them as one hid the gap for as long as it took someone to merge code and watch the old build keep serving. Read the split as real:
+
 ```
-1. PR merged to main
-2. GitHub Actions triggered
-3. Build Docker image
-4. Push to GitHub Container Registry (ghcr.io)
-5. SSH to VPS (host from GitHub Actions secret)
-6. docker pull new image
-7. docker-compose up -d (rolling restart)
-8. Health check endpoint called
-9. If health check fails → rollback to previous image
+kolonie-platform, on push to main (path-filtered per image)
+1. Build Docker image
+2. Push to GitHub Container Registry (ghcr.io), tagged :latest and :<sha>
+   — and that is where this pipeline ends today
+
+kolonie-infra, on push to main, or on manual dispatch
+3. SSH to VPS (host from GitHub Actions secret)
+4. git pull the infrastructure configuration
+5. docker pull, docker-compose up -d (rolling restart)
+6. Apply database migrations before the new API serves
+7. Health check endpoint called
 ```
+
+So **a merge in `kolonie-platform` does not deploy anything.** The image is built and pushed; the running container is replaced only the next time this repository is pushed to, or the deploy is dispatched by hand:
+
+```bash
+gh workflow run deploy.yml -R Kolonie-AI/kolonie-infra
+```
+
+Connecting the two is `kolonie-infra#14`, and it is deliberately the step after `kolonie-infra#12` — a deploy cannot be told *which* version to ship while the host pins `:latest`.
+
+Until then, treat a merge to `kolonie-platform` as *built, not shipped*, and dispatch the deploy when you want it live. That is a real gate on production and `AGENTS.md` §8 asks for the maintainer's confirmation at it anyway — but it is not the gate this document used to claim, and the difference matters to anyone deciding whether a fix is out.
 
 ## Environments
 
@@ -33,15 +47,19 @@ No staging. Only local dev and live.
 
 Every service exposes a `/health` endpoint:
 - Returns 200 OK when service is ready
-- Checked after every deployment
-- Failure triggers automatic rollback
+- Checked after every deployment, and a failing check fails the workflow run
+
+What it does **not** do is notice a container that is unhealthy between deployments — nothing watches while the system is merely running (`kolonie-infra#11`).
 
 ## Rollback
 
-If health check fails after deployment:
-1. Stop the new container
-2. Start the previous container (tagged with commit SHA)
-3. Log the failure as a GitHub issue
+Rollback is **manual**, and narrower than it sounds. `scripts/rollback.sh` restores `docker-compose.last.yml` — the previous *configuration*, not a previous build. Since both the compose file and `deploy.sh` pin `ghcr.io/kolonie-ai/kolonie-api:latest`, restoring the configuration pulls the same image again and changes nothing about the application. There is no previous version to return to, which is `kolonie-infra#12`.
+
+A failed deploy therefore ends as an error in the workflow log and nothing else. It does not roll back and it does not open an issue; both were described here before either existed.
+
+```bash
+ssh <deploy user>@<host> 'cd /opt/kolonie && ./scripts/rollback.sh [service]'
+```
 
 ## Secrets
 
