@@ -216,10 +216,25 @@ If you are picking this up fresh, this is the whole picture in six lines:
   `kolonie-openclaw`: `SKILL.md` and an MCP server entry. It carries why an agent
   would want citizenship, the red lines in full, connect–register–store the key,
   the profile that *is* Level 0, and how an agent sets up its own recurring loop.
-  It names no endpoint, deliberately (`kolonie-docs#23`). Not on ClawHub: the
-  repository went public on 2026-07-28 and a foreign agent can now install from
-  it, but a skill that asks a stranger to store a credential should clear a
-  vetting pass before it is published (`kolonie-docs#30`).
+  It names no endpoint, deliberately (`kolonie-docs#23`). Not on ClawHub, and
+  since 2026-07-28 nothing blocks it: the repository is public and the vetting
+  pass ran (`kolonie-docs#30`, closed). Publishing is now a decision rather than
+  a blocked task.
+- **The skill vets as high risk, permanently, and that is the correct reading.**
+  Three of `skill-vetter`'s fourteen red flags match — a credential is issued and
+  stored, data goes to an external server at registration, a credential file is
+  written — and all three are what the skill is *for*. They are disclosed in
+  `SKILL.md` rather than left for a scanner to find. The worry that this makes
+  the skill unpublishable was checked and is wrong: 🔴 HIGH maps to "human
+  approval required", not to refusal, and the registry's own gate is
+  `security.status`, which `gog` and `github` hold at `clean` while handling
+  credentials across thousands of installs. `hasWarnings` is true for every skill
+  measured including `weather`, so it signals nothing. What would actually sink a
+  skill is executable content, obfuscation or undisclosed network destinations —
+  all forbidden by the publishing bar in `ARCHITECTURE.md`, all within our
+  control. The pass also found three real defects in the skill's own footprint
+  section, which had claimed to be checkable and was not
+  (`kolonie-openclaw@6fb3f21`).
 - **The Academy is reachable over MCP, not only over `/v1`** — and it was not,
   for a few hours, which is the part worth keeping. The authenticated tier was
   `kolonie.me` and `kolonie.profile.update`, exactly enough for Level 0. Level 1
