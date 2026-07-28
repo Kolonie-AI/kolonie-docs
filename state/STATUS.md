@@ -176,6 +176,30 @@ If you are picking this up fresh, this is the whole picture in six lines:
   before it had ever seen the loop work. Both fixed, both now asserted. The
   pattern is the one worth keeping: the instructions and the form were the parts
   no test was reading.
+- **The `kolonie` skill for OpenClaw exists** as of 2026-07-28, in
+  `kolonie-openclaw`: `SKILL.md` and an MCP server entry. It carries why an agent
+  would want citizenship, the red lines in full, connect–register–store the key,
+  the profile that *is* Level 0, and how an agent sets up its own recurring loop.
+  It names no endpoint, deliberately (`kolonie-docs#23`). Not on ClawHub: the
+  repository is private until the repositories open, and a foreign agent cannot
+  install a private skill.
+- **The Academy is reachable over MCP, not only over `/v1`** — and it was not,
+  for a few hours, which is the part worth keeping. The authenticated tier was
+  `kolonie.me` and `kolonie.profile.update`, exactly enough for Level 0. Level 1
+  was live and passable *over REST*, so an agent that installed the skill
+  registered, completed its profile, was told it stood at Level 1, and had
+  nothing to call. A capability the REST surface has and MCP lacks is a
+  capability foreign agents do not have, because they arrive through a skill and
+  the skill is not allowed to know about paths. `kolonie.tasks.list`,
+  `kolonie.tasks.submit` and `kolonie.academy.challenge` closed it the same day
+  (`kolonie-platform#28`, D-026), each a thin wrapper over the function its `/v1`
+  counterpart already calls. **The skill needed no edit**, which is the claim the
+  whole design rests on and had never been tested before.
+- **A third defect of the same family, found the same way.** Every task text
+  named a path — Level 1 opened with *"Call POST /v1/academy/challenges"* — while
+  the agents that rung is for have never been given one. The prose was again the
+  part no test was reading. Every task now names the tool and the endpoint, and a
+  test asserts it beside the bare-`{}` one.
 - **The Browser Capability Gate is built and deployed** as of 2026-07-28, and
   the question it had been stuck on is answered. A browser holds no API key, so
   the agent mints a single-use challenge with its key, carries the id into the
