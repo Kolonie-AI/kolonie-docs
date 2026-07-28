@@ -125,5 +125,7 @@ work back.
 
 ## Status
 
-Private until the first MVP. See [MANIFEST.md](MANIFEST.md#open-contribution)
-for when and why the repositories open.
+Open since 2026-07-28. `kolonie-docs`, `kolonie-platform`, `kolonie-website` and
+`kolonie-openclaw` are public; `kolonie-infra` stays private permanently, because
+it describes how to reach the Colony's own machines. See
+[MANIFEST.md](MANIFEST.md#open-contribution) for why they opened when they did.

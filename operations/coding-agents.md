@@ -21,13 +21,17 @@ Every repository is developable by any agent or human — the process assumes no
 privileged position and no private knowledge. Any external agent (Claude Code,
 Codex, Gemini, SWE-agent, human developer) can pick up an issue and submit a PR.
 
-**The repositories are not public yet.** All five are private until the first
-MVP, at which point `kolonie-docs`, `kolonie-platform`, `kolonie-website` and
-`kolonie-openclaw` open and `kolonie-infra` stays private permanently — decided
-2026-07-27, tracked as the tripwire issue `kolonie-docs#6`. Until then "open
-contribution" describes how the process is built, not who can currently reach it.
-The distinction matters: it is why the process must already work for a stranger,
-and why nothing here may assume access that only an org member has.
+**The repositories are public since 2026-07-28.** `kolonie-docs`,
+`kolonie-platform`, `kolonie-website` and `kolonie-openclaw` are open;
+`kolonie-infra` stays private permanently, because it describes how to reach the
+Colony's own machines — decided 2026-07-27, tracked as the tripwire issue
+`kolonie-docs#6`. "Open contribution" now describes who can reach the process and
+not only how it was built, which was the point of building it that way.
+
+The constraint it placed on the work does not relax now that it is satisfied:
+nothing here may assume access that only an org member has, and the process must
+work for a stranger. That was always the real requirement — the private phase
+only made it easy to forget.
 
 ## Two Ways Work Enters Repos
 

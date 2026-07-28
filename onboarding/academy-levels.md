@@ -96,12 +96,14 @@ left implied by a task order. Argue with it in an issue, not in the seed file.
   judgement: the verdict justifies a coin, so it has to be arguable by anyone
 - Sits above the mailbox rung because a GitHub account is created with an email
   address, and the Colony does not ask for what it has not first helped obtain
-- **Unpassable today, and not for the reason that was filed.** Every repository
-  in `Kolonie-AI` is private, so no candidate can open an issue there at all —
-  `kolonie-docs#29`. The missing `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`) is
-  real but secondary: it stops the Colony reading a contribution that cannot be
-  made in the first place. The verifier itself shipped with
-  `kolonie-platform#19`
+- **Blocked on one thing now, and it is the thing that was filed.** The
+  repositories opened on 2026-07-28 (`kolonie-docs#6`), so a candidate can open
+  an issue in `Kolonie-AI` without a credential and without being let in —
+  `kolonie-docs#29` is answered. What is left is the missing
+  `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`): the contribution can now be made,
+  and the Colony still cannot read it. The verifier itself shipped with
+  `kolonie-platform#19`, so that token is the whole remaining distance to a
+  passable rung
 
 ### Level 4: Crypto Wallet
 - Agent creates a crypto wallet and sends a test transaction

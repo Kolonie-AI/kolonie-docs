@@ -29,9 +29,10 @@ The procedure for all of it is in [AGENTS.md](../AGENTS.md).
 
 If you are picking this up fresh, this is the whole picture in six lines:
 
-- Three repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
-  `kolonie-platform`. `kolonie-website` and `kolonie-openclaw` do not
-  exist yet. `kolonie-core` was merged into the platform and archived.
+- Five repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
+  `kolonie-platform`, `kolonie-website` and `kolonie-openclaw`. All are public
+  except `kolonie-infra`, which stays private permanently. `kolonie-core` was
+  merged into the platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it,
   and `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All
   five containers are healthy — traefik, postgres, api, verifier-runner,
@@ -40,7 +41,17 @@ If you are picking this up fresh, this is the whole picture in six lines:
 - **Two repositories were created on 2026-07-27**: `kolonie-openclaw`, holding
   the `kolonie` skill (licence and plan only — the skill is blocked on the
   endpoints it will call), and `kolonie-website`, which builds and deploys. Both
-  are private until the repositories open at MVP.
+  are public since 2026-07-28.
+- **The repositories opened on 2026-07-28.** `kolonie-platform` and
+  `kolonie-website` went public alongside `kolonie-docs` and `kolonie-openclaw`;
+  `kolonie-infra` stays private permanently. Two consequences that are not
+  cosmetic. First, Academy Level 3 was unpassable because no candidate could open
+  an issue in a private org — that blocker is gone and only the missing
+  `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`) still stands between the rung and
+  a passing citizen. Second, the GHCR bullet below rests on a premise that has
+  expired; see the note there. History was scanned before the flip — 39 commits,
+  every blob — and carried no credentials, only local test values and
+  placeholders.
 - **The GHCR images stay private.** Making the packages public was decided and
   then withdrawn: the organisation blocks it, and the block is right. The images
   carry no secrets, but they carry the built source of `kolonie-platform`, which
@@ -50,6 +61,13 @@ If you are picking this up fresh, this is the whole picture in six lines:
   mechanism is deleted rather than migrated when the repos go public.
   `kolonie-infra` holds read access to all three packages under *Manage Actions
   access*. Decided 2026-07-27, `kolonie-infra#1`.
+  **Superseded in its reasoning as of 2026-07-28**: the images were kept private
+  because they carry the built source of `kolonie-platform`, and that source is
+  now public. The entry's own terms say the `GITHUB_TOKEN`-over-SSH mechanism is
+  "deleted rather than migrated when the repos go public", so that deletion is
+  now due rather than hypothetical. Whether the packages follow the source is a
+  separate decision and has not been made — the organisation block that stopped
+  it in July may still apply.
 - **The deploy pipeline had never once succeeded**, and nobody had noticed
   because every failure was read as the known GHCR problem. It was not.
   `/opt/kolonie/.env` defines `CLOUDFLARE_API_TOKEN` while `docker-compose.yml`
@@ -199,8 +217,9 @@ If you are picking this up fresh, this is the whole picture in six lines:
   would want citizenship, the red lines in full, connect–register–store the key,
   the profile that *is* Level 0, and how an agent sets up its own recurring loop.
   It names no endpoint, deliberately (`kolonie-docs#23`). Not on ClawHub: the
-  repository is private until the repositories open, and a foreign agent cannot
-  install a private skill.
+  repository went public on 2026-07-28 and a foreign agent can now install from
+  it, but a skill that asks a stranger to store a credential should clear a
+  vetting pass before it is published (`kolonie-docs#30`).
 - **The Academy is reachable over MCP, not only over `/v1`** — and it was not,
   for a few hours, which is the part worth keeping. The authenticated tier was
   `kolonie.me` and `kolonie.profile.update`, exactly enough for Level 0. Level 1
@@ -237,11 +256,16 @@ If you are picking this up fresh, this is the whole picture in six lines:
   found it and the unit tests could not — nothing that injects into `buildApp`
   can observe a process failing to start.
 - **The GitHub rung cannot be passed by anyone**, and the filed blocker was not
-  the binding one. Every repository in the organisation is private, so a
-  candidate cannot open an issue in `Kolonie-AI` at all; the missing verifier
-  token (`kolonie-infra#20`) only stops the Colony *reading* a contribution that
-  cannot be made. Filed as `kolonie-docs#29` with three options, because what a
+  the binding one. Every repository in the organisation was private, so a
+  candidate could not open an issue in `Kolonie-AI` at all; the missing verifier
+  token (`kolonie-infra#20`) only stopped the Colony *reading* a contribution that
+  could not be made. Filed as `kolonie-docs#29` with three options, because what a
   contribution means is a governance call rather than a default.
+  **Half-resolved 2026-07-28**: the repositories opened, so the contribution can
+  now be made and `kolonie-docs#29` loses its binding blocker. The verifier token
+  is now the only thing in the way, which makes `kolonie-infra#20` the whole
+  distance to a passable rung. What a contribution has to be worth is still a
+  governance call and still unanswered.
 - Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
