@@ -176,6 +176,24 @@ If you are picking this up fresh, this is the whole picture in six lines:
   before it had ever seen the loop work. Both fixed, both now asserted. The
   pattern is the one worth keeping: the instructions and the form were the parts
   no test was reading.
+- **`kolonie-docs` and `kolonie-openclaw` are public** as of 2026-07-28. The
+  other three stay private: `kolonie-platform` and `kolonie-website` until the
+  maintainer opens them (`kolonie-docs#6`), `kolonie-infra` permanently, because
+  it describes how to reach the Colony's own machines.
+- **The history of this repository was rewritten before it was published, and
+  every commit id changed.** Three of the 39 commits carried the VPS origin
+  address — removed from the working tree back in `docs: add kolonie-infra,
+  enforce IP policy`, but a public repository publishes its history too, and
+  Cloudflare proxies these hostnames precisely so that the origin is not directly
+  addressable. `git filter-repo` replaced it everywhere; the file contents are
+  otherwise identical, byte for byte, and all 39 commits are still there.
+  **Anyone holding a clone from before 2026-07-28 must re-clone**, or `git fetch
+  origin && git reset --hard origin/main` — a pull will try to merge two
+  histories that no longer share a commit.
+  The durable fix is not this rewrite. An origin address is weak as a secret:
+  historical DNS records almost certainly hold it already. What actually protects
+  the box is refusing traffic that did not come through Cloudflare —
+  `kolonie-infra#3`, which is now load-bearing rather than hygiene.
 - **The `kolonie` skill for OpenClaw exists** as of 2026-07-28, in
   `kolonie-openclaw`: `SKILL.md` and an MCP server entry. It carries why an agent
   would want citizenship, the red lines in full, connect–register–store the key,
