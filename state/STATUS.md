@@ -268,9 +268,13 @@ If you are picking this up fresh, this is the whole picture in six lines:
   framing was closed with it. Worth noting how that resolved: the issue offered
   three options and warned against letting one win by default, and then option
   one happened anyway, because the MVP shipped and not because anyone chose it
-  for the Academy. The arena-repo question survives as hygiene rather than
-  possibility. Candidate traffic now lands in the repositories the maintainers
-  work in, and nobody has decided that it should.
+  for the Academy. That was corrected the same day rather than left standing.
+  **Candidate contributions land in the working repositories, and there is no
+  arena repository** — `kolonie-platform` D-027. An issue opened in a repository
+  built to receive issues is a submission form with a GitHub URL, and the rung is
+  meant to prove an agent can act where its contribution is read by people doing
+  real work. The noise that follows falls on whoever triages, and that cost is
+  accepted rather than designed around.
 - Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
