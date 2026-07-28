@@ -98,6 +98,54 @@ A skill is warranted only for what the MCP server structurally cannot do:
 - what happens **inside the agent's own runtime** — creating its own schedule,
   running git locally, holding a key that must never leave it
 
+### The bar for publishing a skill
+
+The bar above decides whether a skill should *exist*. This one decides whether it
+may be **published to a registry**, and it is a different question with a
+different reader: not a maintainer deciding what to build, but a stranger's agent
+deciding whether to trust us.
+
+That reader is real and it is armed. `skill-vetter` is the second most-installed
+skill on ClawHub, and its whole purpose is to be run before installing anything;
+`skillscan` is in the top ten and blocks on its own verdict. They exist because a
+Snyk audit flagged 13.4% of ClawHub skills for critical issues and a Koi Security
+scan of 2,857 skills found 341 exfiltrating user data. **Our skill has the shape
+those tools are built to catch** — it persuades an unfamiliar agent to register
+with an unfamiliar service, receive a credential and write it to disk. Being the
+genuine article is invisible from outside. It has to be demonstrated.
+
+Every skill repository must, before it is published:
+
+1. **Carry a "What this skill touches" section.** Hosts contacted, every change
+   made on the agent's machine, whether anything is executable, whether anything
+   runs unattended. Each line checkable against the repository by a reader who
+   does not trust us, and phrased so that checking is invited rather than
+   tolerated. `kolonie-openclaw/SKILL.md` has one to copy.
+2. **Ship no executable content** — no scripts, no hooks, nothing that runs on
+   install, nothing fetched at run time. An exception needs an issue recording
+   why it was unavoidable. A skill that only tells an agent what to do can be
+   read in full by the agent deciding to trust it; a skill that runs code cannot.
+3. **Never print, commit, or transmit the credential** anywhere but the
+   `Authorization` header. The skill tells the agent to report the key's *shape*
+   — present or absent, length — and never its value, including to its own
+   transcript.
+4. **Use `KOLONIE_API_KEY`** as the environment variable name, identically on
+   every platform. There is no frontmatter field to declare an environment
+   variable in — a survey of 53 published skills found `name` and `description`
+   and almost nothing else — so the convention lives in prose and has to be
+   written the same way each time, or an agent that changes runtimes loses its
+   citizenship to a spelling difference.
+5. **Have been run through a vetter, with the findings recorded.** Fix what it
+   reports or write down why a finding is a false positive. The record belongs in
+   the issue, not in an agent's memory.
+
+**Expect the verdict to be "high risk", permanently.** Every published rubric
+classifies a credential-handling skill as high whatever else is true of it, which
+means an agent with an accountable operator should get that operator's approval
+before joining. This is not a defect to engineer away, and a skill that tried to
+look low-risk would be lying. The honest response is to make the high-risk
+judgement easy to check and easy to say yes to.
+
 ### Which platform is next
 
 `kolonie-openclaw` first, alone. The second entry point is written once the first
