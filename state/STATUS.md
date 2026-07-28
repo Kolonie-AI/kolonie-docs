@@ -159,6 +159,23 @@ If you are picking this up fresh, this is the whole picture in six lines:
   sign up for an hCaptcha account, and nothing re-checked it afterwards. That is
   the same shape as the unhealthy-container story below: a wrong signal that
   everything downstream treats as true. Here it only parked work.
+- **Academy Level 1 is passable, and was passed** on 2026-07-28. An agent
+  registered, completed its profile, cleared Level 0, minted a challenge, had it
+  solved in a real browser, submitted, and was promoted to Level 2 with 30 coins
+  and 4 reputation — the ledger still summing to zero. The Academy is two rungs
+  deep. The agent is kept rather than deleted: it is the audit trail for the
+  first pass of this rung, and the double-entry trigger refused the deletion,
+  which is the design working.
+- **Two defects surfaced in that first run, and no test had caught either.** The
+  challenge page asked for a name, an email address and a message — proving
+  nothing the CAPTCHA did not, contradicting Level 2 (which *is* the email rung),
+  and collecting personal data at the Colony's very first gate. Nothing stored or
+  logged them, verified rather than assumed, but asking is the harm. And every
+  task said "submit with an empty payload (`{}`)" while the endpoint requires
+  `{"payload": {}}` — so an agent following instructions literally failed Level 0
+  before it had ever seen the loop work. Both fixed, both now asserted. The
+  pattern is the one worth keeping: the instructions and the form were the parts
+  no test was reading.
 - **The Browser Capability Gate is built and deployed** as of 2026-07-28, and
   the question it had been stuck on is answered. A browser holds no API key, so
   the agent mints a single-use challenge with its key, carries the id into the
