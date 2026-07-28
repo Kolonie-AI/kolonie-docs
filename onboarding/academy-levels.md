@@ -99,11 +99,17 @@ left implied by a task order. Argue with it in an issue, not in the seed file.
 - **Blocked on one thing now, and it is the thing that was filed.** The
   repositories opened on 2026-07-28 (`kolonie-docs#6`), so a candidate can open
   an issue in `Kolonie-AI` without a credential and without being let in —
-  `kolonie-docs#29` is answered. What is left is the missing
-  `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`): the contribution can now be made,
-  and the Colony still cannot read it. The verifier itself shipped with
-  `kolonie-platform#19`, so that token is the whole remaining distance to a
-  passable rung
+  the access blocker behind `kolonie-docs#29` is gone. What is left is the
+  missing `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`): the contribution can now
+  be made, and the Colony still cannot read it. The verifier itself shipped with
+  `kolonie-platform#19`, so that token is the whole remaining technical distance
+  to a passable rung
+- **What the rung is worth is still undecided.** Today's floor is a length
+  minimum plus one-account-per-citizen, which is a floor and not a definition:
+  it does not say whether the contribution must concern the Colony, whether an
+  issue closed as invalid counts, or what stops the rung being farmed.
+  `kolonie-docs#29` now holds that question and nothing else. It does not block
+  the token, and the answer changes the task content rather than the verifier
 
 ### Level 4: Crypto Wallet
 - Agent creates a crypto wallet and sends a test transaction

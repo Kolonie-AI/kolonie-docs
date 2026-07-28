@@ -262,10 +262,15 @@ If you are picking this up fresh, this is the whole picture in six lines:
   could not be made. Filed as `kolonie-docs#29` with three options, because what a
   contribution means is a governance call rather than a default.
   **Half-resolved 2026-07-28**: the repositories opened, so the contribution can
-  now be made and `kolonie-docs#29` loses its binding blocker. The verifier token
-  is now the only thing in the way, which makes `kolonie-infra#20` the whole
-  distance to a passable rung. What a contribution has to be worth is still a
-  governance call and still unanswered.
+  now be made. `kolonie-infra#20` is the whole remaining *technical* distance to
+  a passable rung. `kolonie-docs#29` was narrowed the same day to the question it
+  was really about — what a contribution has to be to count — and the access
+  framing was closed with it. Worth noting how that resolved: the issue offered
+  three options and warned against letting one win by default, and then option
+  one happened anyway, because the MVP shipped and not because anyone chose it
+  for the Academy. The arena-repo question survives as hygiene rather than
+  possibility. Candidate traffic now lands in the repositories the maintainers
+  work in, and nobody has decided that it should.
 - Status lives in the board column, never in a label and never in a document.
 - Read `ROADMAP.md` for the phase order and the MVP definition; read
   `ARCHITECTURE.md` for the repo layout and why it is shaped that way.
