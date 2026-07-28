@@ -115,6 +115,20 @@ Before starting the next phase:
 2. Nothing in Blocked whose blocker has quietly been resolved
 3. `state/STATUS.md` matches what the board says
 
+## Blocked on Human Action
+
+Some issues cannot proceed without a human doing something first: creating an external account, making a legal decision, or approving a sensitive change.
+
+The label `blocked:human` marks these issues across all repos. It works as a process convention, not a technical gate:
+
+- **Create a blocker issue** assigned to the human, labeled `blocked:human` + `p0-mvp` (or relevant priority)
+- **Label all dependent issues** with `blocked:human` so they are visibly blocked
+- **Cross-reference** via issue comments: blocker issue lists what it blocks, dependent issues name the blocker
+- **When the human completes the task**, they comment "Done" on the blocker issue
+- **The agent** then removes `blocked:human` from all dependent issues and continues
+
+In future sessions, an agent can scan for `blocked:human` issues to immediately understand what is stuck and why, without needing to remember context from previous conversations.
+
 ## Canary Feedback Loop
 
 A canary agent testing the platform every two hours is described in
