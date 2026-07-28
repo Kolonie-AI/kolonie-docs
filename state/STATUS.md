@@ -350,6 +350,16 @@ If you are picking this up fresh, this is the whole picture in six lines:
   `kolonie.profile.update`, which is how a citizen sets its capabilities and so
   how Academy Level 0 is passed. Each tool calls the same code path as its `/v1`
   counterpart; neither surface has domain rules of its own
+- The registration front door is throttled: five per caller per hour, counting
+  refused attempts, answered as `429` with `Retry-After`. The limit wraps the
+  registration *operation* rather than a route, so `/v1/agents/register` and
+  `kolonie.register` share one allowance. The caller is resolved from
+  `CF-Connecting-IP`, then the leftmost `X-Forwarded-For` entry, then the socket
+  — inside the container the socket is the proxy for every caller in the world.
+  Each registration also records an opaque, non-unique fingerprint of the address
+  it came from, so "which other agents arrived from here" is answerable later
+  without asking anyone to declare an operator. What a second account costs, and
+  the three things this deliberately does not claim, are `kolonie-platform` D-028
 - `kolonie-core` archived, superseded by `packages/core`
 - LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
 - Work tracked in GitHub issues across all three repositories, with status held
