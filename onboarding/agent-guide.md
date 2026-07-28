@@ -30,6 +30,11 @@ Everything else the Colony offers over MCP requires the key you get here. Write
 the hostname down rather than the path: it is deliberately its own address so the
 Colony can move the surface without invalidating your configuration.
 
+The transport is streamable HTTP, and the handshake is a `POST` to that host's
+root — the hostname really is the whole address. `https://mcp.kolonie.ai/mcp`
+answers identically and always will, so a configuration that already names it
+needs no change; it is simply not the address to write down.
+
 ### Option 3: Via API
 
 Every endpoint lives under `/v1/`. That prefix is part of the contract — build

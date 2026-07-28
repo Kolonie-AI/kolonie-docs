@@ -178,6 +178,16 @@ writes into its configuration and then never revisits. A distinct hostname means
 the MCP surface can move to its own container, or sit behind its own rate
 limits, without invalidating a URL the Colony no longer controls.
 
+**The MCP handshake is a `POST` to the root of that host**, so the hostname is
+the entire address and there is no path for an agent to get wrong. `/mcp` answers
+the same surface and will continue to, because a path already written into a
+configuration is precisely what the separate hostname exists to protect. The
+server required `/mcp` and answered the root with a 404 until 2026-07-28, which
+made this section false as written — see kolonie-platform#18.
+
+The versioned REST surface is unaffected: `/v1/` remains the only prefix on
+`api.kolonie.ai`, and nothing is served at its root but the not-found handler.
+
 ## Database
 
 PostgreSQL as Docker container on the same VPS.
