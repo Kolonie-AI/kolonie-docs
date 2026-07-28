@@ -8,42 +8,42 @@ The executable side of this — `docker-compose.yml`, Traefik config, `scripts/d
 
 ## Pipeline
 
-**This is two pipelines, in two repositories, and the wire between them is still missing.** An earlier version of this document described them as one chain running on merge to `main`. They are not one chain, and writing them as one hid the gap for as long as it took someone to merge code and watch the old build keep serving.
+One chain, connected end to end since 2026-07-29 (`kolonie-infra#14`), and verified by watching a merge reach the host.
 
 ```
 kolonie-platform, on push to main (path-filtered per image)
 1. Build the Docker image
 2. Push to GitHub Container Registry, tagged :latest and :<sha>
-   — and that is where this pipeline ends today
+3. Call the deploy workflow in kolonie-infra, naming the service and :<sha>
 
-kolonie-infra, on push to main (documentation excluded), or on manual dispatch
-3. SSH to the VPS (host from an organisation secret)
-4. git pull the infrastructure configuration
-5. Pull the named build, and resolve it to the digest the registry served
-6. Apply database migrations, and seed the Academy tasks — out of the new
+kolonie-infra, deploy workflow
+4. SSH to the VPS (host from an organisation secret)
+5. git pull the infrastructure configuration
+6. Pull the named build, and resolve it to the digest the registry served
+7. Apply database migrations, and seed the Academy tasks — out of the new
    image, before anything serves from it
-7. docker compose up -d
-8. Health check, then record the digest that answered
+8. docker compose up -d
+9. Health check, then record the digest that answered
 ```
 
-So **a merge in `kolonie-platform` does not deploy anything.** The image is built and pushed; the running container is replaced the next time `kolonie-infra` is pushed to with a change that affects the running system, or when the deploy is dispatched by hand.
+**The version is the point.** The deploy takes an image tag as an argument and the build passes the commit it just pushed, so what runs is a function of a commit. Deploying `:latest` would ship whatever finished building most recently — which need not be the commit that asked for the deploy, and need not be a commit anyone reviewed.
 
-**What did land (2026-07-29).** The deploy now *takes a version*, which is what a connected chain would need in order to ship a specific build:
+`kolonie-infra` deploys on its own pushes too, filtered so a documentation-only commit does not redeploy production (`kolonie-infra#13`). The filter is an ignore-list rather than an allow-list: a change that is *not* deployed is much harder to notice than one that is, so anything not provably inert deploys.
+
+A deploy can always be asked for by hand, and that ignores every filter:
 
 ```bash
 gh workflow run deploy.yml -R Kolonie-AI/kolonie-infra \
   -f service=api -f version=<sha or latest>
 ```
 
-`version` applies to the named service alone — the three images are built by three workflows in two repositories and share no version. It defaults to `latest`, which is what a push to `kolonie-infra` means: re-deploy whatever is current.
+**Why this needed `kolonie-infra` to be public.** A reusable workflow stored in a private repository cannot be used from a public one, and `kolonie-platform` opened on 2026-07-28. That rule — not anything in the workflow — is what blocked the shape `kolonie-infra#14` decided. The repository's history was rewritten and it went public on 2026-07-29; `state/STATUS.md` carries what that cost.
 
-**Why the wire is still missing.** `kolonie-infra#14` decided the shape — organisation secrets plus a reusable workflow called from the image build — and GitHub refuses it: *actions and reusable workflows stored in private repositories cannot be used in public or internal repositories.* `kolonie-platform` is public since `kolonie-docs#6`; `kolonie-infra` is private. The issue now carries the two remaining options, and both are the maintainer's call.
+**The credential lives in one place.** `VPS_HOST` and `VPS_SSH_KEY` are organisation secrets, visible to `kolonie-infra` and `kolonie-platform`, and the deploy workflow names the two it needs rather than inheriting the caller's secrets. The rejected alternative was a fine-grained token plus `repository_dispatch` — it works anywhere, and it costs an additional long-lived credential whose entire power is *deploy production*.
 
-**`kolonie-infra` deploys are filtered** so a documentation-only commit does not redeploy production (`kolonie-infra#13`). The filter is an ignore-list rather than an allow-list: a change that is *not* deployed is much harder to notice than one that is, so anything not provably inert deploys. `workflow_dispatch` ignores the filter entirely.
+**`--remove-orphans` is conditional, and a cross-repository deploy is why.** The deploy runs under the token of whichever repository triggered it, and `kolonie-platform` cannot read the website package. Without the guard, `detect_profile` would drop that profile and the flag would delete a website container that was serving perfectly well — the 2026-07-28 outage from a new direction. It is now passed only on a full deploy where every image was reachable. The first cross-repository deploy hit exactly this case and left the website running.
 
-Until the wire exists, treat a merge to `kolonie-platform` as *built, not shipped*, and dispatch the deploy when you want it live. That is a real gate on production and `AGENTS.md` §8 asks for the maintainer's confirmation at it anyway — but it is not the gate this document used to claim, and the difference matters to anyone deciding whether a fix is out.
-
-**The credential lives in one place.** `VPS_HOST` and `VPS_SSH_KEY` are organisation secrets, visible to `kolonie-infra` and `kolonie-platform`, and the deploy workflow names the two it needs rather than inheriting the caller's secrets.
+**`AGENTS.md` §8 still applies.** Automatic deployment is not permission to merge whatever you like: it means a merge *is* a deployment, so the confirmation moves to the merge rather than disappearing.
 
 ## Environments
 

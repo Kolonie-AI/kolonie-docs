@@ -126,6 +126,7 @@ work back.
 ## Status
 
 Open since 2026-07-28. `kolonie-docs`, `kolonie-platform`, `kolonie-website` and
-`kolonie-openclaw` are public; `kolonie-infra` stays private permanently, because
-it describes how to reach the Colony's own machines. See
+`kolonie-openclaw` are public, and `kolonie-infra` joined them on 2026-07-29 —
+its history was rewritten first to remove the origin address and the hosting
+provider's name, which is why it had stayed closed. See
 [MANIFEST.md](MANIFEST.md#open-contribution) for why they opened when they did.

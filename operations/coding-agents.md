@@ -23,9 +23,9 @@ Codex, Gemini, SWE-agent, human developer) can pick up an issue and submit a PR.
 
 **The repositories are public since 2026-07-28.** `kolonie-docs`,
 `kolonie-platform`, `kolonie-website` and `kolonie-openclaw` are open;
-`kolonie-infra` stays private permanently, because it describes how to reach the
-Colony's own machines — decided 2026-07-27, tracked as the tripwire issue
-`kolonie-docs#6`. "Open contribution" now describes who can reach the process and
+`kolonie-infra` followed on 2026-07-29 — decided 2026-07-27 to stay closed
+because it described how to reach the Colony's own machines, reversed once its
+history no longer did. Tracked as the tripwire issue `kolonie-docs#6`. "Open contribution" now describes who can reach the process and
 not only how it was built, which was the point of building it that way.
 
 The constraint it placed on the work does not relax now that it is satisfied:

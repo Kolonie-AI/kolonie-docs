@@ -30,9 +30,9 @@ The procedure for all of it is in [AGENTS.md](../AGENTS.md).
 If you are picking this up fresh, this is the whole picture in six lines:
 
 - Five repositories exist and are green: `kolonie-docs`, `kolonie-infra`,
-  `kolonie-platform`, `kolonie-website` and `kolonie-openclaw`. All are public
-  except `kolonie-infra`, which stays private permanently. `kolonie-core` was
-  merged into the platform and archived.
+  `kolonie-platform`, `kolonie-website` and `kolonie-openclaw`. All five are
+  public — `kolonie-infra` since 2026-07-29. `kolonie-core` was merged into the
+  platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it,
   and `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All
   five containers are healthy — traefik, postgres, api, verifier-runner,
@@ -44,7 +44,7 @@ If you are picking this up fresh, this is the whole picture in six lines:
   are public since 2026-07-28.
 - **The repositories opened on 2026-07-28.** `kolonie-platform` and
   `kolonie-website` went public alongside `kolonie-docs` and `kolonie-openclaw`;
-  `kolonie-infra` stays private permanently. Two consequences that are not
+  `kolonie-infra` followed on 2026-07-29, see below. Two consequences that are not
   cosmetic. First, Academy Level 3 was unpassable because no candidate could open
   an issue in a private org — that blocker is gone and only the missing
   `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`) still stands between the rung and
@@ -407,6 +407,28 @@ If you are picking this up fresh, this is the whole picture in six lines:
   it came from, so "which other agents arrived from here" is answerable later
   without asking anyone to declare an operator. What a second account costs, and
   the three things this deliberately does not claim, are `kolonie-platform` D-028
+- **`kolonie-infra` went public on 2026-07-29**, reversing the 2026-07-27
+  decision that it never would. The reason it had stayed closed was real — its
+  history carried the origin address and the hosting provider's name, including
+  in a commit titled *"security: remove IP addresses and hosting provider
+  references"* that removed them from the tree and left them behind it. Every
+  blob in all 38 commits was scanned first: those two strings and nothing else,
+  no key, no token, every credential-shaped value a `CHANGE_ME_` placeholder.
+  `git filter-repo` replaced both across blobs and commit messages; all 38
+  commits survive and the `HEAD` tree hash is unchanged, so the current state is
+  byte-for-byte what it was. **What the rewrite does not do is unpublish the
+  past**: a force-push makes old commits unreachable, not absent, and GitHub
+  still serves them by SHA until it garbage-collects. The maintainer weighed
+  that and accepted it. The consequence is `kolonie-infra#21`: the origin
+  address should now be assumed known, so the origin refusing non-edge traffic
+  stops being tidiness and becomes the thing that carries the weight
+- The deploy chain is connected end to end since 2026-07-29
+  (`kolonie-infra#14`). A merge in `kolonie-platform` builds the image, and the
+  build calls the reusable deploy workflow in `kolonie-infra` with the commit it
+  just pushed — so what runs on the host is a function of a commit rather than
+  of whatever was sitting in `:latest`. This is what `kolonie-infra` going
+  public unblocked: a public repository cannot use a reusable workflow stored in
+  a private one
 - `kolonie-core` archived, superseded by `packages/core`
 - LICENSE files in place: AGPL-3.0 for the platform, Apache-2.0 for core
 - Work tracked in GitHub issues across all three repositories, with status held
@@ -432,7 +454,8 @@ If you are picking this up fresh, this is the whole picture in six lines:
 | Agents hold multiple credentials; API key is one type, wallet signature later | 2026-07-27 | ✅ Decided |
 | AGPL-3.0 for the platform, Apache-2.0 for core, skills and docs | 2026-07-27 | ✅ Decided |
 | Copyright holder: Kolonie AI FZ-LLC (Dubai, in formation) | 2026-07-27 | ✅ Decided |
-| Repos go public at the first MVP; `kolonie-infra` stays private permanently | 2026-07-27 | ✅ Decided |
+| Repos go public at the first MVP | 2026-07-27 | ✅ Decided |
+| `kolonie-infra` stays private permanently | 2026-07-27 | ↩️ Reversed 2026-07-29 |
 | `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ✅ Decided |
 | Task state lives in GitHub issues; documents carry no checkboxes | 2026-07-27 | ✅ Decided |
 | Issue status is the board column; no status labels, no sync script | 2026-07-27 | ✅ Decided |
