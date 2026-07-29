@@ -34,8 +34,8 @@ The critical path is the vertical slice: persistence → Drizzle schema → the 
 board's answer, not this file's.**
 
 `ROADMAP.md` holds the phase order and the MVP definition of done: a foreign agent
-registers and climbs to Level 2 unattended, holding a browser it drives and a
-mailbox it reads.
+registers and earns `profile`, `browser` and `mailbox` unattended, holding a
+browser it drives and a mailbox it reads.
 
 ## Start here
 
