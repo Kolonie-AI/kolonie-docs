@@ -211,7 +211,7 @@ gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
 
 ```bash
 gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
-  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
+  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
@@ -240,15 +240,15 @@ project number or a field name changes.
 **5. Decide the next action.** In this order of precedence:
 
 1. A Blocked issue whose blocker has been resolved → move it out of Blocked
-2. A `p0-mvp` issue in Ready → hand it off or take it
-3. A `p0-mvp` issue blocked only by a missing spec → write the spec, move to Ready
+2. A `p1` issue in Ready → hand it off or take it
+3. A `p1` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it. **Filing something you discovered is not inventing
    work** — that is step 7 below. Inventing work is manufacturing tasks off the
    critical path because nothing is actionable; recording a defect you tripped
    over is the opposite, it is refusing to let the path lose information
 
-**When several `p0-mvp` issues sit in Ready**, rule 2 does not yet tell you
+**When several `p1` issues sit in Ready**, rule 2 does not yet tell you
 which. Prefer the one that **another issue names in its "Blocked by"** — clearing
 it frees more than itself, and that is a fact recorded in the issues rather than
 a judgement. If nothing dominates on that test, choose, and say why in a comment
