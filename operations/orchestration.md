@@ -21,7 +21,7 @@ Whether that is actually true is tracked as an issue and tested, not assumed.
 |---|---|---|
 | **GitHub issues** | Every open task, idea and question | `gh search issues --owner Kolonie-AI --state open` |
 | **[Project board](https://github.com/orgs/Kolonie-AI/projects/1)** | The status of each issue — the column it is in | `gh project item-list 1 --owner Kolonie-AI` |
-| **Labels** | Priority, area, type. Never status | `--label p0-mvp`, `--label area:infra` |
+| **Labels** | Priority, area, type. Never status | `--label p1`, `--label area:infra` |
 | **`state/STATUS.md`** | What exists and what runs, right now — present tense only | Read after the board |
 | **`state/decisions.md`** | What was decided, and whether it still stands | Read when a choice looks arbitrary |
 | **`operations/incidents.md`** | What went wrong, and what it taught | Read before repeating an approach |
@@ -40,13 +40,13 @@ do once you are oriented.
 2. Read the board, by column:
      Ready   → what can be started right now
      Blocked → what is stuck, and why
-   Cross with the p0-mvp label for the critical path
+   Cross with the p1 label for the critical path
 3. Read state/STATUS.md for what exists and runs — after the board, not before
 4. Check the repositories: open PRs, CI status
 5. Decide the next action, in this order of precedence:
      a. A Blocked issue whose blocker is resolved     → move it out of Blocked
-     b. A p0-mvp issue in Ready                       → hand off or take it
-     c. A p0-mvp issue blocked only by a missing spec → write the spec, → Ready
+     b. A p1 issue in Ready                       → hand off or take it
+     c. A p1 issue blocked only by a missing spec → write the spec, → Ready
      d. Nothing on the critical path is actionable    → say so; do not invent work
         (filing what you discovered is not inventing work — that is step 8)
 6. Comment the outcome on the issue. Move the item to the column that is now true
@@ -85,7 +85,7 @@ collide — a protocol nobody has needed is a protocol nobody has tested.
 - Break it into issues small enough that one agent finishes one in one sitting
 - Write each to the standard in [AGENTS.md §7](../AGENTS.md): goal, context with
   the deciding document quoted, blockers, acceptance criteria, definition of done
-- Label `area:*` and one of `p0-mvp`/`p1`/`p2`. Move it to **Ready** only if an
+- Label `area:*` and one of `p1`/`p2`. Move it to **Ready** only if an
   agent that has never seen the project could pick it up unaided
 
 ### Reviewing PRs
@@ -115,7 +115,7 @@ See [review-guidelines.md](review-guidelines.md).
 
 Before starting the next phase:
 
-1. No open `p0-mvp` issue from the current phase
+1. No open `p1` issue from the current phase
 2. Nothing in Blocked whose blocker has quietly been resolved
 3. `state/STATUS.md` still describes what actually exists and runs
 
@@ -125,7 +125,7 @@ Some issues cannot proceed without a human doing something first: creating an ex
 
 The label `blocked:human` marks these issues across all repos. It works as a process convention, not a technical gate:
 
-- **Create a blocker issue** assigned to the human, labeled `blocked:human` + `p0-mvp` (or relevant priority)
+- **Create a blocker issue** assigned to the human, labeled `blocked:human` + `p1` (or relevant priority)
 - **Label all dependent issues** with `blocked:human` so they are visibly blocked
 - **Cross-reference** via issue comments: blocker issue lists what it blocks, dependent issues name the blocker
 - **When the human completes the task**, they comment "Done" on the blocker issue

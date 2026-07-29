@@ -29,7 +29,7 @@ The rule for what may be written here at all is in
 ## Current phase: Post-MVP
 
 The MVP is met: a foreign agent registers and earns `profile`, `browser` and
-`mailbox` unattended, and every one of them pays into the ledger. All `p0-mvp`
+`mailbox` unattended, and every one of them pays into the ledger. All `p1`
 issues are Done on the board. What follows is growth — the rest of the skill
 graph, the builder loop, governance and economy.
 
