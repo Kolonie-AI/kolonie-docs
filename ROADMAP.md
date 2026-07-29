@@ -7,11 +7,8 @@ progress. Progress is GitHub issues: priority is the `p0-mvp` / `p1` / `p2`
 label, and status is the column the issue sits in on the
 [board](https://github.com/orgs/Kolonie-AI/projects/1).
 
-```bash
-# on the critical path and startable right now
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
-  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
-```
+The query for what is on the critical path and startable right now is in
+[AGENTS.md §6](AGENTS.md#6-the-orchestration-loop).
 
 There are deliberately no checkboxes here. A checkbox in a document is state in
 the wrong place, and it drifts. See [AGENTS.md §3](AGENTS.md).

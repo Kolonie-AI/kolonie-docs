@@ -33,12 +33,8 @@ There is one place: the [project board](https://github.com/orgs/Kolonie-AI/proje
 An issue in the **Ready** column is specified well enough to start without asking
 anyone. The column *is* the status — there are no status labels, and there is no
 `ready-to-build` label. [`AGENTS.md`](../AGENTS.md) §4 and §5 are the single
-definition of the columns and the label vocabulary; neither is restated here.
-
-```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
-  --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
-```
+definition of the columns and the label vocabulary; neither is restated here, and
+neither are the queries — those are [`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop).
 
 ## Three ways work enters a repository
 

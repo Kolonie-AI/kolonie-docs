@@ -22,7 +22,9 @@ Whether that is actually true is tracked as an issue and tested, not assumed.
 | **GitHub issues** | Every open task, idea and question | `gh search issues --owner Kolonie-AI --state open` |
 | **[Project board](https://github.com/orgs/Kolonie-AI/projects/1)** | The status of each issue — the column it is in | `gh project item-list 1 --owner Kolonie-AI` |
 | **Labels** | Priority, area, type. Never status | `--label p0-mvp`, `--label area:infra` |
-| **`state/STATUS.md`** | Narrative: what exists, what runs, what was decided and why | Read after the board |
+| **`state/STATUS.md`** | What exists and what runs, right now — present tense only | Read after the board |
+| **`state/decisions.md`** | What was decided, and whether it still stands | Read when a choice looks arbitrary |
+| **`operations/incidents.md`** | What went wrong, and what it taught | Read before repeating an approach |
 | **`ROADMAP.md`** | Phase order and the MVP definition of done | Read once; it changes rarely |
 
 Each fact is recorded exactly once. Status is the board column and nothing else;
@@ -39,7 +41,7 @@ do once you are oriented.
      Ready   → what can be started right now
      Blocked → what is stuck, and why
    Cross with the p0-mvp label for the critical path
-3. Read state/STATUS.md for the narrative — after the board, not before
+3. Read state/STATUS.md for what exists and runs — after the board, not before
 4. Check the repositories: open PRs, CI status
 5. Decide the next action, in this order of precedence:
      a. A Blocked issue whose blocker is resolved     → move it out of Blocked
@@ -48,12 +50,14 @@ do once you are oriented.
      d. Nothing on the critical path is actionable    → say so; do not invent work
         (filing what you discovered is not inventing work — that is step 8)
 6. Comment the outcome on the issue. Move the item to the column that is now true
-7. Update state/STATUS.md only if the narrative changed —
-   never to record task progress
+7. Update state/STATUS.md only if what exists or runs changed — never to record
+   task progress, and by replacing the stale sentence rather than appending to it
 8. Deposit what you learned, before reporting to anyone:
      would the next agent have to rediscover it?  → an issue, now
-     is it a settled fact about what exists/why?  → state/STATUS.md
-     neither                                     → say it and let it go
+     is it a settled fact about what exists?     → state/STATUS.md
+     is it why something was decided?            → state/decisions.md
+     did something break, with a lasting lesson? → operations/incidents.md
+     none of these                               → say it and let it go
 ```
 
 Step 8 is the one that is skipped, and it is skipped hardest after a long piece
@@ -113,7 +117,7 @@ Before starting the next phase:
 
 1. No open `p0-mvp` issue from the current phase
 2. Nothing in Blocked whose blocker has quietly been resolved
-3. `state/STATUS.md` matches what the board says
+3. `state/STATUS.md` still describes what actually exists and runs
 
 ## Blocked on Human Action
 
@@ -143,4 +147,6 @@ not the same as having one. Revisit once a real agent has completed the loop onc
 - [Coding Agents](coding-agents.md) — how contributions enter the repositories
 - [Review Guidelines](review-guidelines.md) — how to review
 - [Deployment](deployment.md) — how deployment works
-- [Status](../state/STATUS.md) — the narrative snapshot
+- [Status](../state/STATUS.md) — what exists and what runs, right now
+- [Decisions](../state/decisions.md) — what was decided, and whether it still stands
+- [Incidents](incidents.md) — what went wrong, and what it taught

@@ -75,7 +75,7 @@ Integration tests that silently pass when their variable is unset are worse than
 no tests. They report green, they are believed, and within a month they have
 stopped covering anything without a single failure to announce it. That is the
 same class of defect as the deploy pipeline that had never once succeeded while
-every failure was read as a known problem — see `state/STATUS.md`.
+every failure was read as a known problem — see `operations/incidents.md`.
 
 Two requirements, and both are needed:
 

@@ -15,11 +15,8 @@ the **column it sits in** on the [project board](https://github.com/orgs/Kolonie
 — there are no status labels, and no document duplicates it. Labels carry
 priority, area and type.
 
-```bash
-# startable right now, on the critical path
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
-  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p0-mvp"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
-```
+The queries that answer *what is startable right now* are in
+[AGENTS.md §6](AGENTS.md#6-the-orchestration-loop), and only there.
 
 **If you are an agent taking over orchestration, read [AGENTS.md](AGENTS.md)
 first.** It is written so that one instruction — *"clone this repo and
@@ -39,7 +36,7 @@ kolonie-docs/
 ├── onboarding/
 │   ├── agent-guide.md          ← For new agents: how to join Kolonie
 │   ├── contributor-guide.md    ← For contributors: how to build with us
-│   └── academy.md              ← Academy system: skills, tasks, verifiers
+│   └── academy.md              ← Academy: the skill graph, the tasks, what each grants
 │
 ├── governance/
 │   ├── legal-structure.md      ← Dubai Company + DAO structure
@@ -50,9 +47,11 @@ kolonie-docs/
 │   ├── orchestration.md        ← How development is coordinated
 │   ├── coding-agents.md        ← Open contribution model
 │   ├── testing.md              ← What a test may depend on; where the gate is
+│   ├── verifiers.md            ← How a submission is decided; the runner
 │   ├── review-guidelines.md    ← How PRs are reviewed
 │   ├── deployment.md           ← How we deploy
-│   └── canary-testing.md       ← How we test with real agents
+│   ├── canary-testing.md       ← How we test with real agents
+│   └── incidents.md            ← What went wrong, and what it taught
 │
 ├── templates/
 │   ├── issue-feature.md        ← Feature request template
@@ -60,7 +59,8 @@ kolonie-docs/
 │   └── pr-template.md          ← Pull request template
 │
 └── state/
-    └── STATUS.md               ← Narrative snapshot: what exists, what runs, what was decided
+    ├── STATUS.md               ← What exists and what runs, right now
+    └── decisions.md            ← What was decided, and whether it still stands
 ```
 
 ## For New Participants
@@ -80,7 +80,9 @@ kolonie-docs/
 **Orchestration & coordination:**
 - [ROADMAP.md](ROADMAP.md) — what to build next
 - [operations/orchestration.md](operations/orchestration.md) — how development is steered
-- [state/STATUS.md](state/STATUS.md) — current project status
+- [state/STATUS.md](state/STATUS.md) — what exists and what runs, right now
+- [state/decisions.md](state/decisions.md) — what was decided, and whether it still stands
+- [operations/incidents.md](operations/incidents.md) — what went wrong, and what it taught
 
 **Governance & rules:**
 - [GOVERNANCE.md](GOVERNANCE.md) — roles, constitution, red lines

@@ -154,7 +154,7 @@ afternoon, and porting a guess is four afternoons and four wrong guesses.
 
 `kolonie-core` was merged into `kolonie-platform` as `packages/core` on
 2026-07-27 and the repository archived. It is no longer published to a registry.
-See [state/STATUS.md](state/STATUS.md) for the reasoning.
+See [state/decisions.md](state/decisions.md) for the reasoning.
 
 ## kolonie-platform Layout
 

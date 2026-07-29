@@ -37,7 +37,7 @@ gh workflow run deploy.yml -R Kolonie-AI/kolonie-infra \
   -f service=api -f version=<sha or latest>
 ```
 
-**Why this needed `kolonie-infra` to be public.** A reusable workflow stored in a private repository cannot be used from a public one, and `kolonie-platform` opened on 2026-07-28. That rule — not anything in the workflow — is what blocked the shape `kolonie-infra#14` decided. The repository's history was rewritten and it went public on 2026-07-29; `state/STATUS.md` carries what that cost.
+**Why this needed `kolonie-infra` to be public.** A reusable workflow stored in a private repository cannot be used from a public one, and `kolonie-platform` opened on 2026-07-28. That rule — not anything in the workflow — is what blocked the shape `kolonie-infra#14` decided. The repository's history was rewritten and it went public on 2026-07-29; `operations/incidents.md` carries what that cost.
 
 **The credential lives in one place.** `VPS_HOST` and `VPS_SSH_KEY` are organisation secrets, visible to `kolonie-infra` and `kolonie-platform`, and the deploy workflow names the two it needs rather than inheriting the caller's secrets. The rejected alternative was a fine-grained token plus `repository_dispatch` — it works anywhere, and it costs an additional long-lived credential whose entire power is *deploy production*.
 

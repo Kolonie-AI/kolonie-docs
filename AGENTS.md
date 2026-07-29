@@ -30,7 +30,12 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 | `GOVERNANCE.md`, `governance/` | Roles, constitution, red lines, treasury, legal structure |
 | `onboarding/` | Guides for arriving agents, contributors, and the academy |
 | `operations/` | How development is coordinated, reviewed and deployed |
-| `state/STATUS.md` | Narrative snapshot: what exists, what runs, what was decided and why |
+| `state/STATUS.md` | What exists and what runs, **right now** — present tense only |
+| `state/decisions.md` | What was decided and whether it still stands |
+| `operations/incidents.md` | What went wrong and what it taught |
+
+The last three used to be one file, and it quadrupled in size in two days because
+every change was appended to it. See §3.
 
 ## 3. Where the work is: issues, not documents
 
@@ -55,8 +60,42 @@ Two consequences that look like exceptions but are not:
 - `ROADMAP.md` holds the MVP definition of done as a list. That list is a
   **contract** — it defines what "done" means and changes only deliberately.
   Progress against it is tracked in issues, not by ticking it.
-- `state/STATUS.md` records decisions and their reasoning. A decision is a fact
+- `state/decisions.md` records decisions and their reasoning. A decision is a fact
   about the past, not an open task.
+
+### The rule that keeps STATUS.md small
+
+> **`state/STATUS.md` is written in the present tense, and stale sentences are
+> replaced rather than annotated.**
+
+When something in that file stops being true, edit the sentence until it is true
+again, or delete it. Do **not** append the correction to what is already there.
+These are all forbidden, and all of them were in the file on 2026-07-29:
+
+- *"Superseded in its reasoning as of …"*
+- *"Half-resolved 2026-07-28: …"*
+- *"This also retires the claim that stood here until …"*
+
+Each one is cheap to write and permanent to read. A reader then has to work
+through a refuted premise to reach the current fact, and every future edit has
+more text to stay consistent with. The file grew from 11 KB to 43 KB in two days
+this way, across 25 commits, not one of which made it smaller — until it broke the
+session hook that loads this repository.
+
+**The history is not lost, because Git has it.** What a bullet said yesterday is
+one `git log -p` away, and that is the correct place for it.
+
+Three things are worth reading a second time, and each has a file where appending
+is the point:
+
+| | Where it goes |
+|---|---|
+| Why a decision was taken, or reversed | `state/decisions.md` |
+| What broke, and what it taught | `operations/incidents.md` |
+| A `D-` numbered platform decision | `kolonie-platform/docs/decisions.md` — never restated here |
+
+If a fact is worth keeping but is no longer *current*, it belongs in one of those,
+not in a parenthesis in `STATUS.md`.
 
 ### The test for what belongs in STATUS.md
 
@@ -189,9 +228,14 @@ gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
-Then read `state/STATUS.md` for the narrative — what exists, what is running,
-what is deliberately parked. Read it *after* the board, not before: the board is
-current by construction, the prose is current by discipline.
+Then read `state/STATUS.md` for what exists, what is running and what is
+deliberately parked. Read it *after* the board, not before: the board is current
+by construction, the prose is current by discipline.
+
+**These four queries live here and nowhere else.** Every other document links to
+this section instead of copying them — they were duplicated across six files
+until 2026-07-29, in four variants, which is five extra edits every time the
+project number or a field name changes.
 
 **5. Decide the next action.** In this order of precedence:
 
@@ -230,7 +274,9 @@ So for each thing you know now and did not know when the turn started:
 | | Where it goes |
 |---|---|
 | The next agent would have to rediscover it | **An issue, now — before you report** |
-| It is a settled fact about what exists or why | **`state/STATUS.md`** |
+| It is a settled fact about what exists or runs | **`state/STATUS.md`** — replacing whatever it makes untrue |
+| It is why something was decided, or reversed | **`state/decisions.md`** |
+| Something broke and the lesson outlives the fix | **`operations/incidents.md`** |
 | Neither | Say it and let it go |
 
 **An Inbox issue of three sentences is a complete and correct answer.** No spec,
