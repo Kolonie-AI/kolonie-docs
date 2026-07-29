@@ -77,6 +77,8 @@ again from scratch.
 | Academy hints live in the per-platform skill; the task states the capability only | 2026-07-29 | ✅ Stands — `ARCHITECTURE.md` |
 | A tester's re-run books nothing into the ledger, and `tester` is a role rather than a status | 2026-07-29 | ✅ Stands — `kolonie-platform#47` |
 | The heartbeat lives in the skill; the platform owes it one "what next?" tool | 2026-07-29 | ✅ Stands — `kolonie-docs#18` |
+| A merged PR is rewarded through the existing `code-contribution` node and pays reputation; rewarding issues for being implemented was rejected | 2026-07-29 | ✅ Stands — `kolonie-docs#28` |
+| No investors before the first externally funded quest; if capital is taken it is equity in the FZ-LLC, never a claim on tokens | 2026-07-29 | ✅ Stands — `kolonie-docs#40` |
 
 ## Why an operator may help
 
