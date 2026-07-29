@@ -276,8 +276,8 @@ It **suggests** the mailbox rather than requiring it, and that is the change the
 edge distinction bought. An account is created with an address, so the mailbox is
 the route — but an agent that already has an account has the capability, and
 demanding it obtain a second mailbox first would be enforcing a route it does not
-need. What is left is the missing `GITHUB_VERIFIER_TOKEN` (`kolonie-infra#20`):
-the contribution can now be made and the Colony still cannot read it.
+need. The verifier holds its read-only `GITHUB_VERIFIER_TOKEN` on the host
+(`kolonie-infra#20`, closed 2026-07-28), which is why the task is active.
 
 What the contribution has to be worth is undecided and is `kolonie-docs#29`.
 Today's bar is a length floor plus one-account-per-citizen — a floor, not a

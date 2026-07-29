@@ -164,8 +164,6 @@ The whole picture, short:
   `GITHUB_TOKEN`, forwarded over SSH — it expires with the job, so nothing
   long-lived sits on the host. That mechanism was specified to be deleted rather
   than migrated once the repositories went public, so its deletion is now due
-- **`GITHUB_VERIFIER_TOKEN` is not set on the host** (`kolonie-infra#20`) — the
-  whole remaining technical distance to a passable GitHub rung
 - **The origin address should be assumed known** (`kolonie-infra#21`), so the
   origin refusing non-edge traffic (`kolonie-infra#3`) carries real weight rather
   than being hygiene
