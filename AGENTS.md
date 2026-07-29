@@ -147,6 +147,16 @@ three repositories, so one query spans the project.
 open decision), `decision` (needs an architectural decision recorded before work
 starts), plus the GitHub defaults `bug` and `documentation`.
 
+**There is no `ready-to-build` label, and there is nothing to reintroduce it
+for.** It existed before status moved onto the board and was deleted with the
+other status labels; "this can be picked up now" is the **Ready** column, per §4.
+`operations/coding-agents.md` described a workflow that triggered on it until
+2026-07-29 — the workflow never existed either, which is how a deleted label kept
+looking like a live part of the process for two months (`kolonie-docs#4`). If a
+dispatch automation is ever built, it may need one label because Actions triggers
+on labels and not on columns; that is a decision to take then, with this
+paragraph as the thing being changed.
+
 ## 6. The orchestration loop
 
 Run these. They are the procedure, not an illustration of it.
