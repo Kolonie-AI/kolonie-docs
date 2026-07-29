@@ -67,6 +67,7 @@ again from scratch.
 | The Treasury is funded by a 3% stablecoin fee and never by selling $KOL | 2026-07-29 | ✅ Stands — `governance/economy.md` §4 |
 | $KOL is issued on Solana; Base and Gnosis Chain were considered and rejected | 2026-07-29 | ✅ Stands — `governance/economy.md` §8 |
 | The token launches on evidence of external quest volume, not on a date | 2026-07-29 | ✅ Stands — `governance/economy.md` §7 |
+| RAK DAO considered and rejected; the entity stays in Dubai, which the maintainer can form personally | 2026-07-29 | ✅ Stands — the zone is `#7` |
 
 ## Why an operator may help
 
