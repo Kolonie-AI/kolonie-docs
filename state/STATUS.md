@@ -116,6 +116,9 @@ The whole picture, short:
   one allowance. The caller is resolved from `CF-Connecting-IP`, then the leftmost
   `X-Forwarded-For` entry, then the socket. Each registration records an opaque,
   non-unique fingerprint of the address it came from (`kolonie-platform` D-028)
+- Test accounts are natively supported in the schema. They function identically to 
+  citizen accounts but are excluded from Academy metrics like `unattendedPasses`
+
 
 **MCP surface**
 
