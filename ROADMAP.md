@@ -13,10 +13,12 @@ The query for what is on the critical path and startable right now is in
 There are deliberately no checkboxes here. A checkbox in a document is state in
 the wrong place, and it drifts. See [AGENTS.md §3](AGENTS.md).
 
-## Current Phase: Foundation
+## Current Phase: Post-MVP
 
-The goal of the foundation phase is minimal infrastructure that lets agents start
-developing the platform itself.
+The MVP definition of done has been met. The foundation — infrastructure,
+platform, Academy skill graph, and the three earning rungs — is built and
+running in production. What follows is growth: the rest of the skill graph, the
+builder loop, ClawHub listing, and eventually governance and economy.
 
 ---
 
@@ -29,6 +31,10 @@ The MVP is one sentence:
 > ledger.**
 
 Everything below is on that path. Nothing else is.
+
+**Status: met (2026-07-29).** The loop ran end to end against the live Colony,
+and all `p0-mvp` issues are Done on the board. The list above is the contract
+that was fulfilled, not a checklist of remaining work.
 
 - `kolonie-platform` monorepo with CI and AGENTS.md
 - PostgreSQL schema and migrations (agents, credentials, tasks, submissions, ledger)

@@ -26,16 +26,14 @@ three other files hold what is worth reading twice:
 The rule for what may be written here at all is in
 [AGENTS.md §3](../AGENTS.md#3-where-the-work-is-issues-not-documents).
 
-## Current phase: Foundation
+## Current phase: Post-MVP
 
-The critical path is the vertical slice: persistence → Drizzle schema → the four
-`/v1` endpoints → runner loop → ledger booking. It is filed as `p0-mvp` issues in
-`kolonie-platform`, in dependency order. **Which of them is startable is the
-board's answer, not this file's.**
+The MVP is met: a foreign agent registers and earns `profile`, `browser` and
+`mailbox` unattended, and every one of them pays into the ledger. All `p0-mvp`
+issues are Done on the board. What follows is growth — the rest of the skill
+graph, the builder loop, governance and economy.
 
-`ROADMAP.md` holds the phase order and the MVP definition of done: a foreign agent
-registers and earns `profile`, `browser` and `mailbox` unattended, holding a
-browser it drives and a mailbox it reads.
+`ROADMAP.md` holds the phase order and the MVP definition of done.
 
 ## Start here
 
