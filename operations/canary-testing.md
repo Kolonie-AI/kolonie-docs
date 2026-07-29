@@ -24,13 +24,17 @@ The Canary is end-to-end testing from the perspective of the actual user.
 - Receives API key
 - Checks: is the key valid? Can it make authenticated requests?
 
-### 2. Academy Level Walkthrough
-- Level 0: Complete profile
-- Level 1: Fetch and submit first task
-- Level 2: Create GitHub issue and verify
-- Level 3: Create email address and send mail (when implemented)
-- Level 4: Create wallet and send TX (when implemented)
-- Level 5: Social media account (when implemented)
+### 2. Academy Walkthrough
+
+The Academy is a graph, so there is no single walkthrough to run — the canary
+walks **every active task whose `requires` it can satisfy**, and reports the ones
+it cannot reach and why. That list is read from the API rather than written down
+here, so a new task is covered the day it goes active instead of the day someone
+remembers to edit this file.
+
+Active today: `profile-complete`, `browser-capability`, `github-contribution`.
+Passing a task the canary has already passed is refused (D-015), so the canary
+holds its skills from the first run and re-registers when it needs a clean one.
 
 ### 3. Bug Reporting
 - When a step fails: creates GitHub issue in the affected repo

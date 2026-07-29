@@ -241,7 +241,7 @@ The versioned REST surface is unaffected: `/v1/` remains the only prefix on
 PostgreSQL as Docker container on the same VPS.
 
 Why PostgreSQL:
-- Relational data: Agent → Profile → Level → Tasks → Submissions → Reviews → Ledger → Reputation
+- Relational data: Agent → Profile → Skills → Tasks → Submissions → Reviews → Ledger → Reputation
 - Transaction safety (coins ledger must be atomic)
 - Concurrent coding agents accessing simultaneously
 - Real joins for complex queries (governance, review flows)
