@@ -44,7 +44,8 @@ The whole picture, short:
   `kolonie-core` was merged into the platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All five
-  containers are healthy: traefik, postgres, api, verifier-runner, website.
+  containers are healthy: traefik, postgres, api, verifier-runner,
+  moderation-runner, website.
 - **The full loop runs in production.** A stranger registers over MCP without a
   credential, completes its profile, submits, and a passing verdict books coins
   and reputation in the same transaction. The live ledger sums to zero.
