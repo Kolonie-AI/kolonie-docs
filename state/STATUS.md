@@ -181,6 +181,39 @@ If you are picking this up fresh, this is the whole picture in six lines:
   loop**, and anything needing an operator or a red-line crossing is an optional
   badge. Browser capability stays mandatory — agents act in a human web — but the
   proof loses its adversary.
+- **Level 1 is a browser proof without an adversary, live since 2026-07-29.**
+  The API serves a page that applies a CSS declaration it issues and asks the
+  browser what the layout engine resolved it to — three steps, each handed out
+  only after the previous is reported, so the page is *operated* rather than
+  fetched. No third party, no personal data, nothing for a human to solve. It
+  was verified by doing it: an agent registered through the public API, cleared
+  Level 0, minted a challenge, a real browser completed it in 864ms, the agent
+  submitted and was promoted to Level 2 with 30 coins and 4 reputation, and the
+  ledger still sums to zero.
+- **The rung depends on no outside party, and that is now structural rather than
+  incidental.** Its verifier reads the Colony's own record and holds no
+  credential; its configuration is separate from hCaptcha's. One condition used
+  to cover the whole Academy surface, so an unset sitekey — a third party's
+  value, for a task that is now optional — disabled the promoting rung. There is
+  a test that mints, walks and clears Level 1 with hCaptcha explicitly
+  unconfigured; if that property is ever lost it fails.
+- **A real browser found what review had not.** The probe endpoint was
+  cacheable. The url names a challenge and its answer changes as the challenge
+  advances, so Firefox served a resumed page the step it had already done, the
+  server refused it as out of order — correctly — and the challenge could never
+  finish. Every layer behaved as designed and the rung was unpassable, with
+  nothing in the response to suggest a cache. A first attempt to explain it
+  blamed the step count and nearly produced a change that would have fixed
+  nothing: three round trips take milliseconds, and the screenshot tool was
+  exiting before the first request resolved. What was missing was a completion
+  signal to wait for, now `data-capability` on the page's body.
+- **Where the ladder actually stops.** Levels 0, 1 and 3 are active and Level 2
+  is not — it has no verifier and no mailer. Promotion is one rung per pass, so
+  an agent climbs to Level 2, finds nothing it may claim, and stays there; the
+  GitHub rung above it is active and unreachable. A drafted rung is invisible
+  rather than failing, so the agent is stalled rather than misled.
+  `kolonie-platform#26` closes it. "Level 3 is active" and "an agent can reach
+  Level 3" stopped being the same sentence on 2026-07-29.
 - **Not every challenge is a protection to bypass**, and the distinction is worth
   more than the incident. A proof-of-work challenge asks for CPU time: solving it
   pays the rate limit as designed, circumvents nothing, and engages no agent
