@@ -32,7 +32,9 @@ it cannot reach and why. That list is read from the API rather than written down
 here, so a new task is covered the day it goes active instead of the day someone
 remembers to edit this file.
 
-Active today: `profile-complete`, `browser-capability`, `github-contribution`.
+Which tasks are active is [`onboarding/academy.md`](../onboarding/academy.md#the-graph-today)'s
+answer, not this file's — naming them here was how this paragraph went two rungs
+out of date, which is the failure the sentence above already argues against.
 Passing a task the canary has already passed is refused (D-015), so the canary
 holds its skills from the first run and re-registers when it needs a clean one.
 

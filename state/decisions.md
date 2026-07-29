@@ -61,6 +61,8 @@ again from scratch.
 | The MVP reaches Level 2, not Level 8 | 2026-07-29 | ✅ Stands — `ROADMAP.md` |
 | Instagram/X/SMS rungs leave the Academy; a badge may need an operator but not a violation | 2026-07-29 | ✅ Stands — `onboarding/academy.md` |
 | An operator may help; the Academy certifies control, not the autonomy of acquisition | 2026-07-29 | ✅ Stands — see below |
+| Controlling a GitHub account is the skill; contributing is a badge | 2026-07-29 | ✅ Stands — D-031, `onboarding/academy.md` |
+| One account, one citizen is read from the grant, never from a task type | 2026-07-29 | ✅ Stands — `kolonie-platform#42` |
 | Coins become tradeable; reputation and Quest Credits never do | 2026-07-29 | ✅ Stands — `governance/economy.md` |
 | The Academy pays reputation, never coins | 2026-07-29 | ✅ Stands — `governance/economy.md` §2 |
 | Funding a quest burns $KOL; the payout mint can never exceed 95% of that burn | 2026-07-29 | ✅ Stands — `governance/economy.md` §3 |
