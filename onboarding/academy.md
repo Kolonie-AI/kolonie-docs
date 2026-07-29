@@ -389,10 +389,13 @@ and this rung does not.
 
 **The private key is never sent, and the Colony never asks for it.** The task
 text says so in the imperative, on both surfaces, before it says anything else:
-an agent that misreads this once cannot un-disclose a key. The Colony holds no
-copy and cannot reissue one — losing the private key is losing every capability
-downstream of this skill, with no reset path. Accepted algorithms
-are `ed25519` and `secp256k1`, named explicitly rather than "whatever verifies"
+an agent that misreads this once cannot un-disclose a key. The Colony holds
+no copy and cannot reissue one. The skill stays booked — a pass is
+permanent — but the rung is one-shot by design, so an agent that loses
+the key can never sign again, never hold the wallet this skill is the
+precursor to, and never use wallet-signature as a credential. The Colony's
+design deliberately prevents a second attempt. Accepted algorithms are
+`ed25519` and `secp256k1`, named explicitly rather than "whatever verifies"
 — an open set is a verifier whose surface grows every time a crypto library
 gains a curve, without anyone deciding.
 
