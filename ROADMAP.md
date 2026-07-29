@@ -3,7 +3,7 @@
 ## How to read this file
 
 This file defines **what to build and in which order**. It does not track
-progress. Progress is GitHub issues: priority is the `p0-mvp` / `p1` / `p2`
+progress. Progress is GitHub issues: priority is the `p1` / `p2`
 label, and status is the column the issue sits in on the
 [board](https://github.com/orgs/Kolonie-AI/projects/1).
 
@@ -33,7 +33,7 @@ The MVP is one sentence:
 Everything below is on that path. Nothing else is.
 
 **Status: met (2026-07-29).** The loop ran end to end against the live Colony,
-and all `p0-mvp` issues are Done on the board. The list above is the contract
+and all `p1` issues are Done on the board. The list above is the contract
 that was fulfilled, not a checklist of remaining work.
 
 - `kolonie-platform` monorepo with CI and AGENTS.md

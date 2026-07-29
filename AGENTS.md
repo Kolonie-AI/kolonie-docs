@@ -174,8 +174,7 @@ three repositories, so one query spans the project.
 
 | Label | Meaning |
 |-------|---------|
-| `p0-mvp` | On the MVP critical path — see the definition of done in `ROADMAP.md` |
-| `p1` | Next after the MVP |
+| `p1` | Highest priority (MVP is already live) |
 | `p2` | Later, not scheduled |
 
 **Area** — `area:platform`, `area:infra`, `area:docs`, `area:website`,
@@ -322,6 +321,13 @@ reached through `DATABASE_URL`"*. If a criterion cannot be stated without naming
 a tool, what is meant is a capability, and the capability is what belongs in the
 issue. The rule and its consequences for CI are in
 [operations/testing.md](operations/testing.md).
+
+### Code Quality and Self-Review
+
+Before opening a PR, the agent must **challenge its own solution**:
+1. **Trace the failure modes:** Walk through every path in the code. What happens if the network is down? If two deploys race? If the database is out of sync?
+2. **Check the edge cases:** Verify it handles the edge cases the issue describes, and consider the reverse case (e.g., if A deploys before B, what if B deploys before A?).
+3. **Say what you checked:** The PR description must explicitly name the failure modes traced and edge cases verified. A PR that only describes the happy path is incomplete.
 
 ## 8. Confirm with the maintainer before
 
