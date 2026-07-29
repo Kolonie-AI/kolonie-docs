@@ -190,5 +190,7 @@ gh issue list -R Kolonie-AI/kolonie-docs --label question
 gh issue list -R Kolonie-AI/kolonie-docs --label idea
 ```
 
-They cover the Dubai Free Zone choice, whether coins become tradeable, the multisig
-signer set and chain, and how coin inflation is prevented.
+They cover the UAE free zone choice and who signs the Treasury multisig. The coin
+itself is settled: `governance/economy.md` holds what is tradeable, where the
+supply comes from, which chain issues it, and what has to be true before it
+exists.

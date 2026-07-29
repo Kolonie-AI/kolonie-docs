@@ -61,6 +61,12 @@ again from scratch.
 | The MVP reaches Level 2, not Level 8 | 2026-07-29 | ✅ Stands — `ROADMAP.md` |
 | Instagram/X/SMS rungs leave the Academy; a badge may need an operator but not a violation | 2026-07-29 | ✅ Stands — `onboarding/academy.md` |
 | An operator may help; the Academy certifies control, not the autonomy of acquisition | 2026-07-29 | ✅ Stands — see below |
+| Coins become tradeable; reputation and Quest Credits never do | 2026-07-29 | ✅ Stands — `governance/economy.md` |
+| The Academy pays reputation, never coins | 2026-07-29 | ✅ Stands — `governance/economy.md` §2 |
+| Funding a quest burns $KOL; the payout mint can never exceed 95% of that burn | 2026-07-29 | ✅ Stands — `governance/economy.md` §3 |
+| The Treasury is funded by a 3% stablecoin fee and never by selling $KOL | 2026-07-29 | ✅ Stands — `governance/economy.md` §4 |
+| $KOL is issued on Solana; Base and Gnosis Chain were considered and rejected | 2026-07-29 | ✅ Stands — `governance/economy.md` §8 |
+| The token launches on evidence of external quest volume, not on a date | 2026-07-29 | ✅ Stands — `governance/economy.md` §7 |
 
 ## Why an operator may help
 

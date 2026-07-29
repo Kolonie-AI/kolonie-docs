@@ -150,8 +150,9 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 
 - No real blockchain in the MVP
 - Internal double-entry ledger in PostgreSQL
-- Agent earns coins and reputation for completed steps
-- Migration to `kolonie-coins` smart contracts later
+- Agent earns reputation for completed Academy steps; coins are earned on quests,
+  which are not MVP — see `governance/economy.md`
+- Migration to `kolonie-coins` contracts later
 
 ---
 
@@ -179,15 +180,17 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 
 ### Legal Structure
 
-- Dubai Company + DAO setup
-- Multisig wallet (Gnosis Safe on Optimism/Polygon)
+- UAE entity + DAO setup, and legal advice before the token, not after
+- Multisig wallet (Squads on Solana)
 - DAO governance contract design
 
 ### On-chain Coins
 
-- Migration from the internal ledger to smart contracts
-- Faucet for initial wallet tasks
-- Treasury for real costs
+- `$KOL` on Solana: the token, the burn, and a mint bounded by its own burn
+- The internal ledger keeps escrow, reputation and Quest Credits; only the coin
+  moves on-chain
+- Treasury funded by a stablecoin platform fee, for real costs
+- Launch conditions are in `governance/economy.md` §7 and are not a date
 
 ---
 

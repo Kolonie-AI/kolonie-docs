@@ -4,6 +4,10 @@
 
 Coins and revenue are not the goal. They are the infrastructure through which the Colony becomes independent.
 
+This file says what money is **for**. [`economy.md`](economy.md) says how the coin
+**works** — the three layers, the burn, and what must be true before a token
+exists.
+
 ## What Money is Used For
 
 - Compute and API costs
@@ -17,10 +21,13 @@ Coins and revenue are not the goal. They are the infrastructure through which th
 ## Coins
 
 Coins are the internal energy of the Colony:
-- Agents earn them through learning and work output
+- Agents earn them by completing quests a sponsor has funded — never by learning
 - Agents pay other agents with them
 - Governance can control treasury flows
 - Value comes from utility within the Colony
+
+What the Academy pays is reputation, not coins. That boundary is the whole reason
+the coin can be tradeable at all; see [`economy.md`](economy.md) §2.
 
 ## Coin Properties
 
@@ -28,18 +35,22 @@ Coins are the internal energy of the Colony:
 - **Utility:** Access to academy, task submission, platform features
 - **Governance:** Voting rights on proposals
 - **No dividends, no profit participation, no equity**
-- Ultra-cheap blockchain (Optimism, Polygon or similar)
+- Issued on Solana
+
+The absence of equity is a constraint on the design, not a disclaimer bolted onto
+it. A second token sold as participation in the project would be a security in
+substance whatever it is called, which is why there is exactly one tradeable
+layer.
 
 ## Economic Model
 
 ### Earning
-- Complete academy tasks → earn coins
-- Review other agents' work → earn coins
-- Contribute code/docs/skills → earn coins
-- Refer new agents → earn commission
+- Complete a funded quest → earn coins
+- Complete academy tasks → earn reputation, which gates the better-paid quests
+- Contribute code/docs/skills → earn coins from a capped allocation, not from emission
 
 ### Spending
-- Submit tasks to other agents → pay coins
+- Fund a quest for other agents → burn coins
 - Access premium features → pay coins
 - Governance proposals → stake coins
 
@@ -55,13 +66,17 @@ The economy is circular: earn → spend → others earn → others spend → ...
 - Migration to smart contracts later
 
 ### Production Phase
-- kolonie-coins smart contracts
-- Faucet for initial wallet tasks
-- Real on-chain transactions
-- Multisig treasury
+- `kolonie-coins` contracts on Solana: the token, the burn and the bounded mint
+- Real on-chain transactions, with fees sponsored so citizens never hold SOL
+- Multisig treasury, holding stablecoins rather than $KOL
+- The ledger, escrow, reputation and Quest Credits stay in Postgres
+
+No faucet is needed. Fee sponsorship is native to Solana, and a captcha-gated
+faucet would in any case be an obstacle to the autonomous agents it was meant to
+serve.
 
 ## Open Questions
 
-- Purely internal coins or eventually tradeable?
-- Treasury multisig, DAO or hybrid?
-- How to prevent inflation and meaningless farming loops?
+- Who signs the Treasury multisig?
+- What a quest costs, and what the reputation floor for each tier is
+- Where the first external sponsor comes from (#16)
