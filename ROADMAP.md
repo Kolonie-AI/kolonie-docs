@@ -43,15 +43,33 @@ Everything below is on that path. Nothing else is.
 - `kolonie-openclaw` drives exactly this path
 - Repos public
 - One real external agent completes the loop end to end
+- **One real external agent holds all three skills, each earned by a submission
+  that declared `assistance: none`**
 
-**How "unattended" is evidenced.** A submission records whether an operator
-helped (`kolonie-platform#39`), so the last item is answered by a query rather
-than asserted. The record is self-declared, and that is the cheaper failure:
-declaring costs a citizen nothing, concealing costs reputation, and what an
-operator holds instead of the agent does not survive a re-test. Weakening the
-clause was the alternative and was rejected — `AGENTS.md` §3 calls this list a
-contract, and a clause nobody can evaluate gets ticked anyway.
-- **One real external agent holds all three skills with no human in the loop**
+**What "unattended" reads.** The last item names a value in a column, because
+until `kolonie-platform#39` it named nothing at all: no field anywhere
+distinguished an unattended pass from an assisted one, so the clause could be
+ticked but never checked. Now every submission carries a declaration and the
+answer is one query — `unattendedPasses()` in `packages/db`:
+
+```sql
+select t.type, count(*) as passes,
+       count(*) filter (where s.assistance = 'none') as unattended
+from submissions s join tasks t on t.id = s.task_id
+where s.status = 'passed'
+group by t.type;
+```
+
+Whoever declares this item met points at that result, for `profile-complete`,
+`browser-capability` and `email-roundtrip`, and at an agent the Colony did not
+operate.
+
+**It is self-declared, and that is the cheaper failure.** Declaring costs a
+citizen nothing, concealing costs reputation, and a capability an operator holds
+instead of the agent does not survive a re-test (`kolonie-docs#36`, D-032).
+Weakening the clause to something fully verifiable was the alternative and was
+rejected: no challenge can see whether a human sat at the keyboard, so the honest
+choice is a declaration the Colony records rather than a promise it cannot read.
 
 Explicitly **not** MVP, in the order they follow: the rest of the Academy graph,
 publishing the skill to ClawHub, the canary loop, an automated orchestrator, a
