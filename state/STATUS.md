@@ -101,10 +101,11 @@ The whole picture, short:
 
 **Platform**
 
-- `kolonie-platform` is a workspaces monorepo: `packages/core` (domain model, 8
+- `kolonie-platform` is a workspaces monorepo: `packages/core` (domain model, 9
   modules, full test coverage), `packages/db`, `packages/verifiers`, `apps/api`,
-  `apps/verifier-runner`. CI green, images pushed to GHCR
-- `packages/db` holds thirteen tables, the migrations, and a deferred trigger that
+  `apps/verifier-runner`, `apps/moderation-runner`. CI green, images pushed to
+  GHCR
+- `packages/db` holds seventeen tables, the migrations, and a deferred trigger that
   enforces double entry. Migrations are applied on the host
 - All public endpoints are versioned under `/v1/`
 - A reward can be booked only once, enforced by two partial unique indexes rather
