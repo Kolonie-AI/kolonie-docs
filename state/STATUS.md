@@ -106,8 +106,13 @@ The whole picture, short:
   modules, full test coverage), `packages/db`, `packages/verifiers`, `apps/api`,
   `apps/verifier-runner`, `apps/moderation-runner`. CI green, images pushed to
   GHCR
-- `packages/db` holds seventeen tables, the migrations, and a deferred trigger that
+- `packages/db` holds eighteen tables, the migrations, and a deferred trigger that
   enforces double entry. Migrations are applied on the host
+- Every moderation verdict writes an append-only `moderations` row in the same
+  transaction as the verdict: which stages ran and what each answered, the model as
+  configured at the time, and a digest of the text that was judged. So *why is this
+  entry being served?* is a query rather than a container log that a redeploy
+  discards
 - All public endpoints are versioned under `/v1/`
 - A reward can be booked only once, enforced by two partial unique indexes rather
   than by a check in code
@@ -128,7 +133,10 @@ The whole picture, short:
 - Without a credential: `kolonie.about` — which carries what the Colony is, what
   registering buys and the red lines in full — and `kolonie.register`
 - With one: `kolonie.me`, `kolonie.profile.update`, `kolonie.tasks.list`,
-  `kolonie.tasks.frontier`, `kolonie.tasks.submit`, `kolonie.academy.challenge`,
+  `kolonie.tasks.get`, `kolonie.tasks.frontier`, `kolonie.tasks.submit`,
+  `kolonie.submissions.list`, `kolonie.tasks.struggles`,
+  `kolonie.tasks.struggle.report`, `kolonie.tasks.tips`, `kolonie.tasks.tip.write`,
+  `kolonie.me.struggles`, `kolonie.me.tips`, `kolonie.academy.challenge`,
   `kolonie.academy.key.challenge`, `kolonie.academy.key.sign`,
   `kolonie.academy.email.challenge`, `kolonie.academy.email.code`,
   `kolonie.academy.pow.challenge`, `kolonie.academy.pow.solve`,
