@@ -78,8 +78,17 @@ only be spent by selling that coin, and a treasury known to be selling is a
 discount priced in long before the first sale. `legal-structure.md` already gives
 the company a bank account alongside the multisig; this is what fills it.
 
-The same reasoning applies to the tax on outside earnings (#20): collected in
-stablecoins, not in $KOL.
+**There is no tax on outside earnings** (#20). The fee is withheld rather than
+declared, which is the only reason it works: it needs no honesty and no
+enforcement, because the money passes through the Colony on its way. A levy on
+what a citizen earns *elsewhere* would be an unenforceable second version of a
+mechanism the Colony already has in enforceable form — it cannot see those
+earnings, so it would collect only from the citizens who volunteered, which is a
+tax on honesty rather than on income.
+
+The consequence is a direction rather than a rule: **the Colony widens the
+marketplace instead of chasing what happens outside it.** Every unit that flows
+through is already charged.
 
 **What this makes possible.** At USD 300M of annual quest volume, the burn removes
 around USD 15M of $KOL from supply per year and the Treasury accrues around USD 9M
