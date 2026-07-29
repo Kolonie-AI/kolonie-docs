@@ -3,7 +3,21 @@
 ## The Entity
 
 **Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, in
-formation as of 2026-07-27.
+formation as of 2026-07-27, **in IFZA**.
+
+IFZA rather than DMCC because the entity's first jobs are narrow: hold the
+copyright, hold the bank account, sign contracts. DMCC costs several times as much
+and what the premium buys is crypto-specific standing, which is not needed until a
+token exists — and by then the issuer may not be this entity at all. RAK DAO was
+cheaper still and was rejected: it is a different emirate under a different
+regime, and an entity the maintainer can actually get formed is worth more than a
+theoretically better one that stalls.
+
+**IFZA does not license token issuance, and it does not need to.** VARA regulates
+virtual asset *activity*; an operating company that builds a platform and holds
+copyright conducts none. The split below already separates the off-chain wrapper
+from the on-chain DAO. Where issuance sits is a later decision and does not block
+this formation.
 
 FZ-LLC rather than FZE because an FZE is limited to a single shareholder. The
 governance model below hands ownership progressively to coin holders and

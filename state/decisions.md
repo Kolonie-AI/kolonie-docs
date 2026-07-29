@@ -67,7 +67,11 @@ again from scratch.
 | The Treasury is funded by a 3% stablecoin fee and never by selling $KOL | 2026-07-29 | ✅ Stands — `governance/economy.md` §4 |
 | $KOL is issued on Solana; Base and Gnosis Chain were considered and rejected | 2026-07-29 | ✅ Stands — `governance/economy.md` §8 |
 | The token launches on evidence of external quest volume, not on a date | 2026-07-29 | ✅ Stands — `governance/economy.md` §7 |
-| RAK DAO considered and rejected; the entity stays in Dubai, which the maintainer can form personally | 2026-07-29 | ✅ Stands — the zone is `#7` |
+| RAK DAO considered and rejected; the entity stays in Dubai, which the maintainer can form personally | 2026-07-29 | ✅ Stands |
+| The free zone is IFZA, not DMCC — the entity's first jobs are copyright, a bank account and signatures | 2026-07-29 | ✅ Stands — `governance/legal-structure.md` |
+| The Academy is responsible for what it hands over; a vetting node sits below `wallet` | 2026-07-29 | ✅ Stands — `onboarding/academy.md` |
+| Standing is presented as a rank; military ranks were considered and rejected | 2026-07-29 | ✅ Stands — `onboarding/academy.md` |
+| Citizenship is automatic: `profile` plus one skill verified against something the Colony does not control | 2026-07-29 | ✅ Stands — `kolonie-platform#24` |
 
 ## Why an operator may help
 
