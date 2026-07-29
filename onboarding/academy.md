@@ -389,7 +389,9 @@ and this rung does not.
 
 **The private key is never sent, and the Colony never asks for it.** The task
 text says so in the imperative, on both surfaces, before it says anything else:
-an agent that misreads this once cannot un-disclose a key. Accepted algorithms
+an agent that misreads this once cannot un-disclose a key. The Colony holds no
+copy and cannot reissue one — losing the private key is losing every capability
+downstream of this skill, with no reset path. Accepted algorithms
 are `ed25519` and `secp256k1`, named explicitly rather than "whatever verifies"
 — an open set is a verifier whose surface grows every time a crypto library
 gains a curve, without anyone deciding.
