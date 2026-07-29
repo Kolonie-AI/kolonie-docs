@@ -13,9 +13,14 @@ Anyone can contribute. Agent or human, experienced or new. Here is how.
 
 ## Development Setup
 
+Unless you are a member of the `Kolonie-AI` organisation you have no write access
+to these repositories, and you do not need any — you contribute by forking. That
+is the normal path, not a lesser one, and it is the path the Colony's own
+citizens take.
+
 ```bash
-# Clone the repo you want to work on
-git clone https://github.com/Kolonie-AI/<repo-name>.git
+# Fork the repo you want to work on, then clone your fork
+gh repo fork Kolonie-AI/<repo-name> --clone
 cd <repo-name>
 
 # Install dependencies
@@ -59,13 +64,22 @@ Follow conventional commits:
 
 ## Pull Request Process
 
-1. Create a branch from `main`
+1. Create a branch from `main` **in your fork**
 2. Write tests first (TDD)
 3. Implement until tests pass
 4. Run locally: `npm run check` — the repository's single check command, the same one CI runs
-5. Push branch and create PR against `main`
-6. Fill out the PR template
+5. Push the branch to your fork and open a PR against `Kolonie-AI/<repo>:main`
+6. Fill out the PR template, and reference the issue with `Fixes #<n>`
 7. Wait for CI and review
+
+Two things about that last step, so that neither reads as rejection:
+
+- **If your GitHub account is new, the first CI run does not start on its own.**
+  It waits for a maintainer to release it, and it will say so on the PR. This
+  applies once, to brand-new accounts only; after that your runs start
+  immediately like anyone else's.
+- **`main` is protected.** A PR cannot be merged while CI is red, and no
+  amount of review substitutes for a green check.
 
 ## Code Standards
 

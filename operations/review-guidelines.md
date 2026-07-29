@@ -32,7 +32,7 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 
 - **Approve:** PR is correct, can be merged
 - **Request Changes:** specific feedback on what is missing or wrong
-- **Auto-Approve:** trivial PRs (docs, lint fixes, tests)
+- **Comment:** the call needs a human — say which part and why
 
 ## Review Rules
 
@@ -42,8 +42,22 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 - No secrets in code
 - CI must pass before review begins
 
+The last two are enforced, not requested: `main` is protected in every repository,
+force-pushes and deletions are refused, and in the repositories that have a CI
+workflow a red check blocks the merge.
+
 ## Who Reviews
 
-- Reviewer Agent (automated) for initial review
-- Human maintainer for final approval on significant changes
-- Trivial PRs can be auto-approved by the Reviewer Agent
+**Today: a human maintainer, and only a human maintainer.** Every PR waits for
+one. This is the honest statement of the process, and it is a bottleneck rather
+than a design — a citizen who opens a PR is currently blocked on the operator
+reading it.
+
+The intended end state is an automated reviewer that runs first, against this
+document, and leaves a real verdict; the maintainer then reads the review rather
+than producing it. That is [kolonie-docs#42](https://github.com/Kolonie-AI/kolonie-docs/issues/42),
+and it is what #37 means by "no human in the loop".
+
+Two things will not change when it exists: a red or missing CI check is never
+approved, and changes touching the ledger, the verifiers or governance always
+reach a human. A process that could reward its own results cannot gate itself.
