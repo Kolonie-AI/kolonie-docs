@@ -199,31 +199,44 @@ paragraph as the thing being changed.
 
 Run these. They are the procedure, not an illustration of it.
 
+**`--limit` is load-bearing, and it is not decoration.** `gh project item-list`
+fetches that many items and *then* the filter runs, so a limit below the board's
+size silently drops rows — the command succeeds and prints a shorter, plausible,
+wrong answer. It has already happened: on 2026-07-30 the board held 146 items,
+`--limit 100` was what these examples said, and query 1 returned **one** of the six
+issues that were actually Ready. Everything above roughly issue #39 was invisible.
+
+The cause is that **Done items dominate the board and come first** — 92 of those
+146. Raising the number is the fix that keeps needing to be raised; archiving Done
+items is the one that stops the limit from mattering (`kolonie-docs#53`). Until
+that lands, keep the number comfortably above the board's size and check it
+occasionally with query 4.
+
 **1. What can be started right now, by anyone:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
   --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
   --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
   --jq '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **4. The whole board at a glance:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
