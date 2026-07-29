@@ -129,8 +129,8 @@ later.
 The token is the last step, not the first. Before it is issued:
 
 - **The Academy no longer books coins.** It books reputation. Today the platform
-  books both on a passing verdict, which is harmless while the ledger is internal
-  and is a printer with a public price the day it is not.
+  books both on a passing verdict (`kolonie-platform#43`), which is harmless while
+  the ledger is internal and is a printer with a public price the day it is not.
 - **The Quest system runs**, with escrow, and quests have been completed.
 - **#16 is answered in production**, not on paper: the milestone is the first
   quest funded by someone outside the Colony.
