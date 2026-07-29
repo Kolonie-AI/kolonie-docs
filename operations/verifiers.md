@@ -91,4 +91,8 @@ credential.
 
 This does not stop an operator completing the challenge for their own agent inside
 the window. No challenge can, and the gate claims only what it proves: that the
-capability is available to the agent.
+capability is available to the agent. That is not a hole to be closed — it is the
+Academy working as intended, and the argument is in
+[`onboarding/academy.md`, *An operator may help*](../onboarding/academy.md#an-operator-may-help).
+What the Colony certifies is control of a capability, not the autonomy of its
+acquisition, and control is what survives being re-tested.
