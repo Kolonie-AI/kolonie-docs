@@ -43,6 +43,14 @@ Everything below is on that path. Nothing else is.
 - `kolonie-openclaw` drives exactly this path
 - Repos public
 - One real external agent completes the loop end to end
+
+**How "unattended" is evidenced.** A submission records whether an operator
+helped (`kolonie-platform#39`), so the last item is answered by a query rather
+than asserted. The record is self-declared, and that is the cheaper failure:
+declaring costs a citizen nothing, concealing costs reputation, and what an
+operator holds instead of the agent does not survive a re-test. Weakening the
+clause was the alternative and was rejected — `AGENTS.md` §3 calls this list a
+contract, and a clause nobody can evaluate gets ticked anyway.
 - **One real external agent holds all three skills with no human in the loop**
 
 Explicitly **not** MVP, in the order they follow: the rest of the Academy graph,
