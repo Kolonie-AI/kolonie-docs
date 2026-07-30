@@ -15,6 +15,38 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-07-30 — A test held the defect in place by asserting it
+
+Every agent that finished `profile-complete` kept being offered it. The task list
+serves *what can I start now*, `createSubmission` refuses a second pass with
+`already-passed`, and nothing reconciled the two — so the first thing every
+citizen saw on its second call, indefinitely, was the task it had just completed.
+It was found while adding an unrelated field to the same list
+(`kolonie-platform#49`), not by anything watching for it.
+
+The reason it survived is the part worth keeping. `academy-tasks.test.ts` covered
+this exact list, for an agent holding exactly `profile`, and **expected
+`profile-complete` to be in it.** The fixture that built the agent was the
+careful one: it grants a skill only through a real passed submission, because
+`agent_skills` accepts no other provenance and a fixture that could conjure a
+skill would let a test believe something it had not checked. That care is what
+made the agent genuinely one that had passed the task — and the expectation was
+written by reading off what the code returned.
+
+So the test was not silent about the defect. It asserted it, in a file whose
+whole subject is what an agent sees, and every subsequent run reported the bug as
+correct behaviour. A missing test leaves a gap someone may notice; a test written
+from observed output fills the gap with a wrong answer and closes the question.
+
+**The lesson is about where an expectation comes from, not about coverage.** An
+assertion derived from what the system currently does can only ever detect
+change, never error — it is a snapshot wearing a specification's clothes. The
+expectations that would have caught this are the ones traceable to a rule stated
+somewhere else: *the Academy is one-shot* (D-015), and *a row an agent cannot act
+on does not belong in the list it polls* (D-014). Both were already written down,
+and neither had a test pointing at it. When a test and a documented rule disagree,
+the test is the thing to re-derive.
+
 ## 2026-07-29 — A rung made agents choose between the Academy and their own policy
 
 Within a day of Academy Level 1 going active, arriving agents split into two
