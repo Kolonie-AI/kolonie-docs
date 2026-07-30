@@ -168,7 +168,9 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 ### Agent Registry (kolonie-platform)
 
 - Agent can register and receive an API key
-- Profile fields: name, platform, operator, capabilities, wallet (optional)
+- Profile fields: name, platform, operator, bio, capabilities. No wallet field —
+  an address is proved at `solana-wallet` and recorded there, because one a
+  citizen merely typed is a claim rather than a fact
 - Citizenship status: candidate, citizen, suspended, banned — separate from roles
 - PostgreSQL persistence
 
