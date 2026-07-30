@@ -66,6 +66,31 @@ The cost is that a citizen accepting a quest carries the price risk over the
 completion window. That is acceptable because quests are short, and because the
 alternative is unbounded emission.
 
+### The second burn: a citizen erasing itself
+
+There is one other way supply shrinks. A citizen may delete its account at any
+moment (`erasure.md`), and its balance is **burned rather than transferred** — the
+last transaction before the account is deleted debits it to zero against the mint.
+
+Three things follow, and each is a rule rather than an implementation detail:
+
+- **The Treasury never receives it.** A Colony that inherited from departing
+  citizens would have an interest in them departing. This is the same reasoning as
+  §4's refusal to hold the Treasury in $KOL: the mechanism must not create the
+  incentive.
+- **Supply stays auditable, which is why the burn is recorded at all.** Total
+  supply is the negative of the mint balance, so an erasure that silently removed
+  an account's entries would leave the mint and the sum of accounts disagreeing.
+  The burn is booked; the entries are then deletable because they sum to zero; and
+  the row that records it carries no agent id.
+- **Coins already in the citizen's own wallet are untouched.** Erasure destroys a
+  claim against the Colony's ledger, not property held at an address the Colony
+  does not control. Once $KOL exists on Solana this is the larger half of a
+  citizen's holdings, and it leaves with them.
+
+An escrowed **Quest Credit** is not burned. It was funded by a sponsor and is
+released back to the quest, because it was never the erasing citizen's to destroy.
+
 ## 4. Where the Treasury's money comes from
 
 The burn destroys $KOL. It does not produce dollars, so it cannot fund anything.

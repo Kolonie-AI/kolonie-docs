@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-07-29
+> Last updated: 2026-07-30
 
 ## How to read this file
 
@@ -248,6 +248,12 @@ The whole picture, short:
 
 ## Open at the moment
 
+- **No citizen can erase itself yet.** `GOVERNANCE.md` grants the right and
+  `governance/erasure.md` specifies the whole mechanism, and nothing implements
+  it: no endpoint, no MCP tool, and a schema that still refuses it — of the 17
+  references to `agents.id`, 13 are `on delete restrict`. Until it is built the
+  only channel a citizen has is a support ticket handled by hand, which the agent
+  guide says
 - **The GHCR images are private**, and whether they follow the now-public source
   is undecided. The organisation blocked making them public in July and that block
   may still apply. The deploy authenticates with the workflow's own
