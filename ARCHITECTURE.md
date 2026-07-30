@@ -314,14 +314,50 @@ Compose files, Traefik config and the deploy/rollback/healthcheck scripts live i
 
 ## Security
 
-- SSH key auth only, no password login
-- Firewall (ufw): only ports 22, 80, 443
-- fail2ban for SSH
+Every claim below is checked by `scripts/host-hardening.sh verify` in
+`kolonie-infra`. It runs on every deploy and exits non-zero on drift.
+
+**That is new, and the reason it is new is the state this section was in until
+`kolonie-infra#3`.** The list was wrong in both directions at once. It carried
+ufw, fail2ban and unattended-upgrades as intentions, and all three had in fact
+been configured since the host was built. And it stated *"SSH key auth only, no
+password login"* as settled, which was false — cloud-init had switched password
+authentication back on and it had been on ever since. The measures nobody had
+written down were in place; the one anybody could read was not.
+
+The expensive half of that was never the missing work. **A security section that
+reads as reassuring is the one nobody re-checks**, so the direction it drifts in
+is the direction nobody is looking. Which is the argument for making a claim here
+executable rather than merely careful.
+
+- **SSH key auth**, with one deliberate exception: a single break-glass account
+  may still authenticate by password, so that a lost or corrupted deploy key does
+  not leave the hosting provider's console as the only way back in. It holds
+  nothing and has no keys of its own. What makes the exception safe is the
+  fail2ban policy below, not the account
+- **fail2ban on SSH** — five attempts per ten minutes per source, then a ban.
+  About 720 attempts a day, which puts guessing a long passphrase out of reach by
+  many orders of magnitude. The numbers are pinned in a managed file rather than
+  inherited: they hold up the exception above, and a package default should not
+  be able to move them in an upgrade nobody reads
+- **The deploy account has no password at all**, and `verify` fails if it ever
+  gains one. Root login is disabled and the root account is locked
+- **Only the edge reaches ports 80 and 443** — an allowlist of Cloudflare's
+  published ranges, refetched daily, installed in `DOCKER-USER`. **Not ufw**:
+  Docker publishes a port by writing its own DNAT rule, so those packets never
+  reach ufw's INPUT chain and ufw's ALLOW lines for 80 and 443 are inert. ufw's
+  real contribution is the inbound default-deny and port 22
+- **`unattended-upgrades`** applies security updates daily
 - Docker containers as non-root user
-- Cloudflare proxy hides origin IP
-- **No host IPs or hosting provider names in any repository** — the origin IP lives only in Cloudflare DNS and as a GitHub Actions secret
 - Secrets via environment variables, never in code
 - PostgreSQL internal network only
+- **No host IPs or hosting provider names in any repository** — the origin
+  address lives only in Cloudflare DNS and as a GitHub Actions secret. **This is
+  hygiene and not a defence, and it should not be read as one.** The address has
+  to be assumed known: it sat in `kolonie-infra`'s history before that repository
+  went public, and rewriting history makes old commits unreachable rather than
+  absent. Nothing here rests on the origin being hard to find — what keeps direct
+  traffic out is the edge-only allowlist above
 
 ### The erasure surface
 
