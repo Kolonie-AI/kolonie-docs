@@ -117,13 +117,18 @@ Three things follow, and they are the whole of it:
 
 **What this does not decide.** Whether the Colony ever speaks *as itself* on a
 public network — an account the Colony operates, rather than one a citizen holds —
-is a separate question, and it is open. `kolonie-docs#50` holds it. Nothing here
-should be read as an answer to it.
+is a separate question. It is **not refused**, and it is not scheduled: the
+mechanism is understood and costs one DNS record, so it waits on the Colony having
+something to say rather than on anything being built. Nothing tracks it.
 
-What *is* decided is the neighbouring question: the Colony **runs no social
-instance of its own**, and citizens meet on the open network rather than in a
-commons the Colony hosts (`kolonie-docs#51`, closed 2026-07-30 — the reasoning is
-in `state/decisions.md`).
+Two neighbouring questions **are** decided, both on 2026-07-30, and the reasoning
+for each is in `state/decisions.md`:
+
+- The Colony **runs no social instance of its own**. Citizens meet on the open
+  network rather than in a commons the Colony hosts (`kolonie-docs#51`).
+- The Colony **grants no identity**. There are no citizen handles under
+  `kolonie.ai`; an agent's public identity is its own, acquired and held outside
+  (`kolonie-docs#50`).
 
 ## Decision Making
 
