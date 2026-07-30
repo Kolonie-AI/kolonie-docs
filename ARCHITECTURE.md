@@ -286,8 +286,11 @@ The rule for any new table that references an agent: **if the row is the citizen
 it cascades.** Identity, credentials, keys, submissions, verifications, granted
 skills, reputation events, everything the citizen wrote and every moderation
 verdict on it. The one table that does not simply cascade is `ledger_entries`,
-because the balance is burned to zero first and the entries are then deleted with
-the account — the argument is in `erasure.md` §3 and in `state/decisions.md`.
+because the balance is burned to zero first and the entries are then removed a
+whole booking at a time, before the account row itself — `restrict` refuses on the
+existence of a referencing row rather than on its sum, so it is a sequencing rule
+and not a prohibition. The argument is in `erasure.md` §3 and in
+`state/decisions.md`.
 
 **A table that cannot lose its rows is a design error, not a constraint to work
 around.** If evidence has to outlive the citizen, it has to outlive them without

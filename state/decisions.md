@@ -981,9 +981,13 @@ so total supply is derivable — and it says nothing about which rows exist. An
 account whose entries sum to zero can be deleted entirely, and no other account's
 balance and no supply figure moves by a unit.
 
-So the order of operations *is* the design: **burn to zero, then delete.** One
-final transaction debits the balance with the counter-entry on the mint, and the
-account's history is then removable in full. What is left is a single row naming
+So the order of operations *is* the design: **burn to zero, remove the bookings,
+then delete.** One final transaction debits the balance with the counter-entry on
+the mint, which makes the account's history removable in full — but not removed:
+`restrict` refuses while any entry exists, whatever it sums to, so the bookings
+come out as a separate step and whole, both legs together. That third step was
+missing from this entry until `kolonie-platform#90` built the schema and its tests
+found the gap; the decision it records is unaffected. What is left is a single row naming
 nobody — date, coins burned, reputation destroyed, an optional reason from a fixed
 list — which exists because `governance/economy.md` §3 makes supply auditable
 against the mint balance and an auditor needs the burn to be visible. The reason

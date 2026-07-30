@@ -72,10 +72,10 @@ this: `tasks.created_by` is the one reference to an agent that is neither
 turns out to be the right rule, and it is the model for any table that has to
 outlive a citizen: the row survives without them, or it does not survive.
 
-## 3. Why the ledger survives it: burn, then delete
+## 3. Why the ledger survives it: burn, remove, delete
 
 The obvious objection is recorded in the schema itself. `ledger_entries.agent_id`
-restricts deletion, and the comment says why:
+restricts deletion, and the comment said why:
 
 > `restrict`: an agent that has ever been paid cannot be deleted. Coins that were
 > minted have to remain accounted for, or total supply stops being auditable —
@@ -92,11 +92,57 @@ So erasure books one last transaction before it deletes anything:
    on the mint. The coins are destroyed, not transferred to the Treasury — they
    were the citizen's, and the Colony does not inherit from a citizen it is
    erasing.
-2. The agent's entries now sum to zero, so every one of them is deleted with the
-   agent.
+2. Every booking the agent's account appears in is **removed whole**, both legs
+   together. Only then can the agent row itself go.
 3. One row is written that names nobody: the date, how many coins were burned, how
    much reputation was destroyed, and optionally a coarse reason chosen from a
    fixed list.
+
+### Three steps and not two, and why the middle one is its own
+
+The obvious reading of that list is *burn, then delete* — two steps, with the
+entries going *with* the agent row. It is the reading this section carried for as
+long as nobody had built it, and it is one step short of what the database does.
+The gap was found by the tests in `kolonie-platform#90` rather than by reading,
+which is why it is worth stating twice:
+
+**`restrict` refuses on the existence of a referencing row and never looks at its
+sum.** A burned account still has every entry it ever had, so the delete is still
+refused. The burn does not make the rows go; it makes them *safe to remove*.
+Removing them is a separate act, and it has to happen before the agent row.
+
+**The entries go a whole booking at a time.** Deleting only the citizen's leg
+would leave the mint's counter-entry alone and the transaction summing to
+something other than zero, which the deferred constraint trigger refuses at
+`COMMIT` — correctly, because that is exactly the state that makes supply
+unauditable. Removing both legs moves total supply by nothing at all, because the
+booking summed to zero to begin with.
+
+**So the burn is arithmetically redundant, and is booked anyway.** Its own booking
+is removed by step 2 along with every other, and total supply would land in the
+same place without it. It is booked because it is what makes step 2 *checkable*:
+after the burn the agent's entries sum to zero, which is the invariant this whole
+section rests on, and the transaction asserts it rather than assuming it. A
+removal performed without ever establishing that invariant is one nobody can audit
+afterwards — and there is nothing left to audit it against.
+
+### What this cannot reach: a booking against anything but the mint
+
+Because bookings go whole, a transaction with a leg on some *other* account cannot
+be removed without moving that account's balance. Three cases, none of which any
+code writes today:
+
+- **Another citizen** — a transfer. Removing it would change a neighbour's balance
+  because their neighbour left. That is not erasure, it is confiscation.
+- **The Treasury** — a purchase. The Colony would refund itself out of a citizen's
+  departure, which §8 forbids outright.
+- **The faucet** — the same shape, one account over.
+
+The platform refuses such an erasure and says so, rather than silently rewriting a
+third party's books. That is a gap and it is named here rather than left for
+somebody to discover: **the day the Colony books its first transfer, erasure stops
+working for the citizens who used it**, and the release path has to exist before
+that booking does. The same holds for an escrowed quest credit (§5).
 
 **That row is the only residue of an erasure, and it exists because the coin is
 tradeable.** `governance/economy.md` §3 makes supply auditable by construction —
