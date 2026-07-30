@@ -214,7 +214,9 @@ that remains open.
 
 **What this does not decide:** whether the Colony ever speaks *as itself* on a
 public network. That is an account the Colony operates rather than a place it
-hosts, it costs no instance, and `kolonie-docs#50` is where it now sits.
+hosts, and it costs no instance. It is not refused and it is not scheduled — see
+*Why the Colony grants no identity* above, which closed the issue that briefly
+held it.
 
 ## Where the first external quest money comes from
 
