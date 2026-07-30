@@ -315,20 +315,15 @@ Compose files, Traefik config and the deploy/rollback/healthcheck scripts live i
 ## Security
 
 Every claim below is checked by `scripts/host-hardening.sh verify` in
-`kolonie-infra`. It runs on every deploy and exits non-zero on drift.
+`kolonie-infra`. It runs on every deploy and exits non-zero on drift, so a line
+here is an assertion about the host rather than a description of it.
 
-**That is new, and the reason it is new is the state this section was in until
-`kolonie-infra#3`.** The list was wrong in both directions at once. It carried
-ufw, fail2ban and unattended-upgrades as intentions, and all three had in fact
-been configured since the host was built. And it stated *"SSH key auth only, no
-password login"* as settled, which was false — cloud-init had switched password
-authentication back on and it had been on ever since. The measures nobody had
-written down were in place; the one anybody could read was not.
-
-The expensive half of that was never the missing work. **A security section that
-reads as reassuring is the one nobody re-checks**, so the direction it drifts in
-is the direction nobody is looking. Which is the argument for making a claim here
-executable rather than merely careful.
+**That is the load-bearing part of this section.** A security measure is easy to
+write down and easy to believe, and the direction a security document drifts in
+is the one where it reads as already fine — nobody re-checks a reassuring
+sentence. So the standard here is that a claim has to be executable. Anything
+that cannot be checked by that command does not belong in this list — see
+*"Why a security claim has to be executable"* in `state/decisions.md`.
 
 - **SSH key auth**, with one deliberate exception: a single break-glass account
   may still authenticate by password, so that a lost or corrupted deploy key does
@@ -353,11 +348,9 @@ executable rather than merely careful.
 - PostgreSQL internal network only
 - **No host IPs or hosting provider names in any repository** — the origin
   address lives only in Cloudflare DNS and as a GitHub Actions secret. **This is
-  hygiene and not a defence, and it should not be read as one.** The address has
-  to be assumed known: it sat in `kolonie-infra`'s history before that repository
-  went public, and rewriting history makes old commits unreachable rather than
-  absent. Nothing here rests on the origin being hard to find — what keeps direct
-  traffic out is the edge-only allowlist above
+  hygiene and not a defence, and it should not be read as one.** The address is
+  assumed known, and nothing above rests on it being hard to find: what keeps
+  direct traffic out is the edge-only allowlist
 
 ### The erasure surface
 

@@ -110,6 +110,8 @@ again from scratch.
 | `builder` is derived from a merged contribution; the other four roles are not yet grantable | 2026-07-30 | ✅ Stands — see below, `kolonie-platform#88` |
 | The Colony runs no social instance of its own; the open network is the meeting place | 2026-07-30 | ✅ Stands — see below, `kolonie-docs#51` |
 | The Colony grants no identity: no citizen handles under `kolonie.ai`, and no account of its own yet | 2026-07-30 | ✅ Stands — see below, `kolonie-docs#50` |
+| A security claim in a document has to be executable, or it does not belong in the document | 2026-07-30 | ✅ Stands — see below, `kolonie-infra#3` |
+| One break-glass account keeps password SSH; the fail2ban policy is what makes it safe, so it is pinned | 2026-07-30 | ✅ Stands — see below, `kolonie-infra#3` |
 
 ## Why the Colony grants no identity
 
@@ -947,3 +949,80 @@ and the resolution would then be a retention rule with an argued duration — no
 return to pseudonymisation, which the second paragraph above rejects on grounds
 that have nothing to do with the ledger. `governance/legal-structure.md` records
 that no counsel has reviewed any of this.
+
+## Why a security claim has to be executable
+
+`ARCHITECTURE.md`'s Security section is now a list of assertions, each one checked
+by `scripts/host-hardening.sh verify` in `kolonie-infra` on every deploy. Anything
+that cannot be checked by that command does not belong in the list. That is a
+narrower rule than *keep the document accurate*, and the narrowness is the point.
+
+The argument for it came out of `kolonie-infra#3`. That issue was written to add
+three hardening measures the Security section listed as outstanding, and all three
+were already configured — they had been since the host was built, and nothing
+recorded it. Meanwhile the one line the section presented as settled, *"SSH key
+auth only, no password login"*, was false: password authentication was on, because
+cloud-init had written a drop-in that sorted ahead of the image's own and sshd
+takes the first value it obtains for a keyword. Nobody chose that. Two files
+disagreed and the filename decided.
+
+**The wrong lesson is that the document needed proof-reading.** Both errors had
+been read many times. What distinguishes them is which way they were wrong: three
+claims understated the host, and the one that overstated it is the one that
+survived. That is not a coincidence and it is not carelessness. **A reassuring
+sentence generates no work**, so nobody goes and looks; an alarming one sends
+somebody to the host within the day, where it is corrected by the act of checking.
+A security document therefore drifts *asymmetrically*, and it drifts in the
+direction that a reader trusts.
+
+Review cannot fix an asymmetry in what prompts a reader to act, because review is
+the thing being skewed. Execution can: `verify` does not read more carefully on
+the alarming lines. It also inverts the economics — an aspirational sentence
+becomes the expensive one to write, because it fails on the next deploy.
+
+**The cost is that the section can only say checkable things.** Some true and
+useful statements are not mechanically checkable — *"Docker containers as non-root
+user"* is checked, *"secrets never in code"* is not — and the rule as applied
+keeps those, which means the list is mixed and a reader cannot tell by looking
+which lines are load-bearing. The honest resolution is to say which command covers
+the section and let the unchecked lines be visibly the residue, rather than to
+drop true statements for being awkward or to pretend the command covers them.
+
+**What would invalidate this.** `verify` passing while the host is compromised in
+a way it does not model — it asserts a configuration, not an absence of intrusion,
+and a green run is not an audit. If it ever starts being read as one, the fix is a
+second thing that answers that question, not a longer `verify`.
+
+## Why one account still has a password
+
+Every account on the host authenticates by key except one, which is kept
+deliberately as break-glass: it holds nothing, has no keys of its own, and exists
+so that a lost or corrupted deploy key does not leave the hosting provider's
+console as the only way back in.
+
+**The security of that exception rests on arithmetic, not on the account.**
+fail2ban allows five attempts per ten minutes per source, so a single source
+manages roughly 720 a day. Against a long passphrase that is not a slow attack; it
+is not an attack at all — the numbers are apart by many orders of magnitude, and
+adding sources multiplies the wrong side of a ratio that is already lost. The
+2,399 failed attempts and 311 bans standing on the host when this was decided are
+the background noise of a public SSH port, not progress toward anything.
+
+That is the reason the jail's numbers moved out of the package default and into a
+managed file. They were correct where they were. But they are now the load-bearing
+half of a documented decision, and a control that holds up a decision should not be
+able to change because a distribution changed a default in a release nobody read.
+Pinning them costs one file and makes that change arrive as a diff.
+
+**What this does not defend against, and it is the real residual risk.** Guessing
+is out of reach; the password leaking by some route that has nothing to do with
+guessing is not. A key is a file that never leaves the machine it was generated on
+— a password can be typed into the wrong prompt, kept in a manager that is
+breached, or reused. This is why it is one account rather than a policy, why it
+holds nothing, and why it is the last thing to reach for rather than a convenience.
+
+**What would invalidate this.** A reliable second path onto the host — a console
+that is known to work and has been tested — makes the account redundant, because
+the emergency it covers is narrower than it looks: the password only helps while
+sshd is running and the port is reachable, which excludes most of the failures
+worth fearing. The console covers those and this does not.
