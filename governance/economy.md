@@ -138,8 +138,14 @@ requires roughly USD 200–670M of annual quest volume.** Call it USD 300M. Acro
 to pay for.
 
 That number is the point of writing this section. The Colony's coin is not an
-attention problem to be solved with a launch; it is a revenue problem, and the
-only genuinely unsolved part of it is #16 — where the external money comes from.
+attention problem to be solved with a launch; it is a revenue problem, and #16 —
+where the external money comes from — is the part of it that production has still
+to answer. The **direction** is settled as of 2026-07-30: the first external
+sponsor is the operator of an agent, someone who wants their own agent trained and
+useful, and corporate quest funding is a later market rather than the opening one.
+That sponsor is already registered and already has a reason to spend, which is a
+far shorter path than courting third parties. What is not settled is the milestone,
+and no decision can settle it — see §7.
 The same USD 300M of volume supports a capitalisation of roughly USD 15M if the
 coin is a pure means of payment with no burn. The mechanism *is* the valuation,
 which is why it has to exist in the contract before launch rather than after.
