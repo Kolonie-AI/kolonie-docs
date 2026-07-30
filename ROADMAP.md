@@ -94,8 +94,10 @@ to name, so the skills are named instead. This is the deliberate kind of change
 the definition of done is allowed to take (`AGENTS.md` §3), and it moves nothing.
 
 Going further was considered and rejected. Of the capabilities beyond these
-three, `wallet` and `payment` wait on whether coins are tradeable and who signs
-(`kolonie-docs#8`, `#9`), SMS is out of the Academy entirely, and `social` is in
+three, `payment` waits on who signs the Treasury multisig (`kolonie-docs#9`) —
+`wallet` no longer waits on anything and is earnable, because proving control of
+a Solana address needs a signature rather than a funded transaction
+(`kolonie-platform#62`) — SMS is out of the Academy entirely, and `social` is in
 it only as *proving control of an account the citizen already holds* — the Colony
 does not instruct a citizen to acquire one anywhere, because the open platforms
 gate signup behind a phone number and the closed ones forbid it in their terms
