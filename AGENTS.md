@@ -205,46 +205,108 @@ size silently drops rows — the command succeeds and prints a shorter, plausibl
 wrong answer. It has already happened: on 2026-07-30 the board held 146 items,
 `--limit 100` was what these examples said, and query 1 returned **one** of the six
 issues that were actually Ready. Everything above roughly issue #39 was invisible.
-
 The cause is that **Done items dominate the board and come first** — 92 of those
-146. Raising the number is the fix that keeps needing to be raised; archiving Done
-items is the one that stops the limit from mattering (`kolonie-docs#53`). Until
-that lands, keep the number comfortably above the board's size and check it
-occasionally with query 4.
+146.
+
+**The number is 1000 because it is sized to be unreachable, not sized to the
+board.** Sizing it to the board is what has to be redone every time the board
+grows, and being one growth spurt behind is the failure above. A limit above any
+plausible board size cannot truncate, and it is free: `--limit` caps the
+pagination, it does not force it, so `gh` still stops on the last page. Measured
+on 2026-07-30 against a 148-item board, `--limit 1000` and `--limit 300` both
+fetch the same two pages and finish within a second of each other.
+
+Free is not the same as unbounded, so keep the board small as well, with query 5.
+Two independent defences: the limit means a stale number cannot silently truncate
+an answer, and the archive means the board does not grow into the limit anyway.
 
 **1. What can be started right now, by anyone:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **4. The whole board at a glance:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 300 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
+
+**5. Prune the board — Done items are archived a fortnight after they close.**
+
+```bash
+CUTOFF=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+gh api graphql --paginate -f query='
+query($endCursor:String){
+  organization(login:"Kolonie-AI"){ projectV2(number:1){
+    items(first:100, after:$endCursor){
+      pageInfo{ hasNextPage endCursor }
+      nodes{ id
+        fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }
+        content{ ... on Issue { closedAt } } } } } } }' \
+  --jq '.data.organization.projectV2.items.nodes[]
+        | select(.fieldValueByName.name=="Done" and .content.closedAt != null)
+        | "\(.content.closedAt) \(.id)"' \
+| awk -v c="$CUTOFF" '$1 < c { print $2 }' \
+| while read -r id; do
+    gh api graphql -f query='mutation($p:ID!,$i:ID!){ archiveProjectV2Item(input:{projectId:$p,itemId:$i}){ item{ id } } }' \
+      -f p=PVT_kwDOEmwuYs4BebbB -f i="$id" --jq '"archived \(.data.archiveProjectV2Item.item.id)"'
+  done
+```
+
+**It is a GraphQL query and not a fifth `item-list`, for a reason worth knowing
+before rewriting it:** `gh project item-list` does not return `closedAt` — its
+`content` object carries `body`, `number`, `repository`, `title`, `type` and `url`
+and nothing else — so the retention window cannot be evaluated from it. Nor does
+`--jq` accept `--arg`, which is why the cutoff is applied by `awk` rather than
+inside the filter. Both were found by writing the obvious version of this command
+first and watching it fail.
+
+`unarchiveProjectV2Item` is the inverse and takes the same arguments, so a
+mis-archived item costs one command. Expect the item list to lag the mutation by
+a call or two — archiving and immediately re-counting shows the old number.
+
+An archived item stays attached to its issue and drops out of `item-list`, which
+is the distinction wanted: a closed issue is history, and history belongs to the
+issue rather than to the list of what to work on. **Finished work is read with
+`gh issue list --state closed`**, not off the board — that query has no retention
+window and never needed one.
+
+**A fortnight, and not zero.** A board where work vanishes the moment it merges
+loses the *what happened this week* read that makes a standup unnecessary. It is
+also not indefinite: at the rate of the opening week — 10, 37 and 51 issues closed
+on 27, 28 and 29 July — an unpruned board reaches four figures within a quarter,
+and the number in the four queries above would have to move again.
+
+**This step is a command in the loop rather than a scheduled workflow, and that is
+a limitation rather than a design.** The built-in *auto-archive items* workflow is
+configurable only in the Projects UI, and a scheduled Action would need a
+project-scoped token stored as a secret, which is a long-lived credential bought
+for a cron job. Either is an improvement; `kolonie-docs#55` holds the choice.
+Until then it runs when an agent runs the loop, which is the same mechanism the
+rest of this section relies on.
 
 Then read `state/STATUS.md` for what exists, what is running and what is
 deliberately parked. Read it *after* the board, not before: the board is current
 by construction, the prose is current by discipline.
 
-**These four queries live here and nowhere else.** Every other document links to
+**These five queries live here and nowhere else.** Every other document links to
 this section instead of copying them — they were duplicated across six files
 until 2026-07-29, in four variants, which is five extra edits every time the
 project number or a field name changes.
