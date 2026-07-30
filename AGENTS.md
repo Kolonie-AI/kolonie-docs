@@ -248,7 +248,47 @@ gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
-**5. Prune the board — Done items are archived a fortnight after they close.**
+**5. Check that the board is still pruning itself.** Done items are archived
+automatically; this confirms the thing doing it is switched on.
+
+```bash
+gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1){
+  workflows(first:30){ nodes{ name enabled } } } } }' \
+  --jq '.data.organization.projectV2.workflows.nodes[]
+        | select(.name=="Auto-archive items") | "Auto-archive items: \(.enabled)"'
+```
+
+`false`, or no output at all, means the board has started growing again and the
+manual sweep below is how it gets caught up.
+
+**What archives, and what the API will not tell you.** The intended rule is *Done
+items whose issue has been untouched for a fortnight*, and it lives in the
+workflow's own filter, set in the Projects UI on 2026-07-30 — the day the
+workflow was switched on.
+
+**The filter string is deliberately not reproduced here, because nobody writing
+this file could read it back.** `ProjectV2Workflow` exposes `name`, `enabled`,
+`createdAt` and `updatedAt` and **not the filter**, so a copy in this file would
+be a claim about a setting it cannot check. Open the workflow if the exact
+boundary matters.
+
+**What is written above is intent, not a second copy of the rule**, and the
+distinction is the same one `onboarding/academy.md` makes about quoting somebody
+else's terms of service: the UI is the only authority on the window, and a number
+restated here could disagree with the live setting without anything noticing.
+One record, or none — the rule this project already applies to status labels and
+to the coin ledger (D-002). If the window ever has to be authoritative in Git,
+that is the argument for the scheduled Action in `kolonie-docs#55`, and the
+reason that issue is closed rather than deleted.
+
+Note also that the auto-archive filters on `updated:` — GitHub offers no
+`closed:`-relative term for it. An issue still collecting comments after it
+closes therefore stays on the board longer than a fortnight, which is the better
+behaviour of the two and is not what *"a fortnight after they close"* would have
+promised.
+
+**The manual sweep**, for catching up after the workflow has been off, or for
+pruning on a tighter window than the filter:
 
 ```bash
 CUTOFF=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -294,13 +334,16 @@ also not indefinite: at the rate of the opening week — 10, 37 and 51 issues cl
 on 27, 28 and 29 July — an unpruned board reaches four figures within a quarter,
 and the number in the four queries above would have to move again.
 
-**This step is a command in the loop rather than a scheduled workflow, and that is
-a limitation rather than a design.** The built-in *auto-archive items* workflow is
-configurable only in the Projects UI, and a scheduled Action would need a
-project-scoped token stored as a secret, which is a long-lived credential bought
-for a cron job. Either is an improvement; `kolonie-docs#55` holds the choice.
-Until then it runs when an agent runs the loop, which is the same mechanism the
-rest of this section relies on.
+**Why the enforcement sits in the board and not in a workflow file here.** A
+scheduled Action would put the window in Git, diffable, which is the one thing
+the arrangement above gives up. It would also need a token with `project` scope
+stored as a secret — a long-lived credential created for board hygiene, in a
+project whose `ARCHITECTURE.md` is deliberately strict about those. That trade
+was judged the wrong way round: the benefit is tidiness, the cost is structural,
+and the failure mode of the chosen option is graceful. If the auto-archive is
+switched off, the board grows and the queries keep answering correctly, because
+`--limit` is sized for that (see above). Nothing goes silently wrong; the board
+merely stops being tidy, and query 5 says so in one line.
 
 Then read `state/STATUS.md` for what exists, what is running and what is
 deliberately parked. Read it *after* the board, not before: the board is current
