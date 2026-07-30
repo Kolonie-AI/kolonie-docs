@@ -65,8 +65,8 @@ The whole picture, short:
   requires `github` hard, so the builder branch no longer waits on an undecided
   question about what makes a comment substantive.
 - **Deliberately parked:** host hardening (`ufw`, `fail2ban`,
-  unattended-upgrades) and backups. The slice can be built and tested locally
-  without any of it.
+  unattended-upgrades). The slice can be built and tested locally without it.
+  Backups are no longer parked — see below.
 
 ## What exists
 
@@ -83,6 +83,19 @@ The whole picture, short:
   Traefik serves production Let's Encrypt certificates at the origin for all five
   names, so the Cloudflare-to-origin hop is authenticated rather than merely
   encrypted (`kolonie-infra#2`)
+- **The database is backed up daily, and the backup has been restored** — a
+  `pg_dump` into an encrypted restic repository on object storage off the host,
+  on a systemd timer at 03:00. The restore test of 2026-07-30 brought back 20
+  tables and 338 rows identical to the live database (`kolonie-infra#4`). Two
+  repository passwords open it, one of them held off the host, because a key
+  stored only on the machine being backed up is not a key
+- Every snapshot is kept; nothing prunes. restic deduplicates and then
+  compresses, so three snapshots held 425 KiB of dumps in 106 KiB of repository
+- A backup that stops is visible without anyone looking: `health-report.sh` emits
+  the age of the last *successful* run, and Health Watch files an issue once it
+  passes 36 hours. `/opt/kolonie/.env` is **not** covered — the secrets do not
+  live where the database goes, and a full host rebuild still needs them from
+  somewhere else
 
 **Deployment**
 
