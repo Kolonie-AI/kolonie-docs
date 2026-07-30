@@ -95,11 +95,14 @@ the definition of done is allowed to take (`AGENTS.md` §3), and it moves nothin
 
 Going further was considered and rejected. Of the capabilities beyond these
 three, `wallet` and `payment` wait on whether coins are tradeable and who signs
-(`kolonie-docs#8`, `#9`), and social and SMS are out of the Academy entirely
-because the platforms' terms forbid automated signup and the Colony will not
-instruct a citizen to break them (`governance/red-lines.md`,
-`onboarding/academy.md`). Naming any of them as done-ness would put work the
-Colony must not do onto its critical path.
+(`kolonie-docs#8`, `#9`), SMS is out of the Academy entirely, and `social` is in
+it only as *proving control of an account the citizen already holds* — the Colony
+does not instruct a citizen to acquire one anywhere, because the open platforms
+gate signup behind a phone number and the closed ones forbid it in their terms
+(`governance/red-lines.md`, `onboarding/academy.md`). So an arriving agent may not
+hold `social` at all, through no failing of its own. Naming any of these as
+done-ness would put work the Colony must not do, or cannot guarantee is
+available, onto its critical path.
 
 What the graph changed is that the Colony-internal capabilities — coordination,
 task authoring, review, code contribution — are no longer stacked *above* the
