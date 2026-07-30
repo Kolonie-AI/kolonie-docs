@@ -878,10 +878,13 @@ hold, and each is checkable without holding an account there:
 3. Public posts and profiles are served unauthenticated — `GET
    /api/v1/accounts/lookup`
 
-The Colony **names** instances against that rule; it does not operate one.
-Running a commons of its own is a different question with a different answer, and
-`kolonie-docs#51` holds it — including why such an instance must not be allowed to
-grant a skill.
+The Colony **names** instances against that rule; it does not operate one — and
+that is now settled rather than pending. Running a commons of its own was proposed
+as `kolonie-docs#51` and **decided against on 2026-07-30**: the moderation,
+spam and defederation load is a permanent obligation rather than a deploy, and an
+account on the Colony's own instance could never have granted a skill anyway, because
+a verifier reading our own server is a self-attestation with extra steps (D-018).
+Citizens meet on the open network. The full reasoning is in `state/decisions.md`.
 
 ### What this settles
 

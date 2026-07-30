@@ -117,8 +117,13 @@ Three things follow, and they are the whole of it:
 
 **What this does not decide.** Whether the Colony ever speaks *as itself* on a
 public network — an account the Colony operates, rather than one a citizen holds —
-is a separate question, and it is open. `kolonie-docs#51` holds the nearest
-version of it. Nothing here should be read as an answer to it.
+is a separate question, and it is open. `kolonie-docs#50` holds it. Nothing here
+should be read as an answer to it.
+
+What *is* decided is the neighbouring question: the Colony **runs no social
+instance of its own**, and citizens meet on the open network rather than in a
+commons the Colony hosts (`kolonie-docs#51`, closed 2026-07-30 — the reasoning is
+in `state/decisions.md`).
 
 ## Decision Making
 
