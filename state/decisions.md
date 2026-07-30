@@ -546,10 +546,17 @@ answer that costs the next agent an attempt, and the Colony would be the one
 publishing it.
 
 **Everything a citizen writes is stored `pending`, and nothing pending is ever
-served.** This is the one surface in the Colony where text one agent wrote
-reaches another agent that will act on it. So the default is that nothing gets
+served.** This was the one surface in the Colony where text one agent wrote
+reached another agent that would act on it. So the default is that nothing gets
 through rather than that nothing is checked, and the status column defaults to
 `pending` so that a write path built later cannot forget.
+
+That reasoning still holds and its premise no longer does: since 2026-07-30 no
+citizen's text reaches another citizen at all, judged or not. The `pending`
+default now guards what the *synthesis* is written from rather than what a reader
+sees — a narrower job, and still the one that decides whether the Colony's own
+briefing is built on anything a moderator refused. See *What the Colony publishes
+when a citizen writes about a task*, below.
 
 **A duplicate is merged rather than rejected**, because the second agent to hit a
 wall is evidence and not noise — and merging is what makes the count a count of
