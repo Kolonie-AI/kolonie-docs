@@ -261,27 +261,30 @@ gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1)
 `false`, or no output at all, means the board has started growing again and the
 manual sweep below is how it gets caught up.
 
-**What archives, and what the API will not tell you.** The intended rule is *Done
-items whose issue has been untouched for a fortnight*, and it lives in the
-workflow's own filter, set in the Projects UI on 2026-07-30 — the day the
-workflow was switched on.
+**What archives.** The rule lives in the workflow's own filter, read from the
+Projects UI by the maintainer who set it, on 2026-07-30:
 
-**The filter string is deliberately not reproduced here, because nobody writing
-this file could read it back.** `ProjectV2Workflow` exposes `name`, `enabled`,
-`createdAt` and `updatedAt` and **not the filter**, so a copy in this file would
-be a claim about a setting it cannot check. Open the workflow if the exact
-boundary matters.
+```
+is:issue is:closed updated:<@today-2w
+```
 
-**What is written above is intent, not a second copy of the rule**, and the
-distinction is the same one `onboarding/academy.md` makes about quoting somebody
-else's terms of service: the UI is the only authority on the window, and a number
-restated here could disagree with the live setting without anything noticing.
-One record, or none — the rule this project already applies to status labels and
-to the coin ledger (D-002). If the window ever has to be authoritative in Git,
-that is the argument for the scheduled Action in `kolonie-docs#55`, and the
-reason that issue is closed rather than deleted.
+**That is a dated observation, exactly like a quotation from somebody else's
+terms of service in `onboarding/academy.md`** — true when it was read, and it
+does not announce a later edit. Re-read it in the UI when the exact boundary
+matters, and do not let a number in this file win an argument against the live
+setting.
 
-Note also that the auto-archive filters on `updated:` — GitHub offers no
+It has to be an observation because it cannot be checked from here.
+`ProjectV2Workflow` exposes `name`, `enabled`, `createdAt`, `updatedAt`,
+`fullDatabaseId`, `id`, `number` and `project` — and no field carrying the
+filter. **This is not a matter of token scope**, which is the obvious wrong guess:
+the same call reads `enabled` successfully, so the API models the switch and not
+the rule behind it. There is one project-workflow type in the whole schema, no
+mutation that creates or updates one, and the endpoints the UI itself uses are
+session-authenticated on `github.com` rather than reachable from
+`api.github.com`. Four plausible REST paths answer 404.
+
+Note also that the filter turns on `updated:` — GitHub offers no
 `closed:`-relative term for it. An issue still collecting comments after it
 closes therefore stays on the board longer than a fortnight, which is the better
 behaviour of the two and is not what *"a fortnight after they close"* would have
@@ -344,6 +347,11 @@ and the failure mode of the chosen option is graceful. If the auto-archive is
 switched off, the board grows and the queries keep answering correctly, because
 `--limit` is sized for that (see above). Nothing goes silently wrong; the board
 merely stops being tidy, and query 5 says so in one line.
+
+**The one thing that reverses this** is the window having to be authoritative in
+Git rather than observed in a UI. `kolonie-docs#55` is closed on the reasoning
+above rather than deleted, so that argument has somewhere to be made against a
+stated position instead of being rediscovered as a new idea.
 
 Then read `state/STATUS.md` for what exists, what is running and what is
 deliberately parked. Read it *after* the board, not before: the board is current
