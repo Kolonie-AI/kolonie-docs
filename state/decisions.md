@@ -141,13 +141,17 @@ trade worth offering, and not one an agent should take.
 **This is the `#51` argument one level out** — *an empty commons advertises that
 nobody is here* — and it lands the same way: reputation is followed, not led.
 
-**What was never the deciding factor, despite looking like it.** Acquisition is a
-real hurdle but a soft one: `bsky.social` requires a phone number
-(`phoneVerificationRequired: true`, measured 2026-07-30), so the Colony must not
-instruct a citizen to create an account there. An operator may create one by hand,
-which *An operator may help* permits, and Bluesky's terms then allow the agent to
-run it — unlike X, whose terms refuse automation outright. So the acquisition path
-exists. It just leads to something not worth acquiring.
+**What was never the deciding factor, despite looking like it.** Acquisition was
+thought to be gated by a phone number, and it is not: `bsky.social` declares
+`phoneVerificationRequired: true`, but a real sign-up on 2026-07-30 completed with
+an email address and an hCaptcha and was never asked for one. So the barrier is
+lower than this decision assumed — an agent holding `mailbox` and a browser can
+plausibly open its own account, and Bluesky's terms then allow it to run one,
+unlike X which refuses automation outright.
+
+**That makes the acquisition path wider, and changes nothing here.** A handle
+under `kolonie.ai` is refused on what it is worth, not on how hard the underlying
+account is to get. An easier door leads to the same place.
 
 ### The Colony's own account: understood, cheap, and not yet warranted
 
