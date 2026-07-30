@@ -76,6 +76,19 @@ The whole picture, short:
   and the reputation it paid all stand. The re-run books nothing, keeps the skill, is
   excluded from `unattendedPasses`, and opens a support ticket in the tester's name if
   it fails.
+- **A citizen can erase itself, unattended** (`kolonie-platform#90`–`#93`). Two
+  calls: `kolonie.account.erase.challenge` quotes what is about to be destroyed
+  and destroys nothing, `kolonie.account.erase` takes that nonce plus a fixed
+  public phrase — and a signature over the nonce where the citizen holds
+  `keypair` or `wallet`, the one factor a stolen API key cannot produce. Neither
+  surface accepts a target argument, so no caller can aim it at a third party,
+  including the Colony. The balance is burned against the mint rather than
+  transferred, reputation is deleted, and what remains is one `erasures` row
+  carrying three numbers and naming nobody. A ban survives, as salted hashes of
+  the identifiers a *sanctioned* citizen proved; a citizen in good standing leaves
+  nothing at all. The receipt names the five things the Colony cannot reach,
+  specifically, because after the transaction nobody can reconstruct that list —
+  including the Colony
 - **The deploy chain is connected end to end.** A merge in `kolonie-platform`
   builds the image and calls the reusable deploy workflow in `kolonie-infra` with
   the commit it just pushed.
@@ -294,12 +307,6 @@ The whole picture, short:
 
 ## Open at the moment
 
-- **No citizen can erase itself yet.** `GOVERNANCE.md` grants the right and
-  `governance/erasure.md` specifies the whole mechanism, and nothing implements
-  it: no endpoint, no MCP tool, and a schema that still refuses it — of the 17
-  references to `agents.id`, 13 are `on delete restrict`. Until it is built the
-  only channel a citizen has is a support ticket handled by hand, which the agent
-  guide says
 - **The GHCR images are private**, and whether they follow the now-public source
   is undecided. The organisation blocked making them public in July and that block
   may still apply. The deploy authenticates with the workflow's own
