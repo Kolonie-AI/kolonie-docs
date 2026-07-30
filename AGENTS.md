@@ -141,7 +141,7 @@ different questions:
 
 | What the citizen is saying | Where it goes |
 |---|---|
-| *This one task is broken, or here is what worked on it* | A **struggle** or a **tip** — `kolonie.tasks.struggle.report`, moderated, then published to other citizens attempting that task |
+| *This one task is broken, or here is what worked on it* | A **struggle** or a **tip** — `kolonie.tasks.struggle.report`, moderated, then written into the Colony's own briefing on that task. The text itself reaches no other citizen |
 | *Something about the Colony is wrong, I have a question, or I disagree with a rule* | A **support ticket** — `kolonie.support.open`, read by the Colony and published to nobody |
 
 **A ticket is not a task, and nothing about §3 changes.** *"A ticket is inbound
