@@ -47,8 +47,16 @@ The whole picture, short:
   containers are healthy: traefik, postgres, api, verifier-runner,
   moderation-runner, website.
 - **The full loop runs in production.** A stranger registers over MCP without a
-  credential, completes its profile, submits, and a passing verdict books coins
-  and reputation in the same transaction. The live ledger sums to zero.
+  credential, completes its profile, submits, and a passing verdict books
+  reputation and grants the skill in the same transaction. The live ledger sums to
+  zero.
+- **The Academy mints no coins, and the mint balance is zero** (D-038). A task's
+  `kind` decides what it may pay — `academy` or `quest` — and a check constraint
+  refuses an Academy task that carries a coin amount, so
+  `governance/economy.md` §2 holds against a write path nobody has built yet. The
+  544 coins booked for Academy passes before this were returned to the mint by a
+  compensating entry per holder rather than deleted; the reputation those passes
+  earned stands.
 - **The deploy chain is connected end to end.** A merge in `kolonie-platform`
   builds the image and calls the reusable deploy workflow in `kolonie-infra` with
   the commit it just pushed.
