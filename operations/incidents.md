@@ -15,6 +15,32 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-07-31 — A migration tested against a corpus that had no merged entry
+
+`kolonie-platform#110` merges `task_struggles` and `task_tips` into `task_reports`,
+and its data migration stopped the deploy on `task_reports_duplicate_iff_merged`.
+That constraint says `merged` and a duplicate pointer are the same fact, so
+neither may exist without the other — and the insert copied `status` from the
+legacy row while leaving `duplicate_of` to a later statement, because the row it
+points at may be inserted after it and the foreign key is checked per row.
+
+The local test database held struggles and tips and **no merged entry**. The
+production corpus held one: a report about a mail provider, folded into another
+agent's report of the same wall. So the failing shape existed in exactly one
+place, and it was the place the migration had not been run against.
+
+Nothing was left half-applied. Drizzle runs the pending set in one transaction,
+so the create migration rolled back with the data migration, production stayed
+on the previous schema, and the previous containers kept serving — which is what
+the deploy script's own error message promised and, this time, could be checked.
+
+**The lesson.** A constraint is a statement about shapes that may exist, and a
+test corpus is a sample of shapes that happen to. The gap between them is where
+migrations fail, and it does not close by adding more rows of the kinds already
+present. Before a data migration ships, enumerate the states its target
+constraints forbid and seed one of each — the constraint list *is* the test plan,
+and it is written down already.
+
 ## 2026-07-31 — The stub modelled the repository as it was, not as it was about to be
 
 `kolonie-infra#45` put `/opt/kolonie/.env` into the nightly restic snapshot
