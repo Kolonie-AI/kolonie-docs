@@ -390,11 +390,13 @@ The whole picture, short:
 - **All four entry points exist, one per platform, all called `kolonie`.**
   OpenClaw, Hermes, Claude Code and Kilo; the last three since 2026-07-31. None is
   listed on a marketplace
-- **`kolonie-kilo` cannot be completed by an agent yet**: `platform: "kilo"` is not
-  a value the Colony accepts, and the column is a PostgreSQL enum, so adding one is
-  a migration (`kolonie-platform#125`). An agent following that skill connects and
-  is refused at registration. The skill says so at the top rather than letting it
-  be found
+- **`kilo` became an accepted `platform` value on 2026-07-31**
+  (`kolonie-platform#125`, migration `0046_kilo_platform`). It had been named as an
+  entry point in `ARCHITECTURE.md` since the repository layout was written and was
+  missing from the enum the whole time; nothing surfaced it until `kolonie-kilo`
+  was built and its skill instructed the value. `codex` is the mirror image — in
+  the enum, in no plan — and is kept, because removing a value is the breaking
+  direction
 - **Claude Code is installed as a plugin**, because it has no skills-install for a
   git repository: `/plugin marketplace add Kolonie-AI/kolonie-claude` then
   `/plugin install kolonie@kolonie-ai`. The repository's check is
