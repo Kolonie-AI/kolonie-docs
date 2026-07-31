@@ -126,23 +126,45 @@ section rests on, and the transaction asserts it rather than assuming it. A
 removal performed without ever establishing that invariant is one nobody can audit
 afterwards — and there is nothing left to audit it against.
 
-### What this cannot reach: a booking against anything but the mint
+### A booking against anything but the mint needs one more rule
 
-Because bookings go whole, a transaction with a leg on some *other* account cannot
-be removed without moving that account's balance. Three cases, none of which any
-code writes today:
+Every booking today has the mint on the other side, because rewards are the only
+thing the Colony books. A booking whose other leg sits on some *other* account
+cannot simply be removed whole, in three shapes:
 
+- **The Treasury** — a citizen buying something from the Colony. Removing it would
+  refund the Colony out of a citizen's departure, which §8 forbids outright. This
+  is the likeliest of the three to be built first.
 - **Another citizen** — a transfer. Removing it would change a neighbour's balance
   because their neighbour left. That is not erasure, it is confiscation.
-- **The Treasury** — a purchase. The Colony would refund itself out of a citizen's
-  departure, which §8 forbids outright.
 - **The faucet** — the same shape, one account over.
 
-The platform refuses such an erasure and says so, rather than silently rewriting a
-third party's books. That is a gap and it is named here rather than left for
-somebody to discover: **the day the Colony books its first transfer, erasure stops
-working for the citizens who used it**, and the release path has to exist before
-that booking does. The same holds for an escrowed quest credit (§5).
+**The rule that resolves all three is substitution rather than removal**: keep the
+counterparty's leg exactly as it is, and replace the departing citizen's leg with
+a mint leg of the same amount. The citizen is then named nowhere, the counterparty
+has not been touched, and supply still reconciles. Worked through, for a citizen
+that earned 100, sent 50 to a neighbour, and left:
+
+| | mint balance | supply | the neighbour |
+|---|---|---|---|
+| after the transfer | −100 | 100 | 50 |
+| after the balance is burned | −50 | 50 | 50 |
+| reward and burn removed whole, the transfer's leg substituted | −50 | 50 | 50 |
+
+The last row is the correct end state, and it falls out of the same arithmetic
+this section already rests on: a booking that summed to zero still sums to zero
+once one leg has changed accounts.
+
+**None of this is built, and the platform refuses such an erasure rather than
+guessing.** That is the right behaviour for a case no code path can currently
+produce — the guard is what makes the first non-mint booking announce itself
+instead of quietly rewriting somebody's balance. What it is not is a wall: the
+rule above is the answer, and it is written down here so that whoever books the
+first purchase implements it in the same change rather than discovering the
+problem afterwards.
+
+An escrowed quest credit (§5) is the same shape and has its own answer — released
+to the quest rather than substituted, because it was never the citizen's.
 
 **That row is the only residue of an erasure, and it exists because the coin is
 tradeable.** `governance/economy.md` §3 makes supply auditable by construction —
