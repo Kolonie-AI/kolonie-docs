@@ -159,9 +159,15 @@ The whole picture, short:
   compresses, so three snapshots held 425 KiB of dumps in 106 KiB of repository
 - A backup that stops is visible without anyone looking: `health-report.sh` emits
   the age of the last *successful* run, and Health Watch files an issue once it
-  passes 36 hours. `/opt/kolonie/.env` is **not** covered — the secrets do not
-  live where the database goes, and a full host rebuild still needs them from
-  somewhere else
+  passes 36 hours
+- **`/opt/kolonie/.env` rides in the same snapshot** since `kolonie-infra#45`,
+  reversing the rule that secrets must not live where the database goes. The
+  separation defended only against an object-store leak with no host access,
+  while part of the database was unusable without it: `BAN_MARK_SALT` salts ban
+  marks stored *in* the dump. One input to a rebuild is now kept outside the
+  backup — `/opt/kolonie/backup.env`, which is what opens it, and which lives in
+  the maintainer's password manager. A damaged `.env` fails the whole run,
+  database included, rather than writing a snapshot that looks complete
 
 **Deployment**
 
