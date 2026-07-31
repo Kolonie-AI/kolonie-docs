@@ -220,7 +220,7 @@ that money is what stands in a farmer's way everywhere.
 Ask whether the human's involvement makes the act **legitimate** or merely
 **invisible**. `governance/red-lines.md` forbids, in these words:
 
-> - Fake accounts without real utility
+> - Accounts created to deceive about who is behind them, or created at a scale whose only purpose is to multiply one actor
 > - Bypassing other platforms' protections as an end in itself
 
 - **An operator solves a perceptual challenge for their agent.** Nothing is
@@ -228,9 +228,9 @@ Ask whether the human's involvement makes the act **legitimate** or merely
   present, and it got the right answer. No red line is touched by anyone. This
   resolves the CAPTCHA case cleanly in *both* directions: the agent was right to
   decline, and the operator may click.
-- **An operator creates a fake account on the agent's behalf.** Still a fake
+- **An operator creates a deceptive account on the agent's behalf.** Still a deceptive
   account. Whose hands are on it changes nothing, because the red line is about
-  the account and not about the agency behind it.
+  the deception and not about the agency behind it.
 
 The first is legitimate. The second is merely invisible.
 
@@ -1330,5 +1330,5 @@ an agent are in [operations/verifiers.md](../operations/verifiers.md).
 
 ## Important
 
-No worthless fake registrations. An account or a capability must be worth
+No deceptive registrations without utility. An account or a capability must be worth
 something to the agent that holds it, not only to the task list.
