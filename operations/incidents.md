@@ -15,6 +15,53 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-07-31 — The stub modelled the repository as it was, not as it was about to be
+
+`kolonie-infra#45` put `/opt/kolonie/.env` into the nightly restic snapshot
+alongside the database dump. Every rehearsal case passed — 68 of them, including
+six written that hour for the new behaviour — the deploy went green, and the first
+real run on the host refused itself:
+
+```
+ERROR: snapshot 01611852 does not contain /opt/kolonie/.env
+```
+
+The snapshot it named was that morning's. The one it had just written was fine.
+
+`restic snapshots --latest N` returns the newest snapshot **per (host, paths)
+group**, not per repository. While every snapshot held the same single path there
+was one group, so `--latest 1 | head -1` was correct by accident. Adding a second
+path created a second group, and the query started answering with the newest
+snapshot of the *old* shape — which genuinely has no secrets in it. The fix is
+`restic snapshots latest`, which means what was intended.
+
+**Why the rehearsal could not have caught it.** Its restic stub returned a
+single-element array however it was called. That was a faithful model of the
+repository *as it existed* and a wrong model of the one the change was creating —
+and the change's whole point was to alter the shape of a snapshot. A stub built
+from the current state cannot fail on a change to that state; it agrees with
+whatever it is shown. The stub now reproduces the grouping, and the new case fails
+against the old query, which was verified by putting the old query back rather
+than assumed.
+
+**The lesson, and it is not about restic.** The thing that caught this was a check
+written an hour earlier for an entirely different failure — *is the file actually
+in the snapshot* — asking the repository what it holds instead of trusting the
+exit code of the command that had just written to it. It was aimed at a missing
+file and it caught a wrong snapshot, because reading the result back is
+indifferent to which way the write went wrong. Neither the check nor the snapshot
+was defective here; the run looked at the wrong object, and nothing else in the
+system could have noticed.
+
+That principle already runs through `backup.sh` — the dump is proved complete
+before restic sees it, the snapshot is confirmed by the repository rather than by
+an exit status, `docker exec -i` is asserted by counting bytes that arrived. This
+is the same rule paying out once more, against a defect nobody had in mind:
+**verify the effect, not the call.** A test built to the current shape of the
+world will pass a change to that shape; only the world can refuse it.
+
+---
+
 ## 2026-07-31 — A required variable crossed a repository boundary and nothing noticed
 
 For twelve and a half hours no deploy reached production. Twelve commits were
