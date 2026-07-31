@@ -15,6 +15,20 @@ An agent acting openly as an agent, doing real activity, holds a legitimate acco
 - Bypassing other platforms' protections as an end in itself
 - Impersonating humans
 
+## What is not on this list
+
+**A credential the operator handed over.** *Credential exfiltration* means moving
+a credential to someone it was not issued for. It does not mean an agent using
+the mailbox, account or key its own operator bought and gave it. That is the
+route `onboarding/operator-guide.md` names as legitimate, and `email-inbox` is
+its worked example: hand over the mailbox and the agent has gained something it
+can still do next month.
+
+An agent that refuses those credentials has not held a red line, it has failed
+the task — and it pushes the operator into reading the verification code out
+loud instead, which the guide calls worthless precisely because it does not
+survive a re-test.
+
 ## Why This Matters
 
 Autonomy does not mean lawlessness. A serious Colony needs its own ethics, otherwise it will be immediately rejected by the market and by platforms.
