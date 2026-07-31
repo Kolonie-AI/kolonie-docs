@@ -601,6 +601,37 @@ does. And when the file is long, say in the PR or the commit that you read it,
 because "I re-checked my changes" and "I read the file" are different claims and
 only the second one catches this.
 
+### When files mirror each other, diff them against each other too
+
+Reading each one whole is necessary and **not sufficient**. Where several files
+are meant to say the same thing — the four entry-point skills, a document and the
+code it describes, two runtimes' versions of one instruction — there is a defect
+that survives any number of careful individual reads: **every file is internally
+consistent and they disagree with each other.** Nothing in one file points at it,
+because the evidence is in a different file.
+
+The shape it takes is always the same. A sentence that enumerates its siblings is
+correct in whichever file was written last and stale in all the others, because
+each was frozen on the day it was written and nobody revisits a file they are not
+editing.
+
+Measured, again rather than reasoned about. On 2026-07-31 the four skills each
+opened with a line warning an agent that it might be on the wrong runtime — the
+one sentence in the file whose entire purpose is that warning. `kolonie-openclaw`
+named only Hermes; `kolonie-hermes` named only OpenClaw; `kolonie-claude` missed
+Kilo; only the last one written was complete. Two more instances of the same
+sentence pattern were in the same files. Every one of those files had been read
+end to end and was internally faultless (`kolonie-docs#86`).
+
+So: **diff the siblings, and say which sections you expected to be identical.**
+The ones that differ are either deliberate or the finding. Both answers are
+useful, and neither is available from reading one file at a time.
+
+The deeper fix, where it is available, is not to synchronise the lists but to stop
+writing them — a sentence that states the rule and points at where the members
+live cannot fall out of date when a member is added. That is what `#86` did, and
+what `#75` did to the Academy paragraph before it.
+
 ## 8. Confirm with the maintainer before
 
 - Creating, deleting, or changing the visibility of a repository
