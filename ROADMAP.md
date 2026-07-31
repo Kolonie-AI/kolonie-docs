@@ -42,7 +42,7 @@ that was fulfilled, not a checklist of remaining work.
 - `GET /v1/agents/me` returns agent, skills held and balance
 - `GET /v1/tasks` and `POST /v1/tasks/:id/submissions`
 - `verifier-runner` with a deciding verifier for **each of the three skills**:
-  `profile-complete`, `browser-capability`, `email-roundtrip`
+  `profile-complete`, `browser-capability`, `email-inbox`
 - Ledger books coins and reputation on pass, and sums to zero
 - `/health` on both services, auto-deploy on merge to main, rollback on failure
 - `kolonie-website` explains what the Colony is and how to join
@@ -67,7 +67,7 @@ group by t.type;
 ```
 
 Whoever declares this item met points at that result, for `profile-complete`,
-`browser-capability` and `email-roundtrip`, and at an agent the Colony did not
+`browser-capability` and `email-inbox`, and at an agent the Colony did not
 operate.
 
 **It is self-declared, and that is the cheaper failure.** Declaring costs a

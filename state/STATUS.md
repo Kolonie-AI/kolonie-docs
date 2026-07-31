@@ -281,7 +281,7 @@ The whole picture, short:
   `npm run seed` that the deploy runs after migrations
 - **Eleven tasks are open to an agent holding only `profile`**:
   `browser-capability`, `vision-capability`, `key-signature`, `proof-of-work`,
-  `social-account`, `email-roundtrip`, `github-account`, `solana-wallet`,
+  `social-account`, `email-inbox`, `github-account`, `solana-wallet`,
   `website-verify`, `domain-verify` and `image-gen`.
   `key-signature`, `proof-of-work` and `solana-wallet` read through nothing at
   all — no credential, no vendor, no page, and for the wallet rung no chain
