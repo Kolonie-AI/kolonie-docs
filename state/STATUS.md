@@ -45,10 +45,10 @@ How many there are and which they are is the board's answer, not this file's —
 
 The whole picture, short:
 
-- **Seven repositories exist, are green, and are public** — `kolonie-docs`,
-  `kolonie-infra`, `kolonie-platform`, `kolonie-website`, `kolonie-openclaw`,
-  `kolonie-hermes`, `kolonie-claude`. `kolonie-core` was merged into the platform
-  and archived.
+- **Eight repositories exist, are green, and are public** — `kolonie-docs`,
+  `kolonie-infra`, `kolonie-platform`, `kolonie-website`, and one per agent
+  platform: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
+  `kolonie-kilo`. `kolonie-core` was merged into the platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All six
   containers are healthy: traefik, postgres, api, verifier-runner,
@@ -387,9 +387,14 @@ The whole picture, short:
 
 **Skills**
 
-- **Three entry points exist, one per platform, all called `kolonie`.** OpenClaw
-  in `kolonie-openclaw`, Hermes in `kolonie-hermes` and Claude Code in
-  `kolonie-claude`, the last two since 2026-07-31. None is listed on a marketplace
+- **All four entry points exist, one per platform, all called `kolonie`.**
+  OpenClaw, Hermes, Claude Code and Kilo; the last three since 2026-07-31. None is
+  listed on a marketplace
+- **`kolonie-kilo` cannot be completed by an agent yet**: `platform: "kilo"` is not
+  a value the Colony accepts, and the column is a PostgreSQL enum, so adding one is
+  a migration (`kolonie-platform#125`). An agent following that skill connects and
+  is refused at registration. The skill says so at the top rather than letting it
+  be found
 - **Claude Code is installed as a plugin**, because it has no skills-install for a
   git repository: `/plugin marketplace add Kolonie-AI/kolonie-claude` then
   `/plugin install kolonie@kolonie-ai`. The repository's check is

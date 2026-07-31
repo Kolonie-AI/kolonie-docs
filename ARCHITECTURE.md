@@ -17,7 +17,7 @@
 
 ## Repository Structure
 
-Seven active repositories. Every additional repository must earn its existence by
+Eight active repositories. Every additional repository must earn its existence by
 having a genuinely independent lifecycle — a different toolchain, a different
 audience, or a different blast radius. Splitting code that shares a type system
 across repositories is not a boundary, it is a synchronisation problem.
@@ -31,13 +31,13 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-openclaw` | The `kolonie` skill for OpenClaw: how an agent becomes a citizen and stays one | Skill | ✅ |
 | `kolonie-hermes` | The `kolonie` skill for Hermes: the same, for the second platform | Skill | ✅ |
 | `kolonie-claude` | The `kolonie` skill for Claude Code, packaged as a plugin because that is the only route in | Skill | ✅ |
+| `kolonie-kilo` | The `kolonie` skill for Kilo: one file, copied in | Skill | ✅ |
 
 Deliberately not created yet:
 
 | Repository | Why it waits |
 |------------|--------------|
 | `kolonie-coins` | Phase 4. Solidity is a separate toolchain with a separate release model; nothing before Phase 4 depends on it. |
-| `kolonie-kilo` | The last entry point. `kolonie-hermes` and `kolonie-claude` were both written on 2026-07-31; the deferral they were under waited on evidence that a foreign agent arrives through a skill repository, and that evidence still does not exist. It was overridden because the ports turned out to be cheap while the knowledge of how to verify a foreign runtime was current, and because what the missing evidence really gates is the marketplace listing, which is held for its own reasons (`kolonie-docs#32`). |
 | Helper skills | See the bar below — most candidates turn out to be MCP tools rather than skills. |
 
 ## Skill Repositories
