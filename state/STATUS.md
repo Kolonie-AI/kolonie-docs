@@ -119,6 +119,39 @@ The whole picture, short:
 - **The deploy chain is connected end to end.** A merge in `kolonie-platform`
   builds the image and calls the reusable deploy workflow in `kolonie-infra` with
   the commit it just pushed.
+- **A failed deploy says what the container said** (`kolonie-infra#43`). When a
+  service does not become healthy, the deploy quotes that container's own log
+  before the rollback replaces it, capped at 40 lines per service; a container
+  that printed nothing says so. It no longer waits out a crash loop:
+  `restart: unless-stopped` means a process that throws on its first line never
+  reaches `exited`, so three restarts — about seven seconds — is the verdict, not
+  180. Before this, nineteen deploys over twelve and a half hours reported
+  `not healthy after 180s: api(unhealthy)` and nothing else, while the sentence
+  naming the missing variable sat inside the container each rollback destroyed.
+- **An image declares what it cannot start without, and the deploy checks it**
+  (`kolonie-infra#42`, `kolonie-platform#75`). The images carry
+  `ai.kolonie.required-env`; `preflight_env()` refuses a deploy whose host cannot
+  supply a declared name, after the images are pulled and **before any container
+  is recreated**. This closes a boundary rather than a bug: a repository that
+  makes a variable mandatory changes the deploy contract of one it cannot see,
+  and every check `kolonie-infra` had was seeded from its own compose file, so a
+  variable that file had never heard of was invisible to all of them. An image
+  carrying no declaration deploys exactly as before.
+- **An image says which commit built it** (`kolonie-platform#75`). All three
+  platform images carry `revision`, `source`, `created` and `version`, so *which
+  build is this container running* is one `docker inspect` on the host rather
+  than a GHCR listing and a digest match. The website image does not yet
+  (`kolonie-website#4`).
+- **A host serving something other than what was last built says so**
+  (`kolonie-infra#44`). Health Watch compares each container's revision against
+  the newest image built for that service — not against `main`, which the api
+  legitimately trails whenever a commit rebuilds only something else. *Behind* and
+  *unknown* stay different words, and only *behind* files an issue. It reports and
+  never deploys.
+- **Container logs cannot fill the disk** (`kolonie-infra#37`). 50 MB across 3
+  files per service, capped in the compose file rather than in host state. The cap
+  bounds the fastest way the partition fills and is not a disk monitor, so Health
+  Watch also reports the partition above 85%.
 - **The Academy is a skill graph, not a ladder** (D-030), and the level is gone
   from the platform entirely (`kolonie-platform#35`) — no column, no module, no
   number in a ledger memo. Tasks declare `requires`, `suggests` and `grants`; a
