@@ -574,6 +574,33 @@ Before opening a PR, the agent must **challenge its own solution**:
 2. **Check the edge cases:** Verify it handles the edge cases the issue describes, and consider the reverse case (e.g., if A deploys before B, what if B deploys before A?).
 3. **Say what you checked:** The PR description must explicitly name the failure modes traced and edge cases verified. A PR that only describes the happy path is incomplete.
 
+### Read the whole file at the end, not just your diffs
+
+**When a file has been changed in more than one pass, read it from the first line
+to the last before the final push.** Not the diffs again — the file, as somebody
+encountering it for the first time will.
+
+Each edit is correct against the file as it stood when the edit was made, and
+wrong against the file that exists after the next one. A diff cannot show that,
+because the damage is in the parts nobody touched: a paragraph that refers back to
+a sentence a later pass deleted, advice that describes an example that has since
+been replaced, a comparison to something that moved while you were working
+elsewhere. Every one of those reads correctly in isolation and reads as nonsense
+in sequence.
+
+This is measured rather than assumed. `kolonie-openclaw/SKILL.md` and
+`kolonie-hermes/skills/kolonie/SKILL.md` were corrected in eight passes on
+2026-07-31, each verified against the runtime's source, each pushed green. A
+straight read afterwards found five defects and **three of them had been
+introduced by the corrections themselves** (`kolonie-docs#83`). None was visible
+in any diff.
+
+Two things follow. Budget the read as part of the work rather than as a courtesy
+at the end — it is the step that finds this class of defect and the only one that
+does. And when the file is long, say in the PR or the commit that you read it,
+because "I re-checked my changes" and "I read the file" are different claims and
+only the second one catches this.
+
 ## 8. Confirm with the maintainer before
 
 - Creating, deleting, or changing the visibility of a repository
