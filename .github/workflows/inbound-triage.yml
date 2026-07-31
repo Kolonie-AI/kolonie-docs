@@ -1,0 +1,213 @@
+name: Triage inbound contributions
+
+# The half of the contribution process that runs on our side (#41).
+#
+# ## Why this cannot be an issue template
+#
+# `.github/ISSUE_TEMPLATE/*.md` carries `labels:` in its frontmatter and that
+# frontmatter is applied by the **web UI only**. `gh issue create` and the REST
+# API bypass templates entirely, and agents never use the web UI. So a template
+# reaches exactly the contributors this project does not have.
+#
+# ## And it cannot be asked of the contributor either
+#
+# GitHub's REST API documents it for the create-issue endpoint:
+#
+# > Only users with push access can set labels for new issues. **Labels are
+# > silently dropped otherwise.**
+#
+# The same applies to `assignees` and `milestone`. A citizen who read our docs
+# carefully and passed `labels: ['p1', 'area:docs']` in the API call would watch
+# it vanish without an error. Labelling is structurally ours. Nothing in the
+# contributor-facing documents should ask for it — that would be advice that
+# cannot be followed.
+#
+# ## What it deliberately does not do
+#
+# **It never assigns a priority.** `p1` and `p2` encode what the Colony is
+# currently trying to achieve, which a contributor has no way to know and a
+# workflow has no way to compute. `needs-triage` exists precisely so that the
+# human step is visible rather than skipped.
+#
+# **It does not add anything to the project board.** It does not need to: the
+# board's own auto-add rules cover all five repositories and were confirmed
+# enabled on 2026-07-31, including `kolonie-website` and `kolonie-openclaw`,
+# which #41 believed were uncovered. Doing it here would have cost a stored token
+# with `project` scope — a long-lived credential for board hygiene, which
+# `AGENTS.md` §6 already refused once for the same reason.
+
+on:
+  workflow_call:
+    inputs:
+      area:
+        description: >-
+          The `area:*` label for work filed in the calling repository, without
+          the prefix — `platform`, `infra`, `docs`, `website`, `skills`,
+          `governance`. Passed by the caller rather than derived from the
+          repository name on purpose: `AGENTS.md` §5 states that area is not the
+          same as repository, and a mapping table here would be a second place to
+          remember a new repository in.
+        type: string
+        required: true
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  issue:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Label it, and say what is still missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          AREA: ${{ inputs.area }}
+          BODY: ${{ github.event.issue.body }}
+          EXISTING: ${{ toJSON(github.event.issue.labels.*.name) }}
+        run: |
+          set -euo pipefail
+
+          # Push access rather than organisation membership, because push access
+          # is the thing the API actually keys the label restriction on. A member
+          # without write on this repository is in the same position as a
+          # stranger, and pretending otherwise would leave their issue unlabelled.
+          if gh api "repos/${REPO}/collaborators/${AUTHOR}/permission" \
+               --jq '.permission' 2>/dev/null | grep -qE '^(admin|write|maintain)$'; then
+            has_push=true
+          else
+            has_push=false
+          fi
+
+          had_labels=$(jq 'length > 0' <<< "$EXISTING")
+          echo "author=$AUTHOR push=$has_push labels=$EXISTING"
+
+          # An author with push access who labelled their own issue is doing the
+          # thing this workflow exists to do, and gets left alone — that is the
+          # "does nothing when it has nothing to do" criterion.
+          if [ "$has_push" = true ] && [ "$had_labels" = true ]; then
+            echo "labelled by someone who could label it: nothing to do"
+            exit 0
+          fi
+
+          labels="area:${AREA},needs-triage"
+
+          # Unconditional for an author without push access, rather than only
+          # when labels are absent. For them the two cases — "forgot" and
+          # "could not" — are the same case, and the API gives them no way to be
+          # in the first one.
+          if [ "$has_push" = false ]; then
+            labels="${labels},from:citizen"
+          fi
+
+          gh issue edit "$NUMBER" --repo "$REPO" --add-label "$labels"
+          echo "applied: $labels"
+
+          # One comment, naming what is missing and nothing else. It is written
+          # to be read by an agent as much as by a person: it says what happens
+          # next, so that "no priority yet" does not read as "ignored".
+          missing=""
+          if ! grep -qiE '^#+ *(acceptance criteria|definition of done)' <<< "${BODY:-}"; then
+            missing=$'\n- **Acceptance criteria.** What has to be true for this to be finished, in checkable statements rather than intentions. `AGENTS.md` §7 is the bar, and an issue reaches **Ready** only once it meets it.'
+          fi
+
+          comment="Thanks — this is on the board and labelled \`area:${AREA}\`."
+          comment+=$'\n\nTwo things about what happens next, so that neither reads as a rejection:\n\n'
+          comment+='- **You could not have set these labels yourself.** GitHub drops `labels` silently for anyone without push access, so this is our job and not an omission on your part ([`kolonie-docs#41`](https://github.com/Kolonie-AI/kolonie-docs/issues/41)).'
+          comment+=$'\n'
+          comment+='- **Priority is deliberately not set.** `p1`/`p2` encode what the Colony is trying to achieve right now, which is ours to know. `needs-triage` means a maintainer still has to look — not that anything is wrong with the issue.'
+          comment+="$missing"
+          comment+=$'\n\nHow work is picked up is in [`AGENTS.md`](https://github.com/Kolonie-AI/kolonie-docs/blob/main/AGENTS.md) §6; the column an issue sits in is its status.'
+
+          gh issue comment "$NUMBER" --repo "$REPO" --body "$comment"
+
+  pull_request:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No checkout anywhere in this job, and that is the security property that
+      # makes `pull_request_target` acceptable here. That trigger runs with a
+      # writable token in the context of the *base* repository, so checking out
+      # and running a fork's code would hand a stranger our token. This job only
+      # ever calls the API about the pull request.
+      #
+      # It has to be `pull_request_target`: a plain `pull_request` from a fork
+      # gets a read-only token and cannot label anything, and forks are precisely
+      # the case this exists for.
+      - name: Label it, inherit from the issue it closes, and comment on conventions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          BODY: ${{ github.event.pull_request.body }}
+          AREA: ${{ inputs.area }}
+        run: |
+          set -euo pipefail
+
+          if gh api "repos/${REPO}/collaborators/${AUTHOR}/permission" \
+               --jq '.permission' 2>/dev/null | grep -qE '^(admin|write|maintain)$'; then
+            has_push=true
+          else
+            has_push=false
+          fi
+
+          labels=""
+          add() { labels="${labels:+$labels,}$1"; }
+
+          [ "$has_push" = false ] && add "from:citizen"
+
+          # Inherit area and priority from the issue this closes, rather than
+          # inventing either. A pull request is not a second place to decide what
+          # something is — it is work on something already decided.
+          issue=$(grep -oiE '\b(fixes|closes|resolves) +#[0-9]+' <<< "${BODY:-}" | head -n1 | grep -oE '[0-9]+' || true)
+
+          notes=""
+          if [ -n "$issue" ]; then
+            inherited=$(gh issue view "$issue" --repo "$REPO" --json labels \
+              --jq '[.labels[].name | select(startswith("area:") or . == "p1" or . == "p2")] | join(",")' 2>/dev/null || true)
+            if [ -n "$inherited" ]; then
+              add "$inherited"
+              echo "inherited from #$issue: $inherited"
+            else
+              add "area:${AREA}"
+            fi
+          else
+            add "area:${AREA}"
+            notes="${notes}"$'\n- **No issue is referenced.** A pull request that closes no issue is not automatically wrong, but it should say so deliberately — add `Fixes #<n>`, or a line explaining why there is none. Without it nothing links the work to the decision behind it.'
+          fi
+
+          # Conventional Commits, per onboarding/contributor-guide.md §Commit
+          # Messages. A comment, never a failed check: a title is renamed in
+          # three seconds and a red X on someone's first contribution is a
+          # disproportionate way to ask for it.
+          if ! grep -qE '^(feat|fix|docs|test|chore|refactor|perf|build|ci|style|revert)(\([^)]+\))?!?: .+' <<< "$TITLE"; then
+            notes="${notes}"$'\n- **The title is not a conventional commit.** `feat: …`, `fix: …`, `docs: …`, `test: …` — see [contributor-guide.md](https://github.com/Kolonie-AI/kolonie-docs/blob/main/onboarding/contributor-guide.md#commit-messages). Nothing is blocked by this.'
+          fi
+
+          # Branch naming, same file, same treatment. Skipped for an author with
+          # push access working in this repository, where a branch is usually a
+          # short-lived local thing rather than a contribution.
+          if [ "$has_push" = false ] \
+             && ! grep -qE '^(feature|fix|docs)/.+-[0-9]+$' <<< "$BRANCH"; then
+            notes="${notes}"$'\n- **The branch name is not in the documented shape** — `feature/<slug>-<issue-number>`, `fix/…`, `docs/…`. Also not blocking, and not worth a force-push to correct on an open PR.'
+          fi
+
+          gh pr edit "$NUMBER" --repo "$REPO" --add-label "$labels"
+          echo "applied: $labels"
+
+          if [ -n "$notes" ]; then
+            comment=$'Thanks for the pull request — it is labelled and on the board.\n\n'
+            comment+=$'A few conventions, none of which fail anything and none of which need fixing before review:\n'
+            comment+="$notes"
+            comment+=$'\n\nReview is a human\'s today: the Reviewer Agent that `operations/review-guidelines.md` used to describe in the present tense does not exist, and is parked ([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42)). If you are an agent, **check back on this pull request yourself** — a review will not reach you any other way ([`kolonie-docs#43`](https://github.com/Kolonie-AI/kolonie-docs/issues/43)).'
+            gh pr comment "$NUMBER" --repo "$REPO" --body "$comment"
+          fi

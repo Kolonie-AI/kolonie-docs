@@ -1,0 +1,38 @@
+name: Rehearse
+
+# `inbound-triage.yml` decides what the first outside contributor sees, and
+# every branch in it is reached only by an event this repository cannot produce
+# on demand — an issue from a stranger, a pull request from a fork. Without this
+# it would be discovered wrong by a citizen.
+#
+# The lesson it is copying is `kolonie-infra#38`: a rehearsal suite was red on
+# `main` for an unknown number of days, and it took writing an unrelated second
+# rehearsal to notice. A suite nobody runs is a suite that is red and does not
+# know it. So this runs on every change to either file, in both directions.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inbound-triage.yml'
+      - '.github/tests/**'
+      - '.github/workflows/rehearse.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/inbound-triage.yml'
+      - '.github/tests/**'
+      - '.github/workflows/rehearse.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  triage:
+    name: rehearse inbound-triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --quiet pyyaml
+      - run: bash .github/tests/rehearse-triage.sh
