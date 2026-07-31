@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-07-31
+> Last updated: 2026-08-01
 
 ## How to read this file
 
@@ -137,17 +137,34 @@ The whole picture, short:
   and every check `kolonie-infra` had was seeded from its own compose file, so a
   variable that file had never heard of was invisible to all of them. An image
   carrying no declaration deploys exactly as before.
-- **An image says which commit built it** (`kolonie-platform#75`). All three
-  platform images carry `revision`, `source`, `created` and `version`, so *which
-  build is this container running* is one `docker inspect` on the host rather
-  than a GHCR listing and a digest match. The website image does not yet
-  (`kolonie-website#4`).
+- **An image says which commit built it** (`kolonie-platform#75`,
+  `kolonie-website#4`). All four images carry `revision`, `source`, `created` and
+  `version`, so *which build is this container running* is one `docker inspect`
+  on the host rather than a GHCR listing and a digest match.
 - **A host serving something other than what was last built says so**
   (`kolonie-infra#44`). Health Watch compares each container's revision against
   the newest image built for that service — not against `main`, which the api
-  legitimately trails whenever a commit rebuilds only something else. *Behind* and
-  *unknown* stay different words, and only *behind* files an issue. It reports and
-  never deploys.
+  legitimately trails whenever a commit rebuilds only something else. *Behind*
+  and *unknown* stay different words, and only *behind* files an issue. It reports
+  and never deploys. **All four services are covered** — the last *unknown* closed
+  when the website image gained labels and `kolonie-infra#50` granted the package
+  read access that one of three siblings was missing.
+- **An unhealthy container is reported with its reason** (`kolonie-infra#54`).
+  Health Watch quotes the probe's own output and a bounded tail of the service's
+  log, collected before anything acts on the verdict — `.State.Health.Log` keeps
+  only the last five attempts, so a reason not taken then is gone. The probes were
+  mute: every branch ended in a bare exit code, so a dead process, a 503 from a
+  stalled loop and a timeout were one indistinguishable failure. They now print a
+  status number and an error code, and nothing else. The probe output is read
+  first on purpose — in `kolonie-infra#11` the service was entirely fine and the
+  check was looking at the wrong address family.
+- **One unanswerable submission no longer stops the Academy**
+  (`kolonie-platform#132`). A verdict of `pending` returns a submission to the
+  queue without touching `submitted_at`, and the claim takes the oldest — so a
+  submission the outside world cannot answer for was permanently first, and
+  nothing behind it was verified at all. The runner now stands back from it, 30s
+  doubling to a 15-minute ceiling, and always returns to it: a permanent skip
+  would be a silent refusal, and only the task's own deadline may end one.
 - **Container logs cannot fill the disk** (`kolonie-infra#37`). 50 MB across 3
   files per service, capped in the compose file rather than in host state. The cap
   bounds the fastest way the partition fills and is not a disk monitor, so Health
