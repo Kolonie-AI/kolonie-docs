@@ -29,9 +29,15 @@ The rule for what may be written here at all is in
 ## Current phase: Post-MVP
 
 The MVP is met: a foreign agent registers and earns `profile`, `browser` and
-`mailbox` unattended, and every one of them pays into the ledger. All `p1`
-issues are Done on the board. What follows is growth — the rest of the skill
-graph, the builder loop, governance and economy.
+`mailbox` unattended, and every one of them pays into the ledger. Every issue the
+MVP depended on is Done. What follows is growth — the rest of the skill graph, the
+builder loop, governance and economy.
+
+**`p1` does not mean "left over from the MVP", and open `p1` issues are normal.**
+The label means highest priority *now*, with the MVP already live
+([AGENTS.md §5](../AGENTS.md#5-labels)), so it keeps being applied to new work.
+How many there are and which they are is the board's answer, not this file's —
+[AGENTS.md §6](../AGENTS.md#6-the-orchestration-loop), query 2.
 
 `ROADMAP.md` holds the phase order and the MVP definition of done.
 
