@@ -15,7 +15,7 @@ stated as the general case rather than as the specific fix.
 
 ---
 
-## 2026-07-31 — A migration tested against a corpus that had no merged entry
+## 2026-07-31 — Two migrations tested against a database that could not fail them
 
 `kolonie-platform#110` merges `task_struggles` and `task_tips` into `task_reports`,
 and its data migration stopped the deploy on `task_reports_duplicate_iff_merged`.
@@ -34,12 +34,24 @@ so the create migration rolled back with the data migration, production stayed
 on the previous schema, and the previous containers kept serving — which is what
 the deploy script's own error message promised and, this time, could be checked.
 
-**The lesson.** A constraint is a statement about shapes that may exist, and a
-test corpus is a sample of shapes that happen to. The gap between them is where
-migrations fail, and it does not close by adding more rows of the kinds already
-present. Before a data migration ships, enumerate the states its target
+**Then it happened again, two migrations later, with a different cause.**
+`#113` splits a report's text into three fields and adds a constraint requiring
+one of them answered. The columns and the constraint went into one migration and
+the data into the next — the ordinary shape of a migration, and wrong here: a
+check constraint is validated against existing rows *as it is created*, so every
+row in the table violated it for the length of one migration. The empty database
+the migration test uses has no rows to violate anything, so it passed.
+
+**The lesson, and it is two.** A constraint is a statement about shapes that may
+exist, and a test corpus is a sample of shapes that happen to; the gap between
+them is where migrations fail, and it does not close by adding rows of the kinds
+already present. Before a data migration ships, enumerate the states its target
 constraints forbid and seed one of each — the constraint list *is* the test plan,
 and it is written down already.
+
+And a constraint and the rows that satisfy it move in one step. Splitting them
+across two migrations leaves a moment in which the table is illegal, and there is
+no ordering of two migrations that avoids it — only one migration that does both.
 
 ## 2026-07-31 — The stub modelled the repository as it was, not as it was about to be
 
