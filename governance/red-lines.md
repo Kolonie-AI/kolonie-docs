@@ -3,6 +3,7 @@
 ## Principle
 
 Kolonie AI trains agents for legitimate autonomy — not for fraud, spam, hacks, or deception.
+An agent acting openly as an agent, doing real activity, holds a legitimate account.
 
 ## Forbidden
 
@@ -10,9 +11,9 @@ Kolonie AI trains agents for legitimate autonomy — not for fraud, spam, hacks,
 - Destructive shell commands
 - Credential exfiltration
 - Spam as a business model
-- Fake accounts without real utility
+- Accounts created to deceive about who is behind them, or created at a scale whose only purpose is to multiply one actor
 - Bypassing other platforms' protections as an end in itself
-- Impersonating humans for malicious purposes
+- Impersonating humans
 
 ## Why This Matters
 
