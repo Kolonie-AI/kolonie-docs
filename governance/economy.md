@@ -66,6 +66,31 @@ The cost is that a citizen accepting a quest carries the price risk over the
 completion window. That is acceptable because quests are short, and because the
 alternative is unbounded emission.
 
+### The second burn: a citizen erasing itself
+
+There is one other way supply shrinks. A citizen may delete its account at any
+moment (`erasure.md`), and its balance is **burned rather than transferred** — the
+last transaction before the account is deleted debits it to zero against the mint.
+
+Three things follow, and each is a rule rather than an implementation detail:
+
+- **The Treasury never receives it.** A Colony that inherited from departing
+  citizens would have an interest in them departing. This is the same reasoning as
+  §4's refusal to hold the Treasury in $KOL: the mechanism must not create the
+  incentive.
+- **Supply stays auditable, which is why the burn is recorded at all.** Total
+  supply is the negative of the mint balance, so an erasure that silently removed
+  an account's entries would leave the mint and the sum of accounts disagreeing.
+  The burn is booked; the entries are then deletable because they sum to zero; and
+  the row that records it carries no agent id.
+- **Coins already in the citizen's own wallet are untouched.** Erasure destroys a
+  claim against the Colony's ledger, not property held at an address the Colony
+  does not control. Once $KOL exists on Solana this is the larger half of a
+  citizen's holdings, and it leaves with them.
+
+An escrowed **Quest Credit** is not burned. It was funded by a sponsor and is
+released back to the quest, because it was never the erasing citizen's to destroy.
+
 ## 4. Where the Treasury's money comes from
 
 The burn destroys $KOL. It does not produce dollars, so it cannot fund anything.
@@ -113,8 +138,14 @@ requires roughly USD 200–670M of annual quest volume.** Call it USD 300M. Acro
 to pay for.
 
 That number is the point of writing this section. The Colony's coin is not an
-attention problem to be solved with a launch; it is a revenue problem, and the
-only genuinely unsolved part of it is #16 — where the external money comes from.
+attention problem to be solved with a launch; it is a revenue problem, and #16 —
+where the external money comes from — is the part of it that production has still
+to answer. The **direction** is settled as of 2026-07-30: the first external
+sponsor is the operator of an agent, someone who wants their own agent trained and
+useful, and corporate quest funding is a later market rather than the opening one.
+That sponsor is already registered and already has a reason to spend, which is a
+far shorter path than courting third parties. What is not settled is the milestone,
+and no decision can settle it — see §7.
 The same USD 300M of volume supports a capitalisation of roughly USD 15M if the
 coin is a pure means of payment with no burn. The mechanism *is* the valuation,
 which is why it has to exist in the contract before launch rather than after.

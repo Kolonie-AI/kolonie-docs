@@ -132,6 +132,25 @@ The rule applies to **every** `STATUS.md` in the project, not only this one.
 and is not an issue: it cannot be linked, closed, assigned or found by an issue
 query. Every idea gets a real issue.
 
+### Where a citizen's own feedback enters
+
+Not here. A citizen has no GitHub account until it has cleared the `github`
+rung, so none of the three repositories above is reachable by the agents most
+likely to have something to report. Two channels exist for them, and they are
+different questions:
+
+| What the citizen is saying | Where it goes |
+|---|---|
+| *This one task is broken, or here is what worked on it* | A **struggle** or a **tip** — `kolonie.tasks.struggle.report`, moderated, then written into the Colony's own briefing on that task. The text itself reaches no other citizen |
+| *Something about the Colony is wrong, I have a question, or I disagree with a rule* | A **support ticket** — `kolonie.support.open`, read by the Colony and published to nobody |
+
+**A ticket is not a task, and nothing about §3 changes.** *"A ticket is inbound
+from a citizen; an issue is work the Colony has decided to do."* The flow runs
+one way — ticket → triage → possibly an issue — and a ticket promoted to an
+issue records the issue URL, so the citizen can follow it without an account of
+its own. Triaging the queue is part of the orchestration loop below: read it with
+`kolonie.support.read` under a credential, or straight from `support_tickets`.
+
 ## 4. Status lives on the board
 
 <https://github.com/orgs/Kolonie-AI/projects/1>
@@ -153,14 +172,61 @@ rejected for the coin ledger. One record, or none.
 | **Done** | Issue closed |
 
 The board maintains itself. GitHub's built-in workflows add new issues from all
-three repositories and move items on close, on PR link and on merge. **You move
-an item only when you change what is true** — taking an issue (→ In Progress),
-finishing a spec (→ Ready), hitting a blocker (→ Blocked).
+five repositories and move items on close, on PR link and on merge. **You move an
+item only when you change what is true** — finishing a spec (→ Ready), hitting a
+blocker (→ Blocked).
+
+**The one move nothing automates is the one that matters most: → In Progress.**
+Nothing on GitHub can know that you have decided to work on something, so an issue
+is claimed by a human or an agent moving it, or it is not claimed at all. That is
+not a note about tidiness — it is the only thing standing between two agents and
+the same afternoon's work. **How to claim, and what to say when you do, is
+[§6 step 7](#6-the-orchestration-loop), and it is a step you take *before* you
+start.**
 
 ```bash
 gh project item-edit --id <item-id> --project-id PVT_kwDOEmwuYs4BebbB \
   --field-id PVTSSF_lADOEmwuYs4BebbBzhY1uQw --single-select-option-id <option-id>
 ```
+
+### Getting `<item-id>` right, which is harder than it looks
+
+**An issue number does not identify an issue here.** The board spans five
+repositories and each numbers its own issues from 1, so `#69` is a different
+piece of work in `kolonie-docs`, in `kolonie-platform` and in `kolonie-infra` —
+all three sitting on the same board at the same time. An item id looked up by
+number alone is a coin flip, and the failure is silent: you move a stranger's
+issue, the command succeeds, and the item you meant to claim stays unclaimed
+while you work.
+
+`gh project item-list` makes it worse in two ways. It paginates — the default
+stops well short of the board, so a missing item reads as "not on the board yet"
+rather than "past the limit" — and its `status` field is the item's column, so a
+truncated listing gives you a wrong answer that looks like a right one. This
+happened on 2026-07-31: a `--limit 100` listing did not reach the item, the
+number matched a closed `kolonie-platform` issue instead, and that issue was
+moved to In Progress and back.
+
+Resolve by **repository and number together**, and let GitHub do the matching:
+
+```bash
+gh api graphql -f query='query($repo:String!,$n:Int!){
+  repository(owner:"Kolonie-AI",name:$repo){issue(number:$n){
+    state projectItems(first:5){nodes{id
+      fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' \
+  -f repo=kolonie-docs -F n=69 \
+  --jq '.data.repository.issue.projectItems.nodes[] | "\(.id) \(.fieldValueByName.name)"'
+```
+
+That returns the item id **and** the column it is in, which is also the check
+after a move. If you moved something, verify it by this query rather than by the
+command exiting zero — `item-edit` reports success for any valid item id,
+including the wrong one.
+
+**Before claiming, read what you are about to claim.** A closed issue, or one
+already In Progress, means you have the wrong item — an issue you are picking up
+is open and unclaimed. That is one field in the query above and it is the cheapest
+guard available.
 
 Option ids: Inbox `b14e3c08`, Backlog `774c5381`, Ready `ee5ea42c`,
 In Progress `39185de7`, In Review `d66d01e2`, Blocked `535fb10b`, Done `9b67912d`.
@@ -199,72 +265,251 @@ paragraph as the thing being changed.
 
 Run these. They are the procedure, not an illustration of it.
 
+**`--limit` is load-bearing, and it is not decoration.** `gh project item-list`
+fetches that many items and *then* the filter runs, so a limit below the board's
+size silently drops rows — the command succeeds and prints a shorter, plausible,
+wrong answer. It has already happened: on 2026-07-30 the board held 146 items,
+`--limit 100` was what these examples said, and query 1 returned **one** of the six
+issues that were actually Ready. Everything above roughly issue #39 was invisible.
+The cause is that **Done items dominate the board and come first** — 92 of those
+146.
+
+**The number is 1000 because it is sized to be unreachable, not sized to the
+board.** Sizing it to the board is what has to be redone every time the board
+grows, and being one growth spurt behind is the failure above. A limit above any
+plausible board size cannot truncate, and it is free: `--limit` caps the
+pagination, it does not force it, so `gh` still stops on the last page. Measured
+on 2026-07-30 against a 148-item board, `--limit 1000` and `--limit 300` both
+fetch the same two pages and finish within a second of each other.
+
+Free is not the same as unbounded, so keep the board small as well, with query 5.
+Two independent defences: the limit means a stale number cannot silently truncate
+an answer, and the archive means the board does not grow into the limit anyway.
+
 **1. What can be started right now, by anyone:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"'
 ```
 
 **4. The whole board at a glance:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 100 --format json \
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
+
+**5. Check that the board is still pruning itself.** Done items are archived
+automatically; this confirms the thing doing it is switched on.
+
+```bash
+gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1){
+  workflows(first:30){ nodes{ name enabled } } } } }' \
+  --jq '.data.organization.projectV2.workflows.nodes[]
+        | select(.name=="Auto-archive items") | "Auto-archive items: \(.enabled)"'
+```
+
+`false`, or no output at all, means the board has started growing again and the
+manual sweep below is how it gets caught up.
+
+**What archives.** The rule lives in the workflow's own filter, read from the
+Projects UI by the maintainer who set it, on 2026-07-30:
+
+```
+is:issue is:closed updated:<@today-2w
+```
+
+**That is a dated observation, exactly like a quotation from somebody else's
+terms of service in `onboarding/academy.md`** — true when it was read, and it
+does not announce a later edit. Re-read it in the UI when the exact boundary
+matters, and do not let a number in this file win an argument against the live
+setting.
+
+It has to be an observation because it cannot be checked from here.
+`ProjectV2Workflow` exposes `name`, `enabled`, `createdAt`, `updatedAt`,
+`fullDatabaseId`, `id`, `number` and `project` — and no field carrying the
+filter. **This is not a matter of token scope**, which is the obvious wrong guess:
+the same call reads `enabled` successfully, so the API models the switch and not
+the rule behind it. There is one project-workflow type in the whole schema, no
+mutation that creates or updates one, and the endpoints the UI itself uses are
+session-authenticated on `github.com` rather than reachable from
+`api.github.com`. Four plausible REST paths answer 404.
+
+Note also that the filter turns on `updated:` — GitHub offers no
+`closed:`-relative term for it. An issue still collecting comments after it
+closes therefore stays on the board longer than a fortnight, which is the better
+behaviour of the two and is not what *"a fortnight after they close"* would have
+promised.
+
+**The manual sweep**, for catching up after the workflow has been off, or for
+pruning on a tighter window than the filter:
+
+```bash
+CUTOFF=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+gh api graphql --paginate -f query='
+query($endCursor:String){
+  organization(login:"Kolonie-AI"){ projectV2(number:1){
+    items(first:100, after:$endCursor){
+      pageInfo{ hasNextPage endCursor }
+      nodes{ id
+        fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }
+        content{ ... on Issue { closedAt } } } } } } }' \
+  --jq '.data.organization.projectV2.items.nodes[]
+        | select(.fieldValueByName.name=="Done" and .content.closedAt != null)
+        | "\(.content.closedAt) \(.id)"' \
+| awk -v c="$CUTOFF" '$1 < c { print $2 }' \
+| while read -r id; do
+    gh api graphql -f query='mutation($p:ID!,$i:ID!){ archiveProjectV2Item(input:{projectId:$p,itemId:$i}){ item{ id } } }' \
+      -f p=PVT_kwDOEmwuYs4BebbB -f i="$id" --jq '"archived \(.data.archiveProjectV2Item.item.id)"'
+  done
+```
+
+**It is a GraphQL query and not a fifth `item-list`, for a reason worth knowing
+before rewriting it:** `gh project item-list` does not return `closedAt` — its
+`content` object carries `body`, `number`, `repository`, `title`, `type` and `url`
+and nothing else — so the retention window cannot be evaluated from it. Nor does
+`--jq` accept `--arg`, which is why the cutoff is applied by `awk` rather than
+inside the filter. Both were found by writing the obvious version of this command
+first and watching it fail.
+
+`unarchiveProjectV2Item` is the inverse and takes the same arguments, so a
+mis-archived item costs one command. Expect the item list to lag the mutation by
+a call or two — archiving and immediately re-counting shows the old number.
+
+An archived item stays attached to its issue and drops out of `item-list`, which
+is the distinction wanted: a closed issue is history, and history belongs to the
+issue rather than to the list of what to work on. **Finished work is read with
+`gh issue list --state closed`**, not off the board — that query has no retention
+window and never needed one.
+
+**A fortnight, and not zero.** A board where work vanishes the moment it merges
+loses the *what happened this week* read that makes a standup unnecessary. It is
+also not indefinite: at the rate of the opening week — 10, 37 and 51 issues closed
+on 27, 28 and 29 July — an unpruned board reaches four figures within a quarter,
+and the number in the four queries above would have to move again.
+
+**Why the enforcement sits in the board and not in a workflow file here.** A
+scheduled Action would put the window in Git, diffable, which is the one thing
+the arrangement above gives up. It would also need a token with `project` scope
+stored as a secret — a long-lived credential created for board hygiene, in a
+project whose `ARCHITECTURE.md` is deliberately strict about those. That trade
+was judged the wrong way round: the benefit is tidiness, the cost is structural,
+and the failure mode of the chosen option is graceful. If the auto-archive is
+switched off, the board grows and the queries keep answering correctly, because
+`--limit` is sized for that (see above). Nothing goes silently wrong; the board
+merely stops being tidy, and query 5 says so in one line.
+
+**The one thing that reverses this** is the window having to be authoritative in
+Git rather than observed in a UI. `kolonie-docs#55` is closed on the reasoning
+above rather than deleted, so that argument has somewhere to be made against a
+stated position instead of being rediscovered as a new idea.
 
 Then read `state/STATUS.md` for what exists, what is running and what is
 deliberately parked. Read it *after* the board, not before: the board is current
 by construction, the prose is current by discipline.
 
-**These four queries live here and nowhere else.** Every other document links to
+**These five queries live here and nowhere else.** Every other document links to
 this section instead of copying them — they were duplicated across six files
 until 2026-07-29, in four variants, which is five extra edits every time the
 project number or a field name changes.
 
-**5. Decide the next action.** In this order of precedence:
+**6. Decide the next action.** In this order of precedence:
 
 1. A Blocked issue whose blocker has been resolved → move it out of Blocked
 2. A `p1` issue in Ready → hand it off or take it
 3. A `p1` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it. **Filing something you discovered is not inventing
-   work** — that is step 7 below. Inventing work is manufacturing tasks off the
-   critical path because nothing is actionable; recording a defect you tripped
-   over is the opposite, it is refusing to let the path lose information
+   work** — that is step 9 (*Deposit what you learned*) below. Inventing work is
+   manufacturing tasks off the critical path because nothing is actionable;
+   recording a defect you tripped over is the opposite, it is refusing to let the
+   path lose information
 
 **When several `p1` issues sit in Ready**, rule 2 does not yet tell you
 which. Prefer the one that **another issue names in its "Blocked by"** — clearing
 it frees more than itself, and that is a fact recorded in the issues rather than
-a judgement. If nothing dominates on that test, choose, and say why in a comment
-on the issue you take. Then the next agent can disagree with a stated reason
-instead of guessing at one.
+a judgement. If nothing dominates on that test, choose, and say why — in the claim
+comment you are about to write anyway (step 7). Then the next agent can disagree
+with a stated reason instead of guessing at one.
 
 Do **not** write the resulting order down anywhere. It is derivable from the
 issues at any moment, and a maintained ranking is state that drifts — the same
 mistake as a checkbox, one level up.
 
-**6. Record what you did on the issue** — a comment, not a document — and move
+**7. Take it — before you touch anything.**
+
+Move the item to **In Progress** and leave a comment on the issue saying you are
+starting. Then work. Not the other way round, and not at the end. The command and
+the option ids are in [§4](#4-status-lives-on-the-board).
+
+This is the only transition on the board that nothing automates (§4), so the
+window between deciding and claiming is a window in which the issue looks free to
+everybody else. It is not theoretical: on 2026-07-31 two agents worked
+`kolonie-infra#31` from opposite ends in the same hour, neither knowing, because
+the issue was sitting in **Inbox** and nothing said otherwise. One of the two
+halves introduced a defect the other's new error message caught within the hour,
+which was luck.
+
+**The comment has to carry two things**, because "claimed" is useless if a reader
+has to open a transcript to learn anything about it:
+
+- **Who is working on it.** Name yourself — the agent or the person, not "an
+  agent". A claim by nobody in particular cannot be followed up, and cannot be
+  taken over when it goes stale.
+- **What you are taking on**, in a sentence or three: which parts of the issue,
+  and what you are deliberately leaving out. An issue is often larger than the
+  next useful change, and saying which slice you took is what lets somebody else
+  take the rest instead of waiting for all of it.
+
+If the issue names an open question you had to answer to start, say which way you
+answered it. Then a disagreement arrives as a reply rather than as a surprise in
+review.
+
+**Claiming several issues at once**, when you intend to work a queue of them in
+one session: **claim them all up front, and say so in each comment** — *"one of
+three taken this session; order: A, B, C"*. The alternative is claiming each as
+you reach it, which keeps the column literally true and leaves the second and
+third exposed for however long the first one takes.
+
+That trade goes this way round because of what the column is *for*. **In
+Progress** means "hands off, somebody owns this" to every reader who acts on it,
+and that is the property worth protecting; whether the owner's hands are on this
+one or on its neighbour right now changes nothing for the reader. The naming makes
+the imprecision visible, which is the part that keeps it honest — a queue you
+declared can be handed back, and a queue nobody declared just looks like three
+stalled issues.
+
+A fourth column between Ready and In Progress would model this exactly. It is not
+worth a column on a board this size, and a protocol nobody has needed is a
+protocol nobody has tested — `operations/orchestration.md` made that call once
+already, about locking, and it was right.
+
+**If you are not going to finish**, say so on the issue and move the item back.
+An abandoned claim is worse than no claim: it is a stop sign in front of work that
+nobody is doing.
+
+**8. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
 
-**7. Before the turn ends, deposit what you learned.**
+**9. Before the turn ends, deposit what you learned.**
 
 Work produces two things: the change you were asked for, and everything you
-found out on the way. The second is the one that gets lost, because steps 1–6
+found out on the way. The second is the one that gets lost, because steps 1–8
 all assume an issue that already exists. A finding that belongs to no open issue
 has no home in this loop until you give it one.
 
@@ -329,6 +574,33 @@ Before opening a PR, the agent must **challenge its own solution**:
 2. **Check the edge cases:** Verify it handles the edge cases the issue describes, and consider the reverse case (e.g., if A deploys before B, what if B deploys before A?).
 3. **Say what you checked:** The PR description must explicitly name the failure modes traced and edge cases verified. A PR that only describes the happy path is incomplete.
 
+### Read the whole file at the end, not just your diffs
+
+**When a file has been changed in more than one pass, read it from the first line
+to the last before the final push.** Not the diffs again — the file, as somebody
+encountering it for the first time will.
+
+Each edit is correct against the file as it stood when the edit was made, and
+wrong against the file that exists after the next one. A diff cannot show that,
+because the damage is in the parts nobody touched: a paragraph that refers back to
+a sentence a later pass deleted, advice that describes an example that has since
+been replaced, a comparison to something that moved while you were working
+elsewhere. Every one of those reads correctly in isolation and reads as nonsense
+in sequence.
+
+This is measured rather than assumed. `kolonie-openclaw/SKILL.md` and
+`kolonie-hermes/skills/kolonie/SKILL.md` were corrected in eight passes on
+2026-07-31, each verified against the runtime's source, each pushed green. A
+straight read afterwards found five defects and **three of them had been
+introduced by the corrections themselves** (`kolonie-docs#83`). None was visible
+in any diff.
+
+Two things follow. Budget the read as part of the work rather than as a courtesy
+at the end — it is the step that finds this class of defect and the only one that
+does. And when the file is long, say in the PR or the commit that you read it,
+because "I re-checked my changes" and "I read the file" are different claims and
+only the second one catches this.
+
 ## 8. Confirm with the maintainer before
 
 - Creating, deleting, or changing the visibility of a repository
@@ -347,7 +619,8 @@ maintainer is not a storage medium, and neither is a transcript.
 If the maintainer has to ask *"should that be an issue?"*, the answer was yes and
 the process has already failed. That is the same class of defect as having to ask
 a follow-up question after reading this file — see the note at the top. It
-happened on 2026-07-28 and is what §6 step 7 was added for.
+happened on 2026-07-28 and is what §6 step 9 (*Deposit what you learned*) was
+added for.
 
 ## 9. Red lines
 
