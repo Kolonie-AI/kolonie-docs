@@ -84,9 +84,25 @@ endpoint by endpoint will drift on the first release, in five places at once.
 The repository name is a distribution detail. The **skill** name is the brand,
 and they are not the same thing.
 
-Every entry-point skill is called `kolonie`, on every platform. An agent
-installing from the OpenClaw registry is already on OpenClaw — repeating it in
-the skill name would be redundant. The Colony is one word, everywhere.
+Every entry-point skill is called `kolonie`, on every platform. The Colony is one
+word, everywhere, and that word is the name the agent holds after installing.
+
+**A registry listing is not the skill, and it carries the platform.** This
+paragraph used to justify the bare name differently: *an agent installing from
+the OpenClaw registry is already on OpenClaw, so repeating it would be
+redundant.* That premise is false, and it was measured on 2026-07-31. ClawHub
+serves both the OpenClaw and the Hermes ecosystems, and `hermes skills install`
+accepts a name with no slashes, searches every registry it knows, and installs a
+single match without asking. Listed as bare `kolonie`, this Colony would hand the
+OpenClaw skill to a Hermes agent, which would then read `openclaw` commands its
+machine does not have. Nothing on either side would have malfunctioned.
+
+So a listing is named like the repository — `kolonie-openclaw`, `kolonie-hermes`
+— and the bare name survives only as the installed skill. The general form:
+**distribution carries the platform wherever two ecosystems can see the same
+shelf; the brand is what is left after the install.** Each `SKILL.md` also opens
+by naming its runtime, but that is the net rather than the fix — it makes a wrong
+install recognisable, it does not prevent one (`kolonie-docs#70`).
 
 The repositories carry the platform, because they have to be distinct:
 
