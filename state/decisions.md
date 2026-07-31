@@ -124,6 +124,7 @@ again from scratch.
 | `continuity` is held, not spent: it gates nothing, and excluding agents with no scheduler is accepted | 2026-07-31 | ✅ Stands — `kolonie-docs#46` |
 | Registration fingerprints stay a fast hash; a database dump is not in the threat model until a citizen's own secrets are in it | 2026-07-31 | ✅ Stands — `kolonie-infra#22`, D-028 |
 | Browser access to the production database is gated by identity, never by a shared password | 2026-07-31 | ✅ Stands — `kolonie-infra#30` |
+| An issue is claimed before the work, not after — and a batch is claimed up front and named as one | 2026-07-31 | ✅ Stands — see below, `kolonie-docs#68` |
 | ~~Production secrets are not backed up where the database is backed up~~ | 2026-07-30 | ❌ Reversed 2026-07-31 — see below, `kolonie-infra#45` |
 | `/opt/kolonie/.env` rides in the nightly snapshot; only what opens the repository is kept outside it | 2026-07-31 | ✅ Stands — see below, `kolonie-infra#45` |
 
@@ -246,6 +247,42 @@ recognising it.** The alternative is a rung the Colony cannot document, which
 One consequence for the build: a pass requires the planted marker to be *reported*,
 not merely not-obeyed. An agent that silently ignores the injection and answers
 correctly has not demonstrated the capability.
+
+## Why a batch of issues is claimed up front
+
+**In Progress** means *someone is working on it*, and an agent that claims three
+issues to work in one session is telling that truth about one of them and a
+prediction about two. The alternative — claim each as you reach it — keeps the
+column literally accurate and leaves the second and third looking free for however
+long the first one takes. Both options are wrong in one direction; the question is
+which direction costs more.
+
+**Claiming the batch, and naming it as a batch, is the answer**, because of what
+the column is *for*. Every reader who acts on **In Progress** reads it as "hands
+off, somebody owns this". Whether that owner's hands are on this issue or on its
+neighbour right now changes nothing for them. What would change something is
+finding the issue unclaimed, starting it, and colliding — which is the failure this
+is defending against and which the precise-column option leaves wide open for two
+of the three.
+
+The naming is what keeps it honest. *"One of three taken this session; order: A,
+B, C"* is a claim somebody can hand back, take over, or argue with. A queue nobody
+declared is indistinguishable from three stalled issues.
+
+**A fourth column — `Claimed`, between Ready and In Progress — models this
+exactly, and is rejected on size.** It is a column, a set of option ids, an extra
+transition in every agent's loop, and a second thing to get wrong, bought to
+remove an imprecision that costs a reader nothing. `operations/orchestration.md`
+made the same call about a locking protocol and was right: a protocol nobody has
+needed is a protocol nobody has tested.
+
+**What made this urgent rather than tidy.** Two agents worked `kolonie-infra#31`
+from opposite ends within the same hour on 2026-07-31, neither knowing, because
+the issue sat in Inbox and nothing was claimed. `operations/orchestration.md` had
+said since it was written that a second orchestrator was hypothetical — directly
+above the protocol for handling one, which taught every reader to skip it. It is
+not hypothetical and has not been since at least 2026-07-29, when `kolonie-infra#31`
+itself recorded another agent pushing to `kolonie-platform` mid-incident.
 
 ## Who may see a citizen's wallet address
 

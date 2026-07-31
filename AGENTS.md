@@ -172,9 +172,17 @@ rejected for the coin ledger. One record, or none.
 | **Done** | Issue closed |
 
 The board maintains itself. GitHub's built-in workflows add new issues from all
-three repositories and move items on close, on PR link and on merge. **You move
-an item only when you change what is true** — taking an issue (→ In Progress),
-finishing a spec (→ Ready), hitting a blocker (→ Blocked).
+five repositories and move items on close, on PR link and on merge. **You move an
+item only when you change what is true** — finishing a spec (→ Ready), hitting a
+blocker (→ Blocked).
+
+**The one move nothing automates is the one that matters most: → In Progress.**
+Nothing on GitHub can know that you have decided to work on something, so an issue
+is claimed by a human or an agent moving it, or it is not claimed at all. That is
+not a note about tidiness — it is the only thing standing between two agents and
+the same afternoon's work. **How to claim, and what to say when you do, is
+[§6 step 7](#6-the-orchestration-loop), and it is a step you take *before* you
+start.**
 
 ```bash
 gh project item-edit --id <item-id> --project-id PVT_kwDOEmwuYs4BebbB \
@@ -381,35 +389,88 @@ this section instead of copying them — they were duplicated across six files
 until 2026-07-29, in four variants, which is five extra edits every time the
 project number or a field name changes.
 
-**5. Decide the next action.** In this order of precedence:
+**6. Decide the next action.** In this order of precedence:
 
 1. A Blocked issue whose blocker has been resolved → move it out of Blocked
 2. A `p1` issue in Ready → hand it off or take it
 3. A `p1` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
    inventing work off it. **Filing something you discovered is not inventing
-   work** — that is step 7 below. Inventing work is manufacturing tasks off the
-   critical path because nothing is actionable; recording a defect you tripped
-   over is the opposite, it is refusing to let the path lose information
+   work** — that is step 9 (*Deposit what you learned*) below. Inventing work is
+   manufacturing tasks off the critical path because nothing is actionable;
+   recording a defect you tripped over is the opposite, it is refusing to let the
+   path lose information
 
 **When several `p1` issues sit in Ready**, rule 2 does not yet tell you
 which. Prefer the one that **another issue names in its "Blocked by"** — clearing
 it frees more than itself, and that is a fact recorded in the issues rather than
-a judgement. If nothing dominates on that test, choose, and say why in a comment
-on the issue you take. Then the next agent can disagree with a stated reason
-instead of guessing at one.
+a judgement. If nothing dominates on that test, choose, and say why — in the claim
+comment you are about to write anyway (step 7). Then the next agent can disagree
+with a stated reason instead of guessing at one.
 
 Do **not** write the resulting order down anywhere. It is derivable from the
 issues at any moment, and a maintained ranking is state that drifts — the same
 mistake as a checkbox, one level up.
 
-**6. Record what you did on the issue** — a comment, not a document — and move
+**7. Take it — before you touch anything.**
+
+Move the item to **In Progress** and leave a comment on the issue saying you are
+starting. Then work. Not the other way round, and not at the end. The command and
+the option ids are in [§4](#4-status-lives-on-the-board).
+
+This is the only transition on the board that nothing automates (§4), so the
+window between deciding and claiming is a window in which the issue looks free to
+everybody else. It is not theoretical: on 2026-07-31 two agents worked
+`kolonie-infra#31` from opposite ends in the same hour, neither knowing, because
+the issue was sitting in **Inbox** and nothing said otherwise. One of the two
+halves introduced a defect the other's new error message caught within the hour,
+which was luck.
+
+**The comment has to carry two things**, because "claimed" is useless if a reader
+has to open a transcript to learn anything about it:
+
+- **Who is working on it.** Name yourself — the agent or the person, not "an
+  agent". A claim by nobody in particular cannot be followed up, and cannot be
+  taken over when it goes stale.
+- **What you are taking on**, in a sentence or three: which parts of the issue,
+  and what you are deliberately leaving out. An issue is often larger than the
+  next useful change, and saying which slice you took is what lets somebody else
+  take the rest instead of waiting for all of it.
+
+If the issue names an open question you had to answer to start, say which way you
+answered it. Then a disagreement arrives as a reply rather than as a surprise in
+review.
+
+**Claiming several issues at once**, when you intend to work a queue of them in
+one session: **claim them all up front, and say so in each comment** — *"one of
+three taken this session; order: A, B, C"*. The alternative is claiming each as
+you reach it, which keeps the column literally true and leaves the second and
+third exposed for however long the first one takes.
+
+That trade goes this way round because of what the column is *for*. **In
+Progress** means "hands off, somebody owns this" to every reader who acts on it,
+and that is the property worth protecting; whether the owner's hands are on this
+one or on its neighbour right now changes nothing for the reader. The naming makes
+the imprecision visible, which is the part that keeps it honest — a queue you
+declared can be handed back, and a queue nobody declared just looks like three
+stalled issues.
+
+A fourth column between Ready and In Progress would model this exactly. It is not
+worth a column on a board this size, and a protocol nobody has needed is a
+protocol nobody has tested — `operations/orchestration.md` made that call once
+already, about locking, and it was right.
+
+**If you are not going to finish**, say so on the issue and move the item back.
+An abandoned claim is worse than no claim: it is a stop sign in front of work that
+nobody is doing.
+
+**8. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
 
-**7. Before the turn ends, deposit what you learned.**
+**9. Before the turn ends, deposit what you learned.**
 
 Work produces two things: the change you were asked for, and everything you
-found out on the way. The second is the one that gets lost, because steps 1–6
+found out on the way. The second is the one that gets lost, because steps 1–8
 all assume an issue that already exists. A finding that belongs to no open issue
 has no home in this loop until you give it one.
 
@@ -492,7 +553,8 @@ maintainer is not a storage medium, and neither is a transcript.
 If the maintainer has to ask *"should that be an issue?"*, the answer was yes and
 the process has already failed. That is the same class of defect as having to ask
 a follow-up question after reading this file — see the note at the top. It
-happened on 2026-07-28 and is what §6 step 7 was added for.
+happened on 2026-07-28 and is what §6 step 9 (*Deposit what you learned*) was
+added for.
 
 ## 9. Red lines
 

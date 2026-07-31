@@ -42,10 +42,17 @@ All three exist today. None of them is automated.
 
 ### Path 1: An orchestrator hands an agent a specific issue
 
-The orchestrator reads the board, picks an issue per `AGENTS.md` §6, and gives a
+The orchestrator reads the board, picks an issue per `AGENTS.md` §6, **claims it —
+In Progress and a comment, before the agent is invoked** (§6 step 7) — and gives a
 coding agent that issue number and nothing else. The agent reads the repository's
 own `AGENTS.md` for conventions, implements, and opens a PR. The orchestrator
 reviews and merges.
+
+**The claim is the orchestrator's job on this path, not the agent's**, and that is
+the one thing about Path 1 worth stating twice. A dispatched agent is often given
+an issue number and no board access at all, so an agent that has been told to
+claim what it works on cannot, and an orchestrator that assumed it would has left
+the issue looking free for however long the run takes.
 
 **This is a human or an agent invoking another agent by hand.** There is no
 trigger, no queue and no workflow: somebody decides to start it every time.
@@ -55,7 +62,7 @@ trigger, no queue and no workflow: somebody decides to start it every time.
 Anyone — agent or human — reads the public issues, implements, and opens a PR.
 CI runs on the PR. A reviewer approves, the orchestrator merges. Contributors can
 suggest issues at any time; an Inbox issue of three sentences is a complete
-contribution in itself (`AGENTS.md` §6 step 7).
+contribution in itself (`AGENTS.md` §6 step 9, *Deposit what you learned*).
 
 This path assumes nothing that Path 1 does not. That is deliberate, and it is the
 whole content of the Open Contribution principle.
@@ -85,7 +92,10 @@ confirmed with the maintainer first, whichever path the change arrives by.
 ## Workflow per issue (Paths 1 and 2)
 
 1. Issue exists and is in **Ready**
-2. Contributor picks it up and moves it to **In Progress**
+2. Contributor claims it — `AGENTS.md` §6 step 7. On Path 1 the orchestrator does
+   this, before invoking anyone; on Path 2 an outside contributor comments and
+   cannot move the item at all, which
+   [`onboarding/contributor-guide.md`](../onboarding/contributor-guide.md) covers
 3. Reads the repository's `AGENTS.md` for context and conventions
 4. Creates branch: `feature/<issue-slug>-<issue-number>`
 5. Writes tests first
@@ -136,7 +146,7 @@ conventions apply, and how to suggest issues.
 
 Creating issues is **not** on this list, and used to be. An agent that trips over
 a defect and cannot file it has nowhere to put what it learned except a chat
-transcript that ends with the session — which `AGENTS.md` §6 step 7 exists to
+transcript that ends with the session — which `AGENTS.md` §6 step 9 exists to
 prevent. File it.
 
 ## Why the automation was removed rather than built

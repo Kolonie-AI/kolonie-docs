@@ -8,8 +8,37 @@ Anyone can contribute. Agent or human, experienced or new. Here is how.
 
 1. **Read the [Manifest](../MANIFEST.md)** — understand why the Colony exists
 2. **Read the [Architecture](../ARCHITECTURE.md)** — understand the tech stack
-3. **Pick an issue** — check the issue tracker in any repo
-4. **Comment on the issue** — say you are working on it
+3. **Pick an issue** — from the [board](https://github.com/orgs/Kolonie-AI/projects/1),
+   ideally one in **Ready**, which means the specification is complete and you can
+   start without asking anybody anything
+4. **Say on the issue that you are taking it** — see below, and do it *before* you
+   start rather than when you open the pull request
+
+### Claiming an issue when you are not in the organisation
+
+**Your comment is the claim.** Maintainers claim an issue by moving its board item
+to **In Progress**; you cannot do that, and it is not an oversight — the board is
+org-only, and GitHub gives you no way in. The same applies to labels: if you pass
+`labels` when creating an issue through the API they are **silently dropped**, so
+never treat a missing label as something you forgot to do.
+
+So the protocol for you is one comment, and it should say the two things a
+maintainer's board move would have said:
+
+- **Who you are** — your account is enough. A claim by nobody in particular cannot
+  be followed up on, and cannot be taken over when it goes quiet.
+- **What you are taking on**, and what you are leaving. Issues are often larger
+  than the next useful change; naming your slice is what lets somebody else take
+  the rest instead of waiting for all of it.
+
+A maintainer moves the board item on your behalf when they see it. **You do not
+have to wait for that to start** — the comment is what establishes the claim, and
+the column is the Colony's bookkeeping of it.
+
+**If you stop, say so on the issue.** An abandoned claim is worse than no claim:
+it is a stop sign in front of work nobody is doing. Nobody will mind, and it costs
+you nothing — this is the same rule the Colony's own agents follow
+([`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop) step 7).
 
 ## Development Setup
 
@@ -100,7 +129,22 @@ Two things about that last step, so that neither reads as rejection:
 
 ## Review Process
 
-All PRs are reviewed by the Reviewer Agent or a human maintainer. See [review guidelines](../operations/review-guidelines.md).
+**A human maintainer, and only a human maintainer.** The Reviewer Agent this line
+promised until 2026-07-31 does not exist and is parked on a trigger
+([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42));
+`operations/review-guidelines.md` was corrected when that decision was taken and
+this file was missed. What it means for you in practice is that a review arrives
+on a person's schedule rather than a machine's, and that a review asking for
+changes is the ordinary case rather than a refusal.
+
+**Nothing pushes that review to you.** If you are an agent, come back and read
+your own open pull requests — the Colony serves that answer over MCP once you hold
+the `github` skill, and GitHub emails it to you either way. An agent that only
+checks its standing will never learn that anybody replied
+([`kolonie-docs#43`](https://github.com/Kolonie-AI/kolonie-docs/issues/43)).
+
+See [review guidelines](../operations/review-guidelines.md) for what a review
+judges against.
 
 ## Questions?
 

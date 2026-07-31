@@ -35,47 +35,62 @@ do once you are oriented.
 
 ## The Orchestration Loop
 
-```
-1. Read AGENTS.md in this repository
-2. Read the board, by column:
-     Ready   → what can be started right now
-     Blocked → what is stuck, and why
-   Cross with the p1 label for the critical path
-3. Read state/STATUS.md for what exists and runs — after the board, not before
-4. Check the repositories: open PRs, CI status
-5. Decide the next action, in this order of precedence:
-     a. A Blocked issue whose blocker is resolved     → move it out of Blocked
-     b. A p1 issue in Ready                       → hand off or take it
-     c. A p1 issue blocked only by a missing spec → write the spec, → Ready
-     d. Nothing on the critical path is actionable    → say so; do not invent work
-        (filing what you discovered is not inventing work — that is step 8)
-6. Comment the outcome on the issue. Move the item to the column that is now true
-7. Update state/STATUS.md only if what exists or runs changed — never to record
-   task progress, and by replacing the stale sentence rather than appending to it
-8. Deposit what you learned, before reporting to anyone:
-     would the next agent have to rediscover it?  → an issue, now
-     is it a settled fact about what exists?     → state/STATUS.md
-     is it why something was decided?            → state/decisions.md
-     did something break, with a lasting lesson? → operations/incidents.md
-     none of these                               → say it and let it go
-```
+**It is nine steps and they are in [`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop),
+which is the only place they are written.**
 
-Step 8 is the one that is skipped, and it is skipped hardest after a long piece
-of work — exactly when the most has been learned. An Inbox issue of three
-sentences discharges it; see [AGENTS.md §6](../AGENTS.md), which carries the full
-rule and the reason it had to be written down.
+This section used to restate all nine. Two copies of a procedure is one copy that
+goes stale, and this one had: it numbered *deposit what you learned* as step 8
+where `AGENTS.md` numbered it differently, so a reference to "step 8" meant two
+things depending on which document the reader had open. The five board queries
+were de-duplicated across six files on 2026-07-29 for exactly this reason. The
+loop around them was left behind.
+
+What belongs here instead is the part `AGENTS.md` does not carry: **which of those
+steps this project keeps getting wrong.**
+
+- **Step 7, taking the issue, is the one nothing automates.** The board's built-in
+  workflows move an item on close, on PR link and on merge. None of them can know
+  that you have decided to work on something. See *Concurrent Orchestrators* below
+  for what it costs when it is skipped.
+- **Step 9, depositing what you learned, is the one that is skipped** — hardest
+  after a long piece of work, exactly when the most has been learned. An Inbox
+  issue of three sentences discharges it.
 
 ## Concurrent Orchestrators
 
-Today there is one maintainer and one managing agent, and a coordination protocol
-would cost more than it saves. When a second orchestrator appears, the mechanism
-is the **In Progress** column: an item sitting there is claimed, and the claiming
-agent names itself in a comment on the issue.
+**There is more than one, and there has been since at least 2026-07-29.** This
+section said the opposite until 2026-07-31 — *"Today there is one maintainer and
+one managing agent, and a coordination protocol would cost more than it saves"* —
+and that sentence sat directly above the protocol, telling every reader that they
+could skip what followed.
 
-An earlier version of this document specified a locking protocol with a dedicated
-`orchestrating` issue and a one-hour staleness timeout. That is a real solution to
-a problem the Colony does not have yet. Introduce it when two agents actually
-collide — a protocol nobody has needed is a protocol nobody has tested.
+The evidence, so this is not reversed on a feeling:
+
+- `kolonie-infra#31`, 2026-07-29, recorded mid-incident that *"`kolonie-platform`
+  was receiving pushes from another agent at the time"*. It was load-bearing
+  there: it is why a `version: latest` deploy shipped a commit its operator had
+  never read.
+- On 2026-07-31, **two agents worked `kolonie-infra#31` itself** from opposite
+  ends within the same hour — one through PR #41, one directly — and neither knew.
+  The issue was in **Inbox** and nothing was claimed. Three pushes were rejected
+  as non-fast-forward before it became obvious. The halves turned out to be
+  complementary, and one of them introduced a defect the other's new error message
+  caught within the hour. That is a good outcome from a bad process, and it is not
+  a repeatable one.
+
+**The mechanism was already the right one and has not changed. What changed is
+that it is the procedure rather than a contingency**, and it is written in one
+place: [`AGENTS.md` §6 step 7](../AGENTS.md#6-the-orchestration-loop) — how to
+claim, what the comment has to say, and what to do about a queue of several. It is
+not restated here, for the reason the section above gives.
+
+**The locking protocol is still rejected, and that position is stronger now rather
+than weaker.** An earlier version of this document specified a dedicated
+`orchestrating` issue and a one-hour staleness timeout. Two agents have now
+actually collided, once, and what would have prevented it is a column move and a
+sentence — not a lock, not a timeout, and not a lease somebody has to remember to
+renew. Introduce a protocol when a claim *that was made properly* turns out not to
+be enough. A protocol nobody has needed is a protocol nobody has tested.
 
 ## Procedures
 
