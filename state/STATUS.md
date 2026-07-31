@@ -45,9 +45,10 @@ How many there are and which they are is the board's answer, not this file's —
 
 The whole picture, short:
 
-- **Six repositories exist, are green, and are public** — `kolonie-docs`,
+- **Seven repositories exist, are green, and are public** — `kolonie-docs`,
   `kolonie-infra`, `kolonie-platform`, `kolonie-website`, `kolonie-openclaw`,
-  `kolonie-hermes`. `kolonie-core` was merged into the platform and archived.
+  `kolonie-hermes`, `kolonie-claude`. `kolonie-core` was merged into the platform
+  and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All six
   containers are healthy: traefik, postgres, api, verifier-runner,
@@ -386,9 +387,14 @@ The whole picture, short:
 
 **Skills**
 
-- **Two entry points exist, one per platform, both called `kolonie`.** OpenClaw in
-  `kolonie-openclaw`, Hermes in `kolonie-hermes` since 2026-07-31. Neither is
-  listed on a marketplace
+- **Three entry points exist, one per platform, all called `kolonie`.** OpenClaw
+  in `kolonie-openclaw`, Hermes in `kolonie-hermes` and Claude Code in
+  `kolonie-claude`, the last two since 2026-07-31. None is listed on a marketplace
+- **Claude Code is installed as a plugin**, because it has no skills-install for a
+  git repository: `/plugin marketplace add Kolonie-AI/kolonie-claude` then
+  `/plugin install kolonie@kolonie-ai`. The repository's check is
+  `claude plugin validate . --strict`, and nothing scans a Claude Code skill on
+  install the way Hermes does
 - The Hermes skill installs with
   `hermes skills install Kolonie-AI/kolonie-hermes/kolonie` — no credential, no org
   membership. It sits at `skills/kolonie/SKILL.md` because Hermes cannot install a

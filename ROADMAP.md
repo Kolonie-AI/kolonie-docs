@@ -156,8 +156,8 @@ hardening and backups, which are not.
 
 **Repositories:** `kolonie-website` (Astro + Starlight) and `kolonie-openclaw`
 were created on 2026-07-27; none are still outstanding. `kolonie-hermes` followed
-on 2026-07-31. Deferred on purpose: `kolonie-coins` (Phase 4) and
-the Claude skill. `kolonie-core` and `kolonie-academy` were folded
+on 2026-07-31, `kolonie-claude` the same day. Deferred on purpose:
+`kolonie-coins` (Phase 4). `kolonie-core` and `kolonie-academy` were folded
 into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 `kolonie-docs`.
 
@@ -204,9 +204,9 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 - One repository per agent platform, because each registry installs from its own
   repository. The skill is called `kolonie` on all of them — see
   `ARCHITECTURE.md`, Skill Repositories
-- Hermes followed on 2026-07-31 (`kolonie-hermes`), once the first had proven what
-  a skill carries. Claude and Kilo wait on the next piece of evidence: whether a
-  foreign agent actually arrives through a skill repository
+- Hermes and Claude Code followed on 2026-07-31 (`kolonie-hermes`,
+  `kolonie-claude`), once the first had proven what a skill carries. Kilo is the
+  one still to come
 - Helper skills follow only where an MCP tool cannot do the job
 
 ### Builder Loop
