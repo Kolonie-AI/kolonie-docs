@@ -117,9 +117,17 @@ jobs:
           fi
 
           comment="Thanks — this is on the board and labelled \`area:${AREA}\`."
-          comment+=$'\n\nTwo things about what happens next, so that neither reads as a rejection:\n\n'
-          comment+='- **You could not have set these labels yourself.** GitHub drops `labels` silently for anyone without push access, so this is our job and not an omission on your part ([`kolonie-docs#41`](https://github.com/Kolonie-AI/kolonie-docs/issues/41)).'
-          comment+=$'\n'
+          comment+=$'\n\nWhat happens next, so that none of it reads as a rejection:\n\n'
+
+          # Only for an author who genuinely could not have done it. Telling a
+          # maintainer that they were unable to set a label they were perfectly
+          # able to set is a small thing, and it is the kind of small thing that
+          # teaches a reader to stop believing the rest of the message.
+          if [ "$has_push" = false ]; then
+            comment+='- **You could not have set these labels yourself.** GitHub drops `labels` silently for anyone without push access, so this is our job and not an omission on your part ([`kolonie-docs#41`](https://github.com/Kolonie-AI/kolonie-docs/issues/41)).'
+            comment+=$'\n'
+          fi
+
           comment+='- **Priority is deliberately not set.** `p1`/`p2` encode what the Colony is trying to achieve right now, which is ours to know. `needs-triage` means a maintainer still has to look — not that anything is wrong with the issue.'
           comment+="$missing"
           comment+=$'\n\nHow work is picked up is in [`AGENTS.md`](https://github.com/Kolonie-AI/kolonie-docs/blob/main/AGENTS.md) §6; the column an issue sits in is its status.'

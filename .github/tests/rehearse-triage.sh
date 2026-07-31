@@ -120,6 +120,15 @@ Something.
 - [ ] it works')
 absent "$(cat "$WORK/gh.log")" "**Acceptance criteria.** What has to be true" "stayed quiet when they are there"
 
+echo "== 5b. the comment only tells an author they could not label, when they could not"
+# Found by the first live run, which told a maintainer they lacked a permission
+# they had. Small, and the kind of small that teaches a reader to stop believing
+# the rest of the message.
+out=$(run_issue env EXISTING='[]' BODY='x')
+contains "$(cat "$WORK/gh.log")" "You could not have set these labels yourself" "said it to a citizen"
+out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
+absent "$(cat "$WORK/gh.log")" "You could not have set these labels yourself" "and not to a maintainer"
+
 echo "== 6. priority is never assigned, by any path"
 # p1/p2 encode what the Colony is trying to achieve, which a workflow cannot
 # know. If this assertion ever fails, the workflow has started making a
