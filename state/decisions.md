@@ -896,7 +896,7 @@ was a circle. It reached the maintainer's password manager on 2026-07-31, which 
 what terminates the chain outside the machine. The rule that replaces the old one:
 
 > Everything the host needs to come back goes into restic. What unlocks restic
-> goes into the vault.
+> goes into the maintainer's password manager.
 
 **What it costs, stated rather than discovered later.** A damaged `.env` now fails
 the entire backup run, database included. The alternative — snapshot the database
