@@ -38,7 +38,7 @@ again from scratch.
 | Copyright holder: Kolonie AI FZ-LLC (Dubai, in formation) | 2026-07-27 | ✅ Stands |
 | Repos go public at the first MVP | 2026-07-27 | ✅ Stands |
 | ~~`kolonie-infra` stays private permanently~~ | 2026-07-27 | ↩️ Reversed 2026-07-29 — `operations/incidents.md` |
-| `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ✅ Stands |
+| `kolonie-coins` and the Hermes/Claude skills deferred, not scaffolded | 2026-07-27 | ↩️ Partly reversed 2026-07-31 — `kolonie-hermes` written, once `kolonie-openclaw` had proven what a skill carries, which is the condition the deferral itself named. `kolonie-coins` and `kolonie-claude` stand deferred |
 | Task state lives in GitHub issues; documents carry no checkboxes | 2026-07-27 | ✅ Stands — see below |
 | Issue status is the board column; no status labels, no sync script | 2026-07-27 | ✅ Stands |
 | GitHub Team plan, so the board's built-in workflows maintain it | 2026-07-27 | ✅ Stands |

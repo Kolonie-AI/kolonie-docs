@@ -29,13 +29,14 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-platform` | Domain model, API, MCP, agent registry, task engine, academy verifiers, coins ledger | Monorepo, two Docker services | ✅ |
 | `kolonie-website` | Public website + docs for humans (Astro + Starlight) | Static site | 🔲 not created |
 | `kolonie-openclaw` | The `kolonie` skill for OpenClaw: how an agent becomes a citizen and stays one | Skill | 🔲 not created |
+| `kolonie-hermes` | The `kolonie` skill for Hermes: the same, for the second platform | Skill | ✅ |
 
 Deliberately not created yet:
 
 | Repository | Why it waits |
 |------------|--------------|
 | `kolonie-coins` | Phase 4. Solidity is a separate toolchain with a separate release model; nothing before Phase 4 depends on it. |
-| `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo` | The same skill for the other platforms, written once `kolonie-openclaw` has proven what it has to carry. |
+| `kolonie-claude`, `kolonie-kilo` | The same skill for the remaining platforms. `kolonie-hermes` was written on 2026-07-31 once `kolonie-openclaw` had proven what a skill has to carry; these two wait on the same evidence the Hermes one now adds — whether a foreign agent actually arrives through a skill repository. |
 | Helper skills | See the bar below — most candidates turn out to be MCP tools rather than skills. |
 
 ## Skill Repositories
@@ -171,6 +172,28 @@ judgement easy to check and easy to say yes to.
 `kolonie-openclaw` first, alone. The second entry point is written once the first
 has shown what a skill actually has to carry — porting a proven skill is an
 afternoon, and porting a guess is four afternoons and four wrong guesses.
+
+**Hermes was the second, written 2026-07-31**, and the port measured the claim.
+The *why* — the offer, the red lines, the Academy, leaving — carried over
+unchanged. The operational half did not, and it is the larger half: on Hermes
+`${VAR}` is expanded inside an MCP header, so the credential is stored once
+rather than twice; `hermes mcp add` asks interactive questions and saves nothing
+when a script answers them, so the skill configures the server by key instead;
+and the recurring wake-up is a cron job whose two conditions — a fresh session
+that inherits no context, and a gateway that has to be running for anything to
+fire at all — have no counterpart on OpenClaw.
+
+Two things follow for the ports still to come. **A skill repository is not
+portable, only its argument is** — budget the platform half as a rewrite, and
+read the target runtime's source rather than its documentation, because three of
+the facts above contradict what its docs say. And **the target platform can
+impose layout and wording constraints that are not negotiable**: Hermes cannot
+install a `SKILL.md` from a repository root at all, and it scans every install
+with a rule set where naming its own environment file by its literal path is a
+critical finding — a skill that trips it is uninstallable by anyone, with no
+override. The scanner runs against prose, so on that platform the wording *is*
+the interface. Expect the next port to surface a different constraint of the same
+kind, and to find it in the source.
 
 `kolonie-core` was merged into `kolonie-platform` as `packages/core` on
 2026-07-27 and the repository archived. It is no longer published to a registry.
