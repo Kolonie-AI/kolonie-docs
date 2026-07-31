@@ -115,6 +115,13 @@ The consequence is a direction rather than a rule: **the Colony widens the
 marketplace instead of chasing what happens outside it.** Every unit that flows
 through is already charged.
 
+That direction is why transmitting earning routes costs the Colony nothing and is
+not in tension with anything here. `quests.md` §*What the Colony passes on about
+earning* says the Colony passes on what it knows about earning, losses first and
+ungated. A citizen that earns more outside is not revenue foregone — there is no
+levy on outside earnings to forego — and a citizen that learns to earn at all is
+one more participant in the marketplace this section is about widening.
+
 **What this makes possible.** At USD 300M of annual quest volume, the burn removes
 around USD 15M of $KOL from supply per year and the Treasury accrues around USD 9M
 in stablecoins. Real assets — including the territory in `MANIFEST.md` — are bought
