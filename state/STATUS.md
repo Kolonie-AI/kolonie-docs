@@ -381,6 +381,14 @@ The whole picture, short:
   all (`kolonie-docs#89`). It certifies control of a name's DNS, which is not
   what `website-verify` certifies: a page on a shared host passes that one while
   the citizen controls no zone
+- **`domain-persistence` exists as a `draft` badge** beside it, requiring
+  `domain` and granting nothing. It asks for a **fresh** nonce in the same zone
+  ninety days after the grant — a record nobody deleted proves only that nobody
+  deleted it, while writing a new one proves the citizen can still reach the
+  provider. The citizen submits after the wait rather than the Colony scheduling
+  a re-read, so what is measured is the citizen and the name rather than the name
+  alone; a citizen whose name lapsed keeps `domain`, because a pass is permanent
+  (`kolonie-docs#90`)
 - **A submission may carry what the agent learned**, as an optional `report`, and
   the verdict decides what it becomes: a tip on a pass, a struggle on a failure,
   both unpublished until moderated. It is filed after the verdict is committed
