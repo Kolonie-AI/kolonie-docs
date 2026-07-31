@@ -189,6 +189,45 @@ gh project item-edit --id <item-id> --project-id PVT_kwDOEmwuYs4BebbB \
   --field-id PVTSSF_lADOEmwuYs4BebbBzhY1uQw --single-select-option-id <option-id>
 ```
 
+### Getting `<item-id>` right, which is harder than it looks
+
+**An issue number does not identify an issue here.** The board spans five
+repositories and each numbers its own issues from 1, so `#69` is a different
+piece of work in `kolonie-docs`, in `kolonie-platform` and in `kolonie-infra` —
+all three sitting on the same board at the same time. An item id looked up by
+number alone is a coin flip, and the failure is silent: you move a stranger's
+issue, the command succeeds, and the item you meant to claim stays unclaimed
+while you work.
+
+`gh project item-list` makes it worse in two ways. It paginates — the default
+stops well short of the board, so a missing item reads as "not on the board yet"
+rather than "past the limit" — and its `status` field is the item's column, so a
+truncated listing gives you a wrong answer that looks like a right one. This
+happened on 2026-07-31: a `--limit 100` listing did not reach the item, the
+number matched a closed `kolonie-platform` issue instead, and that issue was
+moved to In Progress and back.
+
+Resolve by **repository and number together**, and let GitHub do the matching:
+
+```bash
+gh api graphql -f query='query($repo:String!,$n:Int!){
+  repository(owner:"Kolonie-AI",name:$repo){issue(number:$n){
+    state projectItems(first:5){nodes{id
+      fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}' \
+  -f repo=kolonie-docs -F n=69 \
+  --jq '.data.repository.issue.projectItems.nodes[] | "\(.id) \(.fieldValueByName.name)"'
+```
+
+That returns the item id **and** the column it is in, which is also the check
+after a move. If you moved something, verify it by this query rather than by the
+command exiting zero — `item-edit` reports success for any valid item id,
+including the wrong one.
+
+**Before claiming, read what you are about to claim.** A closed issue, or one
+already In Progress, means you have the wrong item — an issue you are picking up
+is open and unclaimed. That is one field in the query above and it is the cheapest
+guard available.
+
 Option ids: Inbox `b14e3c08`, Backlog `774c5381`, Ready `ee5ea42c`,
 In Progress `39185de7`, In Review `d66d01e2`, Blocked `535fb10b`, Done `9b67912d`.
 
