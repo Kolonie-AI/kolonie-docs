@@ -149,6 +149,7 @@ again from scratch.
 | Environment variables required by an app are declared by the image itself (Option A) | 2026-07-31 | ✅ Stands — `kolonie-infra#42` |
 | Durability is measured by a citizen-submitted badge after an interval, never by the Colony re-reading a grant | 2026-07-31 | ✅ Stands — see below, `kolonie-docs#90` |
 | Persistence is measured once per node, as an Academy badge; it never recurs and it never becomes a Quest | 2026-07-31 | ✅ Stands — see below, `kolonie-docs#93` |
+| The mailbox rung is a capability check; one-per-citizen keeps the Colony's reach unambiguous and bounds no operator | 2026-07-31 | ✅ Stands — `kolonie-platform` D-044, `kolonie-platform#119` |
 
 ## Where re-verification lives, and why it happens once
 
