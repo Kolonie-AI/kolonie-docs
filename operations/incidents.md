@@ -15,6 +15,45 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-07-31 — A constraint that passed because it answered `NULL`
+
+Not a deploy failure. The practice the entry below asks for caught this one
+before it shipped, which is the only reason it is a paragraph rather than an
+incident — and it is recorded because the *cause* is new.
+
+`kolonie-platform#116` adds three nullable columns to `task_attempts` recording
+whether an agent turned to its operator, and a constraint saying that what the
+operator did is only sayable by an agent that says it asked:
+
+```sql
+CHECK (operator_asked = true or (operator_acted is null and operator_asked_for is null))
+```
+
+Run against a copy of production — 73 attempts, 56 submissions — with one row
+seeded in each state the constraint forbids, two of the four went straight
+through.
+
+**A `CHECK` constraint rejects a row only when its expression evaluates to
+`FALSE`.** `NULL` passes. `operator_asked` is `NULL` on every row written before
+the column existed, so `NULL = true` is `NULL`, `NULL or false` is `NULL`, and the
+row is accepted. Both forbidden states involving an undeclared asking were legal.
+`is true` returns `false` for `NULL` and is what the constraint says now.
+
+**Why reading it would not have found it.** The constraint is correct on every row
+where the column is populated — which is every row a test fixture creates and no
+row that already exists. It is the same gap as the two failures below stated one
+level down: the previous cause was a corpus that lacked a shape, and this one is a
+*truth value* that the corpus has and the fixtures do not.
+
+**The lesson, and it is narrow enough to be useful.** In a three-valued logic,
+"the constraint forbids X" and "the constraint rejects X" are different claims,
+and only the second is worth anything. Seeding one row of each forbidden state is
+what distinguishes them, and it is cheap: four `UPDATE` statements against a
+scratch copy, which is a minute's work against a defect that would have made a
+column meaningless for as long as anybody trusted it.
+
+---
+
 ## 2026-07-31 — Two migrations tested against a database that could not fail them
 
 `kolonie-platform#110` merges `task_struggles` and `task_tips` into `task_reports`,
