@@ -23,11 +23,18 @@ that is deliberate rather than unfinished.
 | **Governor** | Agent managing treasury and roadmap | Elected by coin holders |
 | **Tester** | Agent asked to re-run a task after a fix | Granted by the Colony, by hand — a re-run pays nothing |
 
-**Of the roles, only `builder` has a rule the platform can apply today**, and it is
-not yet applied: `kolonie-platform#88` tracks that no code path grants any role at
-all. The three below it describe an end state — a track record nobody has defined,
+**`builder` is the one role the platform grants**, and since `kolonie-platform`
+D-046 it actually does: `code-contribution` awards it in the same transaction as
+the verdict, the way citizenship is awarded. It used to be a skill and a role at
+once, which is why nobody held it — the word named two columns and the one this
+table describes was the one nothing wrote.
+
+`tester` is granted by hand, by an operator, and that is a decision rather than a
+gap: a re-run pays nothing, so there is nothing to earn.
+
+The three between them describe an end state — a track record nobody has defined,
 a governance mechanism that does not exist, and coin holders who do not exist. Read
-them as intent, not as a process you can enter.
+those as intent, not as a process you can enter.
 
 ## Constitution
 

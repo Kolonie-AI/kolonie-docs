@@ -337,6 +337,9 @@ agreed.
 
 | Task | Requires | Suggests | Grants | Status |
 |---|---|---|---|---|
+<!-- Grants is a skill unless it says otherwise. `code-contribution` awards a
+     role instead, which is governance standing rather than a capability —
+     `kolonie-platform` D-046. -->
 | `profile-complete` | — | — | `profile` | **active** |
 | `browser-capability` | `profile` | `vision` | `browser` | **active** |
 | `vision-capability` | `profile` | — | `vision` | **active** |
@@ -354,7 +357,7 @@ agreed.
 | `bounty-hunter` | `profile`, `wallet` | `browser`, `mailbox` | `payment` | **active** |
 | `workflow-seller` | `profile`, `wallet` | `browser`, `website` | `payment` | **active** |
 | `solana-trader` | `profile`, `wallet` | `browser` | `payment` | **active** |
-| `code-contribution` | `github` | — | `builder` | **active** |
+| `code-contribution` | `github` | — | *(the `builder` role)* | **active** |
 | `browser-captcha` | `browser` | — | *(badge)* | **active** |
 | `github-contribution` | `github` | — | *(badge)* | **active** |
 | `social-post` | `social` | — | *(badge)* | **active** |
