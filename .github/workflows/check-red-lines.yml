@@ -1,0 +1,108 @@
+name: Check Red Lines
+
+on:
+  push:
+    paths:
+      - 'governance/red-lines.md'
+  schedule:
+    - cron: '0 4 * * *' # Run daily
+  workflow_dispatch:
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout docs
+        uses: actions/checkout@v4
+        with:
+          path: kolonie-docs
+      
+      - name: Checkout platform
+        uses: actions/checkout@v4
+        with:
+          repository: Kolonie-AI/kolonie-platform
+          path: kolonie-platform
+          
+      - name: Checkout openclaw
+        uses: actions/checkout@v4
+        with:
+          repository: Kolonie-AI/kolonie-openclaw
+          path: kolonie-openclaw
+          
+      - name: Checkout hermes
+        uses: actions/checkout@v4
+        with:
+          repository: Kolonie-AI/kolonie-hermes
+          path: kolonie-hermes
+
+      - name: Verify Red Lines Sync
+        run: |
+          #!/bin/bash
+          set -e
+          
+          cat << 'EOF' > check.py
+          import sys
+          import re
+          
+          def extract_docs():
+              with open('kolonie-docs/governance/red-lines.md', 'r') as f:
+                  content = f.read()
+              match = re.search(r'## Forbidden\n\n(.*?)\n\n', content, re.DOTALL)
+              if not match: return []
+              return [line.strip()[2:] for line in match.group(1).split('\n') if line.strip().startswith('- ')]
+          
+          def extract_about_ts():
+              with open('kolonie-platform/apps/api/src/about.ts', 'r') as f:
+                  content = f.read()
+              match = re.search(r'redLines:\s*\[(.*?)\]', content, re.DOTALL)
+              if not match: return []
+              lines = []
+              for line in match.group(1).split('\n'):
+                  line = line.strip()
+                  if line.startswith("'") and line.endswith("',"):
+                      lines.append(line[1:-2])
+              return lines
+              
+          def extract_skill_md(path):
+              with open(path, 'r') as f:
+                  content = f.read()
+              match = re.search(r'## Red lines\n\n.*?\n\n(.*?)\n\n', content, re.DOTALL)
+              if not match: return []
+              return [line.strip()[2:] for line in match.group(1).split('\n') if line.strip().startswith('- ')]
+          
+          docs_lines = extract_docs()
+          if not docs_lines:
+              print("Failed to extract from docs")
+              sys.exit(1)
+              
+          errors = 0
+          
+          about_lines = extract_about_ts()
+          for i, ref in enumerate(docs_lines):
+              expected = "No " + ref[:1].lower() + ref[1:]
+              if i < len(about_lines):
+                  actual = about_lines[i]
+                  if expected.lower() != actual.lower():
+                      print(f"::error file=about.ts::Mismatch! Expected: '{expected}', Got: '{actual}'")
+                      errors += 1
+              else:
+                  print(f"::error file=about.ts::Missing line {i+1}")
+                  errors += 1
+          
+          for skill_path in ['kolonie-openclaw/SKILL.md', 'kolonie-hermes/skills/kolonie/SKILL.md']:
+              skill_lines = extract_skill_md(skill_path)
+              for i, ref in enumerate(docs_lines):
+                  expected = "No " + ref[:1].lower() + ref[1:]
+                  if i < len(skill_lines):
+                      actual = skill_lines[i]
+                      if expected.lower() != actual.lower():
+                          print(f"::error file={skill_path}::Mismatch! Expected: '{expected}', Got: '{actual}'")
+                          errors += 1
+                  else:
+                      print(f"::error file={skill_path}::Missing line {i+1}")
+                      errors += 1
+          
+          sys.exit(errors > 0)
+          EOF
+          
+          python3 check.py
