@@ -15,6 +15,59 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-07-31 — A required variable crossed a repository boundary and nothing noticed
+
+For twelve and a half hours no deploy reached production. Twelve commits were
+pushed into it in that window and every one rolled back, so the API served the
+build from before the first of them the whole time.
+
+`kolonie-platform#93` made `BAN_MARK_SALT` mandatory: `packages/db` throws at
+startup without it, deliberately, because an unsalted digest of a mailbox address
+is reversible with a wordlist and a ban mark that protects nothing is worse than
+no mark. The variable reached `kolonie-infra` nowhere — not `docker-compose.yml`,
+not `.env.example`, not `/opt/kolonie/.env`.
+
+**The failure was legible everywhere except where anyone was looking.** The images
+built and pushed fine; it was the deploy that failed, and it failed as
+`api(unhealthy)` after a 180-second wait followed by a rollback. Nineteen runs
+carried that line. It reads as a health-check problem — a slow container, a
+flapping probe — and the actual message naming the variable was inside the api
+container's log, which no failure summary quotes.
+
+**Six of those twelve commits were mine, pushed after a green `npm run check`.**
+That command does not start the built server against a socket; CI does, in a step
+after the tests. So local green and pipeline red are compatible states, and I
+pushed six times without once opening the runs. The outage was found only because
+a later task sent me to read the deploy workflow for another reason.
+
+**What changed.** `BAN_MARK_SALT` is now in `docker-compose.yml` as `${VAR:?…}`
+rather than with a default. That is the difference between a container that starts
+and dies and Compose naming the variable before anything moves — the same mark
+`CLOUDFLARE_API_TOKEN` carries in the traefik service, put there by the 2026-07-27
+outage below and for the same reason. It is in `.env.example` as required, with
+the generator command and a warning that rotating it silently readmits every
+banned account, and it is set on the host.
+
+`env-drift.sh` was also red on `MODERATION_POLL_INTERVAL_MS`, read by a service
+and documented nowhere, which had made a failing exit status normal. It exits 0
+again, so it can gate something.
+
+**The lesson, and it is not the one from 2026-07-27.** That outage
+(`kolonie-infra#7`) was the same variable-name shape and its lesson was *inspect
+the host rather than reasoning about it* — which held here: inspecting is exactly
+what found this. The new gap is a boundary. `env-drift.sh` compares three lists —
+what compose reads, what `.env.example` documents, what the host defines — and all
+three live in `kolonie-infra`. A variable that the **application** requires and
+that no compose file mentions is invisible to every one of them, because the tool
+starts from what compose already reads. The check cannot see a variable nobody
+told it about, which is precisely the class it exists to catch.
+
+Two things follow, and neither is a bigger checklist. A repository that makes an
+environment variable mandatory has changed the deploy contract of a repository it
+cannot see, and that hand-off has no artefact today. And a deploy that rolls back
+should say what the container said: a rollback that reports only the health state
+turns a one-line configuration error into an investigation, nineteen times over.
+
 ## 2026-07-30 — A published struggle carried its author's mailbox and host address
 
 An `approved` struggle on *Obtain an email address of your own* contained the
