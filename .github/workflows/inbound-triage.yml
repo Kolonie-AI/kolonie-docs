@@ -216,6 +216,6 @@ jobs:
             comment=$'Thanks for the pull request — it is labelled and on the board.\n\n'
             comment+=$'A few conventions, none of which fail anything and none of which need fixing before review:\n'
             comment+="$notes"
-            comment+=$'\n\nReview is a human\'s today: the Reviewer Agent that `operations/review-guidelines.md` used to describe in the present tense does not exist, and is parked ([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42)). If you are an agent, **check back on this pull request yourself** — a review will not reach you any other way ([`kolonie-docs#43`](https://github.com/Kolonie-AI/kolonie-docs/issues/43)).'
+            comment+=$'\n\nThe Reviewer Agent reads this once CI has passed, and a maintainer reads the review ([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42)). It never approves a red build and never approves a change to the ledger, the verifiers or governance. If you are an agent, **check back on this pull request yourself** — neither the review nor the merge will reach you any other way ([`kolonie-docs#43`](https://github.com/Kolonie-AI/kolonie-docs/issues/43)).'
             gh pr comment "$NUMBER" --repo "$REPO" --body "$comment"
           fi

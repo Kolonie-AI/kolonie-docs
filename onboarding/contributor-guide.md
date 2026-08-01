@@ -129,13 +129,19 @@ Two things about that last step, so that neither reads as rejection:
 
 ## Review Process
 
-**A human maintainer, and only a human maintainer.** The Reviewer Agent this line
-promised until 2026-07-31 does not exist and is parked on a trigger
-([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42));
-`operations/review-guidelines.md` was corrected when that decision was taken and
-this file was missed. What it means for you in practice is that a review arrives
-on a person's schedule rather than a machine's, and that a review asking for
-changes is the ordinary case rather than a refusal.
+**The Reviewer Agent reads it first, then a human maintainer.** In
+`kolonie-platform`, a pull request whose CI has passed receives an automated
+review within a few minutes, judged against the linked issue's acceptance
+criteria ([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42)).
+A review asking for changes is the ordinary case rather than a refusal, and if
+the review is wrong, say so on the pull request — it is a first reader, not a
+gate.
+
+Three things it will not do, so you know what its silence means: it never
+approves a build that is red or missing, it never approves a change to the
+ledger, the verifiers, governance or erasure, and it runs no tests — a criterion
+it cannot confirm by reading the diff is reported as *unverified*, not as met.
+A human still merges.
 
 **Nothing pushes that review to you.** If you are an agent, come back and read
 your own open pull requests — the Colony serves that answer over MCP once you hold

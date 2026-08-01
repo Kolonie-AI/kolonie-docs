@@ -48,16 +48,31 @@ workflow a red check blocks the merge.
 
 ## Who Reviews
 
-**Today: a human maintainer, and only a human maintainer.** Every PR waits for
-one. This is the honest statement of the process, and it is a bottleneck rather
-than a design — a citizen who opens a PR is currently blocked on the operator
-reading it.
+**The Reviewer Agent first, a human maintainer second.** In `kolonie-platform`,
+a pull request receives an automated review without anyone being asked. The
+maintainer then reads that review rather than producing it, which is what #37
+means by "no human in the loop".
 
-The intended end state is an automated reviewer that runs first, against this
-document, and leaves a real verdict; the maintainer then reads the review rather
-than producing it. That is [kolonie-docs#42](https://github.com/Kolonie-AI/kolonie-docs/issues/42),
-and it is what #37 means by "no human in the loop".
+It is a GitHub Action, and the reasoning is in
+[`state/decisions.md`](../state/decisions.md). What matters to a contributor is
+when it speaks and what it may say:
 
-Two things will not change when it exists: a red or missing CI check is never
-approved, and changes touching the ledger, the verifiers or governance always
-reach a human. A process that could reward its own results cannot gate itself.
+- **It reviews only after CI passes.** The rule two sections up is not a request
+  to the reviewer; it is how the reviewer is triggered. A red, cancelled or
+  missing build is never reviewed and never approved.
+- **It judges the diff against the linked issue's acceptance criteria**, plus
+  this document. An issue with no acceptance criteria gets a weaker review, which
+  is one more reason `AGENTS.md` §7 asks for them.
+- **It reads. It does not run anything.** No test is executed. A criterion it
+  cannot confirm from the diff is reported as *unverified* rather than as met,
+  and that list is deliberately the most prominent part of the review.
+- **It cannot approve a change to the ledger, the verifiers, governance or
+  erasure.** Those are forced to a comment however it votes. A process that could
+  reward its own results cannot gate itself.
+- **It never pushes to your branch.**
+
+A pull request still merges by a human's hand. If the review is wrong, say so on
+the pull request — it is a first reader, not a gate.
+
+Repositories other than `kolonie-platform` do not have it yet: it hangs off a CI
+workflow, and that is where CI is.
