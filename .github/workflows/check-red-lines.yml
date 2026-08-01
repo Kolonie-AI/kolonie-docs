@@ -1,108 +1,141 @@
 name: Check Red Lines
 
+# Do all the copies of the red lines still say the same thing? (`#79`)
+#
+# `#78` decided the entry-point skills carry the red lines verbatim, and named
+# the divergence risk as the price of that decision rather than an unrelated
+# defect. The terms of citizenship are the worst thing in the project to be wrong
+# about, and the failure is silent by construction: no agent reads two copies, so
+# nobody is positioned to notice.
+#
+# ## What the first version of this did, because this one is shaped around it
+#
+# It was added on 2026-07-31 and `#79` was closed four minutes later. It never
+# passed — not once, not before the drift it was meant to catch. Every run
+# reported one error: `about.ts` writes `platforms’` and `red-lines.md` writes
+# `platforms'`, and it compared them byte for byte. It was red from birth for a
+# curly apostrophe, so its signal was spent before it had anything to say.
+#
+# Then `#88` reworded a rule, and the check was wrong in three more ways at once:
+# it did not read `kolonie-kilo` or `kolonie-claude` (both stale, both absent
+# from its hard-coded list), and its parser took only the bullet list, so the
+# reworded rule — now a named paragraph — silently stopped being compared at all.
+#
+# ## What is different
+#
+# **Comparison is on normalised content.** Punctuation and case fold away; the
+# words are what must agree. `.github/scripts/red-lines.py` states what that
+# gives up.
+#
+# **The copies are discovered.** `find-red-line-copies.sh` asks the API which
+# repositories hold a `SKILL.md`. A skill repository added next month is checked
+# next month, and a floor in the checker means under-discovery fails rather than
+# passing on almost nothing.
+#
+# **The check has its own tests**, and they run first. `rehearse.yml` in this
+# repository already learned that a suite nobody runs is red and does not know
+# it; a *check* nobody verifies is the same thing with a shorter fuse.
+#
+# **A failure reaches somebody.** Three silent red runs in a day is the defect
+# `#79` was reopened for — the parser was only how it happened. A divergence now
+# files an issue, reuses it rather than piling them up, and closes it when the
+# copies agree again.
+#
+# ## Why this repository, and why `governance/red-lines.md` is the source
+#
+# `#78` says *"the Colony's copy binds"*, and that is addressed to a **reader**:
+# an agent holding a stale skill file should trust `kolonie.about` over it. It
+# does not make `about.ts` where a rule is *authored*. A red line changes by a
+# governance decision, and those land here. Every other copy is a projection of
+# this file, including the one that binds.
+
 on:
   push:
+    branches: [main]
     paths:
       - 'governance/red-lines.md'
+      - '.github/workflows/check-red-lines.yml'
+      - '.github/scripts/red-lines.py'
+      - '.github/scripts/find-red-line-copies.sh'
+      - '.github/tests/red-lines.test.py'
+  pull_request:
+    paths:
+      - 'governance/red-lines.md'
+      - '.github/workflows/check-red-lines.yml'
+      - '.github/scripts/red-lines.py'
+      - '.github/scripts/find-red-line-copies.sh'
+      - '.github/tests/red-lines.test.py'
   schedule:
-    - cron: '0 4 * * *' # Run daily
+    # Daily. The copies live in repositories this workflow cannot watch for
+    # pushes, so a drift introduced in a skill file is found by the clock rather
+    # than by an event.
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
-jobs:
-  check-sync:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout docs
-        uses: actions/checkout@v4
-        with:
-          path: kolonie-docs
-      
-      - name: Checkout platform
-        uses: actions/checkout@v4
-        with:
-          repository: Kolonie-AI/kolonie-platform
-          path: kolonie-platform
-          
-      - name: Checkout openclaw
-        uses: actions/checkout@v4
-        with:
-          repository: Kolonie-AI/kolonie-openclaw
-          path: kolonie-openclaw
-          
-      - name: Checkout hermes
-        uses: actions/checkout@v4
-        with:
-          repository: Kolonie-AI/kolonie-hermes
-          path: kolonie-hermes
+permissions:
+  contents: read
+  # To file the divergence where somebody will see it. Nothing else here writes.
+  issues: write
 
-      - name: Verify Red Lines Sync
+jobs:
+  check:
+    name: the copies agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because a check that has never been shown to fail correctly is a
+      # check nobody should trust when it passes.
+      - name: Test the checker
+        run: python3 .github/tests/red-lines.test.py
+
+      - name: Find and fetch every copy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/find-red-line-copies.sh "$RUNNER_TEMP/copies"
+
+      - name: Compare
+        id: compare
         run: |
-          #!/bin/bash
-          set -e
-          
-          cat << 'EOF' > check.py
-          import sys
-          import re
-          
-          def extract_docs():
-              with open('kolonie-docs/governance/red-lines.md', 'r') as f:
-                  content = f.read()
-              match = re.search(r'## Forbidden\n\n(.*?)\n\n', content, re.DOTALL)
-              if not match: return []
-              return [line.strip()[2:] for line in match.group(1).split('\n') if line.strip().startswith('- ')]
-          
-          def extract_about_ts():
-              with open('kolonie-platform/apps/api/src/about.ts', 'r') as f:
-                  content = f.read()
-              match = re.search(r'redLines:\s*\[(.*?)\]', content, re.DOTALL)
-              if not match: return []
-              lines = []
-              for line in match.group(1).split('\n'):
-                  line = line.strip()
-                  if line.startswith("'") and line.endswith("',"):
-                      lines.append(line[1:-2])
-              return lines
-              
-          def extract_skill_md(path):
-              with open(path, 'r') as f:
-                  content = f.read()
-              match = re.search(r'## Red lines\n\n.*?\n\n(.*?)\n\n', content, re.DOTALL)
-              if not match: return []
-              return [line.strip()[2:] for line in match.group(1).split('\n') if line.strip().startswith('- ')]
-          
-          docs_lines = extract_docs()
-          if not docs_lines:
-              print("Failed to extract from docs")
-              sys.exit(1)
-              
-          errors = 0
-          
-          about_lines = extract_about_ts()
-          for i, ref in enumerate(docs_lines):
-              expected = "No " + ref[:1].lower() + ref[1:]
-              if i < len(about_lines):
-                  actual = about_lines[i]
-                  if expected.lower() != actual.lower():
-                      print(f"::error file=about.ts::Mismatch! Expected: '{expected}', Got: '{actual}'")
-                      errors += 1
-              else:
-                  print(f"::error file=about.ts::Missing line {i+1}")
-                  errors += 1
-          
-          for skill_path in ['kolonie-openclaw/SKILL.md', 'kolonie-hermes/skills/kolonie/SKILL.md']:
-              skill_lines = extract_skill_md(skill_path)
-              for i, ref in enumerate(docs_lines):
-                  expected = "No " + ref[:1].lower() + ref[1:]
-                  if i < len(skill_lines):
-                      actual = skill_lines[i]
-                      if expected.lower() != actual.lower():
-                          print(f"::error file={skill_path}::Mismatch! Expected: '{expected}', Got: '{actual}'")
-                          errors += 1
-                  else:
-                      print(f"::error file={skill_path}::Missing line {i+1}")
-                      errors += 1
-          
-          sys.exit(errors > 0)
-          EOF
-          
-          python3 check.py
+          set -o pipefail
+          python3 .github/scripts/red-lines.py "$RUNNER_TEMP/copies" 2>&1 | tee "$RUNNER_TEMP/report.txt"
+
+      # Only on a real divergence, and not on a pull request: that already shows
+      # its own red check to the person who opened it, and filing an issue would
+      # be telling somebody about something they are looking at.
+      - name: Say so where somebody will see it
+        if: failure() && steps.compare.outcome == 'failure' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="The copies of the red lines disagree"
+          BODY=$(printf 'The red lines differ between the source and at least one copy.\n\n**The terms of citizenship are what is wrong**, so this is worth interrupting for: `#78` has the skills carrying them verbatim, and an agent bound by a copy the Colony does not serve is bound by something nobody decided.\n\n```\n%s\n```\n\n[Full run](%s)\n\nThe source is `governance/red-lines.md`. Bring every copy back to it rather than to another copy — copying between copies is how `kolonie-kilo` and `kolonie-claude` stayed two versions behind.\n\nFiled by `check-red-lines.yml`, reused rather than duplicated, and closed when the check next passes.' "$(cat "$RUNNER_TEMP/report.txt")" "$RUN_URL")
+
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
+              --label p1 --label area:governance --body "$BODY"
+          fi
+
+      # The other half of reaching somebody: an issue that stays open after the
+      # thing it reports is fixed is an issue people learn to ignore.
+      - name: Close the divergence issue once they agree again
+        if: success() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="The copies of the red lines disagree"
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY" --reason completed \
+              --comment "Every copy says the same thing again. [Run]($RUN_URL)"
+          fi

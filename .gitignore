@@ -11,3 +11,6 @@ Thumbs.db
 # Temp
 *.tmp
 *.bak
+
+# Python bytecode from the workflow scripts and their tests.
+__pycache__/
