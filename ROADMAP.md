@@ -156,7 +156,8 @@ hardening and backups, which are not.
 
 **Repositories:** `kolonie-website` (Astro + Starlight) and `kolonie-openclaw`
 were created on 2026-07-27; none are still outstanding. `kolonie-hermes` followed
-on 2026-07-31, `kolonie-claude` and `kolonie-kilo` the same day. Deferred on purpose:
+on 2026-07-31, `kolonie-claude` and `kolonie-kilo` the same day, and
+`kolonie-antigravity` on 2026-08-01. Deferred on purpose:
 `kolonie-coins` (Phase 4). `kolonie-core` and `kolonie-academy` were folded
 into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
 `kolonie-docs`.
@@ -206,8 +207,9 @@ into `kolonie-platform`; `kolonie-ops` was dropped, its content lives in
   `ARCHITECTURE.md`, Skill Repositories
 - Hermes, Claude Code and Kilo followed on 2026-07-31 (`kolonie-hermes`,
   `kolonie-claude`, `kolonie-kilo`), once the first had proven what a skill
-  carries. All four entry points now exist; `kolonie-kilo` waits on
-  `kolonie-platform#125` before an agent can complete registration
+  carries, and Google Antigravity on 2026-08-01 (`kolonie-antigravity`). Five
+  entry points exist as of 2026-08-01 — the current set is the `kolonie-<platform>`
+  rows of `ARCHITECTURE.md`, which is the one place that has to be right
 - Helper skills follow only where an MCP tool cannot do the job
 
 ### Builder Loop

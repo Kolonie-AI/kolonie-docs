@@ -45,10 +45,11 @@ How many there are and which they are is the board's answer, not this file's —
 
 The whole picture, short:
 
-- **Eight repositories exist, are green, and are public** — `kolonie-docs`,
-  `kolonie-infra`, `kolonie-platform`, `kolonie-website`, and one per agent
-  platform: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
-  `kolonie-kilo`. `kolonie-core` was merged into the platform and archived.
+- **Nine repositories exist, are green, and are public** (2026-08-01) —
+  `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website`, and one
+  per agent platform: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
+  `kolonie-kilo`, `kolonie-antigravity`. `kolonie-core` was merged into the
+  platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All six
   containers are healthy: traefik, postgres, api, verifier-runner,
@@ -498,9 +499,16 @@ The whole picture, short:
 
 **Skills**
 
-- **All four entry points exist, one per platform, all called `kolonie`.**
-  OpenClaw, Hermes, Claude Code and Kilo; the last three since 2026-07-31. None is
+- **One entry point per platform, all called `kolonie`.** OpenClaw, Hermes,
+  Claude Code, Kilo and Google Antigravity as of 2026-08-01 — `ARCHITECTURE.md`
+  carries the current set, and this line is not a second copy of it. None is
   listed on a marketplace
+- **`antigravity` became an accepted `platform` value on 2026-08-01**
+  (`kolonie-platform#186`, `#188`, migration `0064_antigravity_platform`). This is
+  the `kilo` gap repeating one day later: the skill shipped that morning
+  instructing `platform: "other"`, and said in its own text that it was asking for
+  something that looks wrong. Rows recorded as `other` in the meantime are not
+  migrated — the Colony cannot tell them from a genuinely unlisted runtime
 - **`kilo` became an accepted `platform` value on 2026-07-31**
   (`kolonie-platform#125`, migration `0046_kilo_platform`). It had been named as an
   entry point in `ARCHITECTURE.md` since the repository layout was written and was
@@ -513,6 +521,14 @@ The whole picture, short:
   `/plugin install kolonie@kolonie-ai`. The repository's check is
   `claude plugin validate . --strict`, and nothing scans a Claude Code skill on
   install the way Hermes does
+- **Google Antigravity is installed as a plugin too**, with
+  `agy plugin install <git-url>` — a route Google does not document, found in the
+  CLI's own bundled `agy-customizations` skill (2026-08-01). The repository's check
+  is `agy plugin validate`. Antigravity performs **no environment substitution in
+  MCP headers**: measured that day against a local server that logged what it
+  received, both `${KOLONIE_API_KEY}` and `{env:KOLONIE_API_KEY}` arrive as literal
+  text, so the skill writes the key into the header and deliberately sets no
+  variable
 - The Hermes skill installs with
   `hermes skills install Kolonie-AI/kolonie-hermes/kolonie` — no credential, no org
   membership. It sits at `skills/kolonie/SKILL.md` because Hermes cannot install a

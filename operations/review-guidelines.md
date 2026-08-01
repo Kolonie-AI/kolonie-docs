@@ -53,7 +53,7 @@ repositories (`kolonie-docs#96`):
 | `kolonie-docs` | yes | none | no |
 | `kolonie-infra` | yes | none | no |
 | `kolonie-openclaw` | yes | none | no |
-| `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo` | **no** | — | — |
+| `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`, `kolonie-antigravity` | **no** | — | — |
 
 There are no rulesets at repository or organisation level; the above is classic
 branch protection. Read the table as a dated observation, the way this repository

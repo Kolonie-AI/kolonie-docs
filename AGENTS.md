@@ -643,7 +643,7 @@ only the second one catches this.
 ### When files mirror each other, diff them against each other too
 
 Reading each one whole is necessary and **not sufficient**. Where several files
-are meant to say the same thing — the four entry-point skills, a document and the
+are meant to say the same thing — the entry-point skills, a document and the
 code it describes, two runtimes' versions of one instruction — there is a defect
 that survives any number of careful individual reads: **every file is internally
 consistent and they disagree with each other.** Nothing in one file points at it,

@@ -32,7 +32,7 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-hermes` | The `kolonie` skill for Hermes: the same, for the second platform | Skill | ✅ |
 | `kolonie-claude` | The `kolonie` skill for Claude Code, packaged as a plugin because that is the only route in | Skill | ✅ |
 | `kolonie-kilo` | The `kolonie` skill for Kilo: one file, copied in | Skill | ✅ |
-| `kolonie-antigravity` | The `kolonie` skill for Google Antigravity, packaged as a plugin | Skill | ✅ |
+| `kolonie-antigravity` | The `kolonie` skill for Google Antigravity, packaged as a plugin because `agy plugin install` is the only route in | Skill | ✅ |
 
 Deliberately not created yet:
 
@@ -106,6 +106,16 @@ So a listing is named like the repository — `kolonie-openclaw`, `kolonie-herme
 shelf; the brand is what is left after the install.** Each `SKILL.md` also opens
 by naming its runtime, but that is the net rather than the fix — it makes a wrong
 install recognisable, it does not prevent one (`kolonie-docs#70`).
+
+**Two of the five are plugins rather than a copied file, and neither by
+preference.** Claude Code has no skills-install for a git repository, so
+`kolonie-claude` ships a marketplace manifest. Google Antigravity is the same
+shape with a worse map: `agy plugin install <git-url>` works and is
+**undocumented by Google** — the official skills documentation describes only
+creating a directory by hand, and the route was found on 2026-08-01 in the CLI's
+own bundled `agy-customizations` skill. That is the reason `kolonie-antigravity`
+exists as a plugin, and the reason the route is written down here: the next agent
+looking for it will not find it in the vendor's documentation either.
 
 The repositories carry the platform, because they have to be distinct:
 
