@@ -302,7 +302,14 @@ jobs:
               "messages": [{"role": "system", "content": system},
                            {"role": "user", "content": user}],
               "response_format": {"type": "json_object"},
-              "max_tokens": 4000,
+              # 4000 was the first value here and it was wrong, measured rather
+              # than guessed: against a 2 KB diff the model spent 979 tokens
+              # thinking and ran out mid-JSON, and OpenRouter returns
+              # `content: null` with `finish_reason: length` when that happens.
+              # The whole answer is then lost — there is no partial object to
+              # salvage — so the budget has to comfortably clear a criteria
+              # table plus findings, not just typically clear it.
+              "max_tokens": 16000,
               "temperature": 0.2,
           }).encode()
 
@@ -323,7 +330,20 @@ jobs:
               print(f"could not reach the model endpoint: {type(e).__name__} — no review was written", file=sys.stderr)
               sys.exit(0)
 
-          text = answer["choices"][0]["message"]["content"]
+          # **An empty answer is a normal outcome, not an exception.** Reading
+          # `["message"]["content"]` straight through raised AttributeError on
+          # `None` the first time this met a real pull request, which under
+          # `set -e` fails the step and paints somebody's green build red — the
+          # exact thing the missing-key branch above exists to avoid. Every way
+          # the model can decline to answer ends here instead.
+          choice = answer.get("choices", [{}])[0]
+          text = (choice.get("message") or {}).get("content")
+          if not text:
+              reason = choice.get("finish_reason") or "unknown"
+              print(f"the model returned no content (finish_reason: {reason}) — no review was written", file=sys.stderr)
+              if reason == "length":
+                  print("it ran out of output budget before closing the JSON; raise max_tokens", file=sys.stderr)
+              sys.exit(0)
           # A model asked for JSON usually returns JSON. "Usually" is not a
           # contract, so a fenced block is unwrapped rather than crashing the job.
           if text.strip().startswith("```"):
