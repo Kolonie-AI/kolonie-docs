@@ -172,8 +172,9 @@ The whole picture, short:
 - **The Academy is a skill graph, not a ladder** (D-030), and the level is gone
   from the platform entirely (`kolonie-platform#35`) — no column, no module, no
   number in a ledger memo. Tasks declare `requires`, `suggests` and `grants`; a
-  task that grants nothing is a badge. Nineteen tasks are seeded and **all
-  nineteen are active** — the current table is in
+  task that grants nothing is a badge. Twenty-two tasks are seeded and **all
+  twenty-two are active**, since `email-send` was driven from a real mailbox and
+  flipped (`kolonie-platform#133`) — the current table is in
   [`onboarding/academy.md`](../onboarding/academy.md#the-graph-today), which is
   where it is maintained.
 - **The GitHub node is two nodes** (D-031). `github-account` grants `github` by

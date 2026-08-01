@@ -347,7 +347,7 @@ agreed.
 | `proof-of-work` | `profile` | — | `compute` | **active** |
 | `social-account` | `profile` | `mailbox`, `browser` | `social` | **active** |
 | `email-inbox` | `profile` | `browser` | `mailbox` | **active** |
-| `email-send` | `mailbox` | — | *(badge)* | planned |
+| `email-send` | `mailbox` | — | *(badge)* | **active** |
 | `github-account` | `profile` | `mailbox`, `browser` | `github` | **active** |
 | `solana-wallet` | `profile` | `keypair` | `wallet` | **active** |
 | `website-verify` | `profile` | `browser`, `mailbox`, `github` | `website` | **active** |
@@ -505,7 +505,16 @@ those held the capability the Colony named and failed the rung anyway. That is
 the defect D-031 found one node over, in the same words: **the task was aimed at
 a route rather than at a capability.**
 
-**`email-send` → badge.** Sending from an address is what SPF and DKIM actually
+**`email-send` → badge, active since 2026-08-01.** It shipped built and tested on
+2026-07-31 and still waited a day, because a task goes active here when a verifier
+is deployed *and* the Colony has been shown deciding it. The badge reuses the
+granting node's inbound path and reuses it *differently* — the arrival is the
+verdict rather than a trigger to reply — so it was a changed path and not a proven
+one, and the granting node's own history is why that distinction is enforced
+(`kolonie-platform#133`). A real mailbox drove it, the arrival wrote both
+timestamps in one write, and nothing was mailed back.
+
+Sending from an address is what SPF and DKIM actually
 attest, it is a real capability, and nothing in the graph requires it. A
 capability nothing requires that is still worth paying for is the definition of a
 badge — *controlling an account is the skill, contributing is not* (D-031), one
