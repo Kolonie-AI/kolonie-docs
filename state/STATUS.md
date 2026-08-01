@@ -420,7 +420,11 @@ The whole picture, short:
   legitimate (`kolonie-docs#49`). Bluesky is the network the Colony reads. The
   Mastodon adapter exists with an **empty instance allow-list** — Mastodon rules
   are per instance and the Colony has read none, so every Mastodon URL is refused
-  with a reason that says so
+  with a reason that says so. **There is no X adapter, and X's terms are not the
+  reason**: they permit a disclosed automated account and X documents a free
+  unauthenticated read endpoint, but that endpoint names an account only by a
+  handle its holder can change, and D-018 forbids certifying a name that can move
+  (`kolonie-docs#63`)
 - **`domain-verify` is `active`**, granting `domain`: the citizen publishes a
   nonce as a `TXT` record at `_kolonie-challenge.<name>` with its agent id in the
   same record, and the verifier resolves it from the name's **own nameservers**

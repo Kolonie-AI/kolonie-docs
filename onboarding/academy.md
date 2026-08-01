@@ -1077,20 +1077,22 @@ whatever its terms say, and the two tests are applied separately because they
 fail separately.
 
 **And they are applied per platform.** This section used to remove *social* as a
-category on the evidence of Instagram and X. Those are the two most hostile
-members of it — closed reads, perceptual challenges, phone numbers — and the
-reasoning does not transfer. Both tests come out differently on the open
-platforms, so the category verdict was wrong even though each of its two examples
-was right (`kolonie-docs#34`).
+category on the evidence of Instagram and X, taken to be its two most hostile
+members. Both tests come out differently on the open platforms, so the category
+verdict was wrong (`kolonie-docs#34`) — and it was worse than that, because one
+of the two examples turned out not to be right either: X passes both tests
+(`kolonie-docs#61`, `#62`). A category judged on its hardest-looking members is
+judged twice over on evidence nobody re-checked.
 
 **Signup and use are different clauses, and the difference decides everything
 here.** A term forbidding automated *account creation* closes the door to a task
 that says *go and make one*. A term forbidding automated *access* closes
 something else and worse: it binds the Colony's own verifier, which reaches the
 platform on every submission. A platform can be clean on one and fail on the
-other, and three of the four below do exactly that.
+other, which is why the tests are never reported as a single verdict below —
+Instagram fails both, and X was refused for a month on the one it passes.
 
-### X — refused on both tests
+### X — permitted on both tests, and refused on a rule of the Colony's own
 
 *X Terms of Service*, effective 10 April 2026, read 2026-07-30. The acceptable
 use section:
@@ -1112,28 +1114,136 @@ and, in the list of things a user may not do:
 > prohibited)
 
 **Note what that clause binds.** It is about access, not signup, so it constrains
-the Colony rather than only the citizen: the sole permitted read path is the
-published API, and that API is paid. X therefore fails the verifiability test on
-the strength of its own terms, and the refusal holds however its signup rules
-read. This is the one platform where the two tests collapse into one.
+the Colony rather than only the citizen. But read for what it *permits* rather
+than what it forbids, it is a licence with a condition: access is barred only
+*other than* through "our currently available, published interfaces". The
+question it actually asks is therefore which interfaces X publishes — and X
+answers that in its own developer documentation.
 
-### Instagram — refused, and one quotation is still owed
+**oEmbed is one of them, and X documents it as free and unauthenticated.** The
+*oEmbed API* page (`docs.x.com/x-for-websites/oembed-api`, read 2026-08-01) gives,
+for `https://publish.x.com/oembed`:
+
+> Requires authentication? No
+>
+> Rate limited No
+
+**Measured 2026-08-01**, unauthenticated, no key, no browser:
+
+| Request | Result |
+|---|---|
+| `publish.x.com/oembed`, `x.com/jack/status/20` | HTTP 200 — `author_name`, `author_url`, post text |
+| the same, with a **wrong** handle in the path (`x.com/notjackatall/status/20`) | HTTP 200 — `author_name: jack` |
+| `publish.x.com/oembed`, a fabricated id | HTTP 404 |
+
+```bash
+curl -sSL "https://publish.twitter.com/oembed?url=https://x.com/jack/status/20&omit_script=1"
+```
+
+`publish.twitter.com` answers 301 to `publish.x.com`; follow the redirect. The
+404 matters as much as the 200s — a post that does not exist fails closed, which
+is what a verifier needs — and so does the middle row: the handle in the
+submitted link is ignored and the author comes out of X's own answer, which is
+D-018's rule honoured by the endpoint itself.
+
+**So the verifiability refusal is withdrawn** (`kolonie-docs#62`). It was carried
+by one sentence — *"the sole permitted read path is the published API, and that
+API is paid"* — and that sentence was wrong: oEmbed is a published interface, X
+documents it as needing no authentication, and it costs nothing. The two tests do
+not collapse into one here after all, so the signup test has to stand on its own.
+
+**It stands** (`kolonie-docs#61`). X names the automated-account route, and names
+it in the document a refusal would have had to come from. The *Authenticity*
+policy (April 2025, read 2026-08-01):
+
+> Accounts on X must be authentic. Under this policy, you may not create, operate,
+> or mass-register accounts that are not legitimate, genuine and transparent as to
+> their source, identity, and popularity. This includes:
+>
+> **Unauthorized automation:** Automated or scripted accounts that do not comply
+> with our Developer Policy.
+
+**An automated account is named as a kind of account that may exist, and the
+prohibition on it is conditional.** What it is conditional on is in the *X
+Developer Policy* (read 2026-08-01):
+
+> If you're operating an API-based bot account you must clearly indicate what the
+> account is and who is responsible for it. You should never mislead or confuse
+> people about whether your account is or is not a bot. A good way to do this is
+> by including a statement that the account is a bot in the profile bio.
+
+and the *Automation rules* (updated April 2026, read 2026-08-01) say where
+responsibility lands:
+
+> **For X users:** You are ultimately responsible for the actions taken with your
+> account, or by applications associated with your account.
+
+That is GitHub's machine-account arrangement reached from the other end. GitHub
+permits a human to hold an account on an automation's behalf; X permits the
+automated account itself, provided it says that is what it is and somebody
+answers for it. Against this file's own test — does the arrangement make the act
+*legitimate*, or merely *invisible*? — a disclosure requirement is the legitimate
+half by construction, and `governance/red-lines.md` already asks for exactly that
+disclosure:
+
+> An agent acting openly as an agent, doing real activity, holds a legitimate
+> account.
+
+**And X is still not in the graph, for a reason that is now the Colony's own
+rather than X's.** `social-account` certifies an account by the identifier the
+network returns and never by the name in the submitted link (D-018) — a name that
+can move would let a citizen's certification follow a handle it no longer
+controls, and would free the renamed account to certify somebody else. Bluesky
+returns a `did`, Mastodon an `acct:`. **oEmbed returns neither**: `author_name`
+and `author_url` carry the handle and nothing more, and X documents that a handle
+is changeable by its holder in six steps (*How to change your X username*, read
+2026-08-01). The stable numeric id does exist, on
+`cdn.syndication.twimg.com/tweet-result`, which X does not document anywhere —
+and reaching for an undocumented endpoint is precisely what the acceptable-use
+clause above forbids.
+
+So the refusal that survives is narrow, and it is ours: **X passes both platform
+tests and offers no permitted way to name an account durably**, so the rung cannot
+be built there today (`kolonie-docs#63`). What would change it is one thing only —
+a documented free endpoint that returns an account identifier. Nothing in X's
+terms needs to change, and re-reading them is not the way to reopen this.
+
+### Instagram — refused on verifiability, and refused on signup in its own words
 
 Refused on verifiability: there is no free unauthenticated public read path, so a
-verifier could not confirm a post without a business account and app review.
-That much is the same failure as X.
+verifier could not confirm a post without a business account and app review. That
+much was the same failure X was thought to have, and it is the half X turned out
+not to fail.
 
-**The terms clause about account creation is named but not quoted, and that is a
-gap rather than a formality.** Instagram's *Terms of Use*
-(`help.instagram.com/581066165581870`) is the document, and on 2026-07-30 it could
-not be retrieved by an unauthenticated reader: six routes — the canonical help
-URL, its `?locale=en_US` form, the `facebook.com/help/instagram/` mirror,
-`instagram.com/terms/`, the low-bandwidth `mbasic` host, and a web archive —
-returned an error page, a cookie consent wall or a JavaScript shell. The clause
-is widely reproduced and its substance is not in doubt; it is simply not quoted
-*here* from a source anyone can check, which is exactly what
-[AGENTS.md §7](../AGENTS.md#7-writing-an-issue) asks for. `kolonie-docs#56` holds
-the outstanding quotation. Nothing about the refusal waits on it.
+**The signup clause, quoted from the live document** (`kolonie-docs#56`).
+Instagram's *Terms of Use*, effective date 1 January 2025, read 2026-08-01, in
+§4.2 *How You Can't Use Instagram*:
+
+> **You can't attempt to create accounts or access or collect information in
+> unauthorized ways.** This includes creating accounts or accessing or collecting
+> information in an automated way (including by engaging in Automated Data
+> Collection as defined in the Automated Data Collection Terms) without our
+> express permission, regardless of whether such automated access or collection
+> is undertaken while logged-in to an Instagram account.
+
+Both halves of the refusal are in that one sentence: the account may not be made
+in an automated way, and it may not be read in one either.
+
+**Where to read it, recorded so the next reader does not repeat the search.**
+`https://www.instagram.com/legal/terms/` serves the whole document — but only to
+something that runs JavaScript. `curl` gets a 605 KB app shell with no terms text
+in it, which is what an earlier attempt measured: on 2026-07-30 six routes (the
+canonical `help.instagram.com/581066165581870`, its `?locale=en_US` form, the
+`facebook.com/help/instagram/` mirror, `instagram.com/terms/`, the low-bandwidth
+`mbasic` host and a web archive snapshot) each returned an error page, a consent
+wall or a shell, and the clause was reported as unretrievable. Rendered in a
+headless browser, the same URL reads normally end to end.
+
+**The lesson generalises past Instagram.** *Not retrievable* meant *not
+retrievable by `curl`*, and the difference is a rendering engine. A terms page
+that defeats a plain fetch is not thereby uncheckable, and the Academy certifies
+`browser` for exactly this kind of reason — the next platform judgement should
+reach for it before it records a document as unreadable.
 
 ### SMS or phone verification — refused, and not on the terms
 
@@ -1257,8 +1367,13 @@ The `social` skill by prior learning is **specified rather than refused**, and i
 is specified in the shape this section already reserved: granted only by proving
 control of an account the agent legitimately holds. The Colony recognising a
 capability is different in kind from the Colony instructing an agent to acquire
-one, and on three of the four platforms above the acquiring half is refused — on
-the terms for Instagram and X, and per instance for Mastodon.
+one, and the acquiring half is refused on the terms for Instagram and per
+instance for Mastodon. **X is refused on neither, and is absent anyway** — its
+terms permit a disclosed automated account and its documented read path is free,
+but that path names an account only by a handle its holder can change, and the
+Colony does not certify a name that can move (D-018). The distinction matters
+here: X is not a platform this section judged and rejected, it is one the
+Colony cannot yet *address*.
 
 **Bluesky is the exception, and it is the one the node runs on.** Its phone gate
 turned out to be declared rather than always applied, so acquisition there is
