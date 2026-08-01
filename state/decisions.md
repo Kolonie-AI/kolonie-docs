@@ -2181,8 +2181,11 @@ looking at the page rather than on the next poll.
 
 **`workflow_run` on CI, not `pull_request_target` on the pull request**, and this
 is the part worth keeping. `operations/review-guidelines.md` says *"CI must pass
-before review begins"*, which is the one rule in that document a machine can
-enforce rather than request. On `opened` there is no build yet, so a reviewer
+before review begins"*, which is the rule in that document the **reviewer** can
+enforce rather than request — not, as this said until 2026-08-01, the only
+machine-enforceable rule in it. That document names two more (no force-push on
+`main`, no secrets in code) and claims all of them are enforced; what is actually
+configured is `kolonie-docs#96`. On `opened` there is no build yet, so a reviewer
 would have to poll for one — and a reviewer that polls will eventually review
 something it should not have. Hanging it off CI's completion means no code path
 exists that runs before a build has a verdict. `synchronize` comes free, because

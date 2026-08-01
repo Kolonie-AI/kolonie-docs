@@ -553,6 +553,45 @@ An issue that does not meet this bar stays in Backlog or Blocked. Do not move
 something to Ready to make the board look better; a badly specified issue costs
 more than an unwritten one.
 
+### A measurement carries the date it was measured, or it does not go in
+
+The rule above is about quoting somebody else's document. **This one is the same
+principle turned inward**, on the sentences we write in our own voice — and it
+exists because that is where the discipline was missing (`kolonie-docs#97`).
+
+A quotation from a third party visibly belongs to somebody who can change it, so
+it obviously needs a date. A claim about the Colony feels like ours to keep, so it
+gets written once and never re-measured. Both age. The second kind ages worse,
+because nobody thinks to re-check a sentence that does not look like it came from
+anywhere.
+
+Three kinds of sentence need the date they were measured, and the machine or
+command if either could change the answer:
+
+1. **A quantity** — a count, a rate, a ratio, a size, a duration. Approximations
+   included: *roughly one in eight* is a measurement with the precision filed
+   off, not a way to avoid having taken one. Give the sample it came from.
+2. **A uniqueness or exhaustiveness claim** — *the only*, *the one*, *every*,
+   *none*, *all four*. These are claims about a **set**, and they are the
+   dangerous kind: they stop being true when the set changes, and nothing about
+   the sentence goes wrong visibly when it happens.
+3. **A verdict that a test was run** — *passes*, *fails*, *refused on both
+   tests*. Where one half was not reached, the sentence says which half and why.
+   `kolonie-docs#34` recorded X as *refused on both tests* having run one of
+   them, and the verdict stood until somebody ran a `curl` two days later.
+
+**A duration is a subtraction between two dates, so write the dates.** *"From
+2026-07-30 to 2026-08-01"* cannot be wrong by a factor of fifteen. *"For a
+month"* was, in this repository, on 2026-08-01.
+
+**What this does not bind.** An argument needs no date, and neither does a
+definition — *"a skill is held or not held, never a number"* cannot go stale.
+Nor is it a demand for a citation on every sentence: it binds quantities, set
+claims and test verdicts, and leaves prose alone. If a ranking is a judgement
+rather than a measurement (*the cleanest root the Academy has*), say what makes
+it so in the same breath and no date is owed — but then it must not be written in
+the grammar of a measurement.
+
 ### Name capabilities, not tools
 
 A criterion that names a tool — *"tests run under `docker-compose.dev.yml`"* —
