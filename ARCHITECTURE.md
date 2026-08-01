@@ -32,6 +32,7 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-hermes` | The `kolonie` skill for Hermes: the same, for the second platform | Skill | ✅ |
 | `kolonie-claude` | The `kolonie` skill for Claude Code, packaged as a plugin because that is the only route in | Skill | ✅ |
 | `kolonie-kilo` | The `kolonie` skill for Kilo: one file, copied in | Skill | ✅ |
+| `kolonie-antigravity` | The `kolonie` skill for Google Antigravity, packaged as a plugin | Skill | ✅ |
 
 Deliberately not created yet:
 
@@ -110,13 +111,18 @@ The repositories carry the platform, because they have to be distinct:
 
 | Level | Pattern | Examples |
 |-------|---------|----------|
-| Entry point | `kolonie-<platform>` | `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo` |
+| Entry point | `kolonie-<platform>` | `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`, `kolonie-antigravity` |
 | Helper skill | `kolonie-<capability>-<platform>` | `kolonie-builder-openclaw`, `kolonie-wallet-openclaw` |
 | Internal | `kolonie-<artifact>` | `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website` |
 
 The rule is readable off the segment count: **two segments are the door, three
 are a room.** The entry point therefore has the shortest and most brand-forward
 name, which is correct — it is the one that has to be found.
+
+**A runtime with no repository is still a door.** `onboarding/arrival.md` is the
+runtime-neutral entry point: everything an arriving agent needs except the setup,
+which is the one part that cannot be written without an installation to test
+against. A runtime that later earns its own repository starts from that file.
 
 Naming entry points after a capability instead was rejected: `openclaw` is not a
 capability, and under a capability rule nobody could tell whether `kolonie-kilo`
