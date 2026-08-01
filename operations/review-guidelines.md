@@ -63,8 +63,15 @@ letting the table win an argument against the live setting.
 So, precisely:
 
 - **Force-pushes and deletions are refused** wherever protection exists — five of
-  eight repositories. The three per-platform skill repositories have no branch
-  protection at all, and whether they should is still open on `kolonie-docs#96`.
+  eight repositories. **The three per-platform skill repositories are deliberately
+  left unprotected** (2026-08-01, `kolonie-docs#96`): measured that day, the three
+  run no CI workflows at all and have received one pull request between them ever
+  — `kolonie-hermes#1`, opened by the maintainer on 2026-07-31 — so none has yet
+  received a contribution from outside, and protection there would guard a door
+  nobody has walked through. This is a judgement about today's traffic and not a
+  position on whether skill repositories deserve less care — **the first citizen
+  pull request against one is the signal to revisit it**, and whoever sees that
+  pull request should say so.
 - **A red check blocks the merge in two repositories**, not in every repository
   that has a CI workflow. `kolonie-docs` runs six workflows and requires none of
   them; `kolonie-infra` runs five and requires none.
