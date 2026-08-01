@@ -455,3 +455,66 @@ the deploy.
 inspected, for days, because a plausible known cause was already in hand. The
 read-only `Diagnose VPS` workflow in `kolonie-infra` exists so that stops
 happening.
+
+## 2026-08-01 — The Reviewer Agent had never run, and the comment warning about injection was the injection
+
+The maintainer reported a stream of GitHub emails: *"`.github/workflows/review.yml`
+workflow run — No jobs were run."* Nineteen runs since the workflow was added, all
+`failure`, zero jobs on every one, and no successful run in its history.
+
+The API says nothing useful about it. A run with no jobs has no logs, no
+annotations and no check runs, and `referenced_workflows` comes back empty —
+which is itself the finding, because the reusable workflow was never resolved.
+The message exists only in the HTML of the run page:
+
+```
+Invalid workflow file: .github/workflows/review.yml#L30
+error parsing called workflow
+"Kolonie-AI/kolonie-platform/.github/workflows/review.yml"
+ -> "Kolonie-AI/kolonie-docs/.github/workflows/review-pull-request.yml@main"
+: (Line: 103, Col: 14): An expression was expected
+```
+
+Line 103 is `run: |`. The fault was ninety lines further down, inside the shell
+script, in a **comment**:
+
+> Through the environment, never interpolated into the command. A `${{ }}`
+> expression is pasted into the script before bash sees it, so a value containing
+> a quote would be running as shell rather than as a pattern — the standard
+> GitHub Actions injection, and it costs one variable to close.
+
+The advice is correct and the workflow was following it. But the parser scans a
+`run:` block for expressions **before** anything is a shell script, and it does not
+know that a `#` makes the rest of a line a comment. An empty pair of delimiters
+there is an empty expression, and an empty expression is a parse error for the
+whole file. The comment explaining the injection risk was, verbatim, an injection
+into the workflow that carried it.
+
+**Three lessons, and the first two are the ones that generalise.**
+
+**A `run:` block has two readers, and only one of them understands shell.** Any
+`${{` in a `run:` block is Actions syntax, wherever it sits — in a comment, in a
+heredoc, in a quoted string. Prose about expression syntax has to describe it
+rather than write it.
+
+**A workflow with no successful run in its history has never worked.** That is one
+command, and nobody ran it for a workflow that was merged, documented in
+`state/decisions.md` at length, and reasoned about as if it were live:
+
+```bash
+gh run list --workflow=review.yml --limit 100 --json conclusion \
+  --jq '[.[].conclusion] | group_by(.) | map({(.[0]): length}) | add'
+```
+
+`{"failure": 19}` is not a flaky pipeline. It is a feature that does not exist.
+
+**The diagnosis came from a sibling, not from the failing thing.**
+`ci-status.yml` in the same repository has the same trigger, the same cross-repo
+`uses:` and the same job-level `permissions`, and it succeeds every time. That
+narrowed the search to what the two do not share, which is the fastest available
+move when a workflow fails before producing any output — and it is the same
+technique `AGENTS.md` §7 asks for when files mirror each other.
+
+**What was fixed.** The comment describes the syntax instead of writing it. The
+2026-07-27 entry above ends on the same sentence and it is worth reading twice:
+the host was reasoned about rather than inspected.

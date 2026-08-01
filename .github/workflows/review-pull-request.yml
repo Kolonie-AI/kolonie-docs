@@ -193,11 +193,17 @@ jobs:
           # Whichever paths matched is carried forward, so the review can say
           # *which* file made it a human's call rather than asserting it.
           #
-          # Through the environment, never interpolated into the command. A
-          # `${{ }}` expression is pasted into the script before bash sees it,
+          # Through the environment, never interpolated into the command. An
+          # Actions expression is pasted into the script before bash sees it,
           # so a value containing a quote would be running as shell rather than
           # as a pattern — the standard GitHub Actions injection, and it costs
           # one variable to close.
+          #
+          # This paragraph wrote that syntax out in full until 2026-08-01, and
+          # the workflow had never once run. The parser scans a `run:` block for
+          # expressions and does not know it is reading a shell comment, so an
+          # empty pair of delimiters here is an empty expression there. See
+          # operations/incidents.md.
           jq -r '.files[].path' /tmp/review/pr.json \
             | grep -E "$SENSITIVE_PATHS" > /tmp/review/sensitive.txt || true
           [ -s /tmp/review/sensitive.txt ] && echo "sensitive=yes" >> "$GITHUB_OUTPUT"
