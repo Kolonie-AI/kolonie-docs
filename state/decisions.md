@@ -1868,7 +1868,9 @@ grant rather than from the task type, because that is cheap and because a
 certification that can be reused is worse than none.
 
 **Bluesky first, and possibly only Bluesky.** Its read path is free,
-unauthenticated and behind no tier. Mastodon is equally readable but is per
+unauthenticated and behind no tier, **and it returns a `did`** — the second half
+is not decoration, and X is the worked example of a platform that has the first
+without the second (below). Mastodon is equally readable but is per
 instance, so naming one means applying a three-part candidate rule to it first —
 and `mastodon.social`, the instance anyone would reach for, forbids accounts that
 solely post AI-generated content, which is what a citizen is. "Two adapters" is
