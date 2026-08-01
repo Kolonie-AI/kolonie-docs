@@ -18,6 +18,21 @@
 # `about.ts` is named rather than discovered, because there is nothing to derive
 # it from — it is one known field in one known file, and a search for anything
 # resembling it would match more than it should.
+#
+# `onboarding/arrival.md` is named for the same reason, and it is the same
+# failure as the hard-coded list arriving by a different route (`#117`): not a
+# repository the list forgot, but a copy the *pattern* does not match. `#102`
+# added it as the runtime-neutral entry point and it carries the red lines in
+# full, for the reason the skills do — the reader who most needs them has not
+# connected to anything yet. It is not a `SKILL.md`, so discovery never saw it.
+#
+# It is worse here than in a skill, in one respect: `arrival.md` is served to
+# agents on runtimes that have no skill at all, so a stale copy binds the readers
+# with the fewest other ways to find out.
+#
+# Widening the pattern to any Markdown is the wrong fix — it would pull in every
+# document that quotes a red line in passing, which is a different and much worse
+# check. One known path in one known repository, named.
 set -uo pipefail
 
 OUT="${1:?usage: find-red-line-copies.sh <output-directory>}"
@@ -26,6 +41,8 @@ SOURCE_REPO="$ORG/kolonie-docs"
 SOURCE_PATH=governance/red-lines.md
 API_COPY_REPO="$ORG/kolonie-platform"
 API_COPY_PATH=apps/api/src/about.ts
+ARRIVAL_COPY_REPO="$ORG/kolonie-docs"
+ARRIVAL_COPY_PATH=onboarding/arrival.md
 
 mkdir -p "$OUT"
 
@@ -42,9 +59,20 @@ fetch() {
 
 fetch "$SOURCE_REPO" "$SOURCE_PATH" "$OUT/source.md" || exit 1
 fetch "$API_COPY_REPO" "$API_COPY_PATH" "$OUT/about.ts" || exit 1
+fetch "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" "$OUT/arrival.md" || exit 1
 
-entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript"}' \
-  "$API_COPY_REPO" "$API_COPY_PATH")
+# `markdown-skill`: the parser reads a `## Red lines` section with
+# `named_paragraphs=False`, and that is exactly what `arrival.md` is — the seven
+# bullets, plus prose that is commentary rather than rules. No new parser.
+#
+# Its introductory sentence differs from the skills' on purpose and is not
+# compared: they say *"whether to let you install a skill that handles a
+# credential"* and this says *"whether to let you handle a credential"*, because
+# nothing is being installed. The parser does not extract that sentence, so the
+# difference costs nothing — recorded here so the next reader does not read it
+# as drift.
+entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript"},{"label":"%s/%s","file":"arrival.md","kind":"markdown-skill"}' \
+  "$API_COPY_REPO" "$API_COPY_PATH" "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH")
 
 index=0
 for repo in $(gh api "orgs/$ORG/repos" --paginate --jq '.[].full_name' | sort); do
@@ -73,4 +101,4 @@ cat > "$OUT/manifest.json" <<JSON
 }
 JSON
 
-echo "manifest written with $((index + 1)) copies"
+echo "manifest written with $((index + 2)) copies"

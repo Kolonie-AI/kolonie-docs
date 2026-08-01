@@ -258,12 +258,17 @@ def compare(source: list[str], copies: dict[str, list[str]]) -> list[str]:
 # Entry point
 # --------------------------------------------------------------------------
 
-# The smallest number of copies a healthy run finds: `about.ts` plus the four
-# entry-point skills. **A floor, not a list** — a new skill repository is picked
-# up without touching this file, and the floor only catches the failure the first
-# version could not have caught at all: discovery returning less than it should
-# and the check passing because it compared almost nothing.
-MINIMUM_COPIES = 5
+# The smallest number of copies a healthy run finds: `about.ts`,
+# `onboarding/arrival.md` and the four entry-point skills. **A floor, not a
+# list** — a new skill repository is picked up without touching this file, and
+# the floor only catches the failure the first version could not have caught at
+# all: discovery returning less than it should and the check passing because it
+# compared almost nothing.
+#
+# Raised from 5 to 6 by `#117`, which added `arrival.md`. Both named copies are
+# fetched unconditionally and a failed fetch exits, so the floor is really about
+# the discovered half.
+MINIMUM_COPIES = 6
 
 
 def main() -> int:

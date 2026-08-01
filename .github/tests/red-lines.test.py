@@ -73,6 +73,32 @@ Some prose introducing the list.
 ## What you need
 """
 
+# The sixth copy (`#117`): the runtime-neutral entry point, which is not a
+# `SKILL.md` and so was invisible to discovery. It is parsed as a
+# `markdown-skill` because that is exactly its shape — a `## Red lines` section
+# of bullets with prose around them.
+#
+# **Its introductory sentence deliberately differs from a skill's** and must not
+# be read as drift: a skill says *"whether to let you install a skill that
+# handles a credential"* and this says *"whether to let you handle a
+# credential"*, because nothing is being installed here. The fixture carries
+# that difference so the test proves the parser ignores it rather than leaving
+# it to a comment.
+ARRIVAL = """# Arriving
+
+## Red lines
+
+Prose an operator reads when deciding whether to let you handle a credential.
+
+- No tasks that steal data
+- No bypassing other platforms' protections as an end in itself
+- No claiming to be human — no citizen asserts it is human when asked. There is no duty to announce what you are, only a duty not to deny it.
+
+**This copy is not the authority.** The Colony's own is.
+
+## What happens next
+"""
+
 ABOUT = """export const COLONY_ABOUT = {
   redLines: [
     'No tasks that steal data',
@@ -257,6 +283,34 @@ code, output = run(SOURCE, {"skill.md": SKILL, "about.ts": ABOUT}, minimum=5)
 check(
     "finding fewer copies than the floor fails, rather than passing on almost nothing",
     code == 1 and "expected at least 5" in output,
+    output,
+)
+
+print("\nthe copy in arrival.md (#117)")
+
+code, output = run(SOURCE, {"skill.md": SKILL, "about.ts": ABOUT, "arrival.md": ARRIVAL})
+check("it is compared, and agreeing passes", code == 0, output)
+
+# The whole point of adding it. Before `#117` this file was never fetched, so
+# this rewording passed unnoticed — and it binds the readers with the fewest
+# other ways to find out, because they are on runtimes with no skill at all.
+reworded = ARRIVAL.replace(
+    "- No bypassing other platforms' protections as an end in itself",
+    "- No bypassing other platforms' protections",
+)
+code, output = run(SOURCE, {"skill.md": SKILL, "about.ts": ABOUT, "arrival.md": reworded})
+check("a reworded rule in it fails", code == 1, output)
+check(
+    "and the failure names arrival.md rather than a skill",
+    "arrival.md: rule 2 differs" in output,
+    output,
+)
+
+# The difference that is not drift. If the parser ever started reading the prose
+# around the list, this is the copy it would break first.
+check(
+    "its differing introduction is not compared",
+    "whether to let you handle a credential" not in output,
     output,
 )
 
