@@ -1,0 +1,227 @@
+name: Reflect CI status on linked issues
+
+# The blind spot `kolonie-platform#81` names: GitHub propagates nothing from a
+# pull request's checks back to the issue it closes. Somebody watching the board
+# sees an issue in **In Review** and has no way to tell that the work under it
+# has been red for two days — they would have to open the pull request to find
+# out, which is exactly the click nobody makes.
+#
+# ## Why the label is `ci:failed` and not `status: CI failed ❌`
+#
+# #81 names the second one. It is not used, and the reason is in `AGENTS.md` §3:
+# this project **deleted its status labels** because they duplicated the board's
+# columns and the two disagreed within a week. Reintroducing a `status:`
+# namespace would teach the next reader that status lives in labels again, and
+# the first person to add `status: in progress` beside it will have a fair case.
+#
+# `ci:failed` says the same thing in the shape the surviving labels already use —
+# `area:`, `blocked:`, `from:`, all lowercase, all `prefix:value`, none with a
+# space or an emoji in it. And CI state is genuinely *not* board state: it is a
+# fact about a build, which is why it may live in a label at all.
+#
+# ## What it deliberately does not do
+#
+# **It never comments.** #81 asks for this outright and it is right to: a label
+# appears and disappears silently, and a comment on every red push would make the
+# issue unreadable for the thing it is actually for.
+#
+# **It does not touch issues in another repository.** `github.token` is scoped to
+# the repository the run happened in, so a cross-repo link is reported in the log
+# and skipped. Failing there would paint a working reflection red for something
+# nobody can fix from here.
+#
+# ## The truthfulness problem, and how far this goes
+#
+# A label that lies is worse than no label. Two open pull requests can close the
+# same issue, and a naive "CI passed, remove the label" would clear it while the
+# other one is still red.
+#
+# So the removal path does not trust the run that triggered it. It asks which
+# open pull requests close the issue, reads the latest conclusion of *this same
+# workflow* for each of their head commits, and removes the label only when none
+# of them is failing. The apply path needs no such care — one red build is enough
+# to make the statement true.
+
+on:
+  workflow_call:
+    inputs:
+      label:
+        description: >-
+          The label applied to an issue whose pull request has a failing build.
+          Overridable so a repository can rename it without editing this file,
+          not because any repository is expected to.
+        type: string
+        required: false
+        default: "ci:failed"
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+  actions: read
+
+jobs:
+  reflect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No checkout, anywhere. `workflow_run` runs in the base repository with a
+      # writable token even when the build it reports on came from a fork — that
+      # is the whole reason this trigger is used instead of `pull_request`, and
+      # checking out the fork's code would hand a stranger that token. This job
+      # only ever calls the API.
+      - name: Apply or clear the label on every issue the pull request closes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          LABEL: ${{ inputs.label }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+
+          owner="${REPO%%/*}"
+          name="${REPO##*/}"
+
+          # A push to main closes nothing and has no pull request to speak for.
+          case "$RUN_EVENT" in
+            pull_request|pull_request_target) ;;
+            *) echo "triggered by '$RUN_EVENT', which has no pull request — nothing to reflect"; exit 0 ;;
+          esac
+
+          # **Only two conclusions mean anything here, and `cancelled` is the one
+          # worth naming.** ci.yml sets `cancel-in-progress: true`, so a second
+          # push to a branch cancels the first run — and reading that as either a
+          # pass or a failure would report on a build that was abandoned while a
+          # newer one is already running. `skipped`, `neutral` and
+          # `action_required` are left alone for the same reason: the label must
+          # only ever state something that was actually measured.
+          case "$CONCLUSION" in
+            failure|timed_out|startup_failure) verdict=failing ;;
+            success)                           verdict=passing ;;
+            *) echo "conclusion '$CONCLUSION' says nothing about the build — leaving the label as it is"; exit 0 ;;
+          esac
+
+          # `workflow_run.pull_requests` is empty for a pull request from a fork,
+          # which is precisely the case #81 cares about — a citizen's
+          # contribution. Asking the commit which pull requests it heads works
+          # for both, because the base repository holds the fork's commit under
+          # refs/pull/<n>/head.
+          prs=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
+                  --jq '.[] | select(.state == "open") | .number' 2>/dev/null || true)
+
+          if [ -z "$prs" ]; then
+            echo "no open pull request heads ${HEAD_SHA} — nothing to reflect"
+            exit 0
+          fi
+
+          # The issues a pull request closes, as GitHub itself resolves them.
+          # This covers both `Fixes #12` in the body and a link made through the
+          # sidebar; a regular expression over the body covers only the first,
+          # and the second is what the web UI encourages.
+          closing_issues() {
+            gh api graphql -f owner="$owner" -f name="$name" -F number="$1" -f query='
+              query($owner:String!, $name:String!, $number:Int!) {
+                repository(owner:$owner, name:$name) {
+                  pullRequest(number:$number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number repository { nameWithOwner } }
+                    }
+                  }
+                }
+              }' --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]
+                       | "\(.repository.nameWithOwner) \(.number)"' 2>/dev/null || true
+          }
+
+          # The latest conclusion of *this* workflow for a commit. Scoped to the
+          # workflow by name rather than reading every check on the commit: a
+          # repository may run other workflows whose failure is not what this
+          # label is about, and the caller decided which one it cares about when
+          # it named it under `workflow_run.workflows`.
+          latest_conclusion() {
+            gh api "repos/${REPO}/actions/runs?head_sha=$1&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name == \"${WORKFLOW_NAME}\")]
+                    | sort_by(.run_started_at) | last | .conclusion // \"\"" 2>/dev/null || true
+          }
+
+          # Whether any *other* open pull request closing this issue is red. Only
+          # the removal path asks; see the header.
+          another_pr_is_red() {
+            local issue="$1" this_pr="$2" pr sha conclusion
+            while read -r pr sha; do
+              [ -z "$pr" ] && continue
+              [ "$pr" = "$this_pr" ] && continue
+              # Does that pull request close this issue too?
+              closing_issues "$pr" </dev/null | grep -qx "${REPO} ${issue}" || continue
+              conclusion=$(latest_conclusion "$sha" </dev/null)
+              case "$conclusion" in
+                failure|timed_out|startup_failure)
+                  echo "  #${issue}: PR #${pr} is still ${conclusion}" >&2
+                  return 0 ;;
+              esac
+            done < <(gh api "repos/${REPO}/pulls?state=open&per_page=100" \
+                       --jq '.[] | "\(.number) \(.head.sha)"' 2>/dev/null || true)
+            return 1
+          }
+
+          ensure_label_exists() {
+            gh label create "$LABEL" --repo "$REPO" \
+              --color B60205 \
+              --description "A pull request closing this issue has a failing build. Set and cleared automatically." \
+              >/dev/null 2>&1 || true
+          }
+
+          has_label() {
+            gh issue view "$1" --repo "$REPO" --json labels \
+              --jq "[.labels[].name] | index(\"${LABEL}\") != null" </dev/null 2>/dev/null | grep -qx true
+          }
+
+          echo "run: ${RUN_URL}"
+          echo "workflow '${WORKFLOW_NAME}' is ${verdict} on ${HEAD_SHA}"
+
+          for pr in $prs; do
+            found=false
+            while read -r issue_repo issue; do
+              [ -z "${issue:-}" ] && continue
+              found=true
+
+              if [ "$issue_repo" != "$REPO" ]; then
+                echo "PR #${pr} closes ${issue_repo}#${issue} — another repository, and this token cannot label it. Skipped."
+                continue
+              fi
+
+              if [ "$verdict" = failing ]; then
+                if has_label "$issue"; then
+                  echo "PR #${pr} → #${issue}: already labelled"
+                else
+                  ensure_label_exists
+                  # `</dev/null` on every command inside these loops, and it is
+                  # not decoration. The loop reads from a process substitution,
+                  # and a child that touches stdin eats the lines the loop has
+                  # not read yet — so the second issue a pull request closes
+                  # silently never happens.
+                  gh issue edit "$issue" --repo "$REPO" --add-label "$LABEL" </dev/null
+                  echo "PR #${pr} → #${issue}: applied ${LABEL}"
+                fi
+              else
+                if ! has_label "$issue"; then
+                  echo "PR #${pr} → #${issue}: not labelled, nothing to clear"
+                elif another_pr_is_red "$issue" "$pr"; then
+                  echo "PR #${pr} → #${issue}: passing, but another open PR is red — label kept"
+                else
+                  gh issue edit "$issue" --repo "$REPO" --remove-label "$LABEL" </dev/null
+                  echo "PR #${pr} → #${issue}: cleared ${LABEL}"
+                fi
+              fi
+            done < <(closing_issues "$pr")
+
+            # Said out loud rather than passed over in silence. `inbound-triage`
+            # already tells a contributor that a pull request closing no issue is
+            # not automatically wrong but should say so deliberately; this is the
+            # cost of not having done that, and the log is where somebody
+            # wondering why the board never moved will look.
+            [ "$found" = false ] && echo "PR #${pr} closes no issue — nothing to reflect"
+          done
