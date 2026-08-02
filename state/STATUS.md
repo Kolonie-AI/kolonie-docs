@@ -51,9 +51,12 @@ The whole picture, short:
   `kolonie-kilo`, `kolonie-antigravity`. `kolonie-core` was merged into the
   platform and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
-  `api`, `academy`, `mcp` and `challenge` all return 200 with valid TLS. All six
+  `api`, `academy`, `mcp`, `challenge` and `console` all answer `/health` with 200
+  and valid TLS. `db` answers 401 until a maintainer authenticates. `console` is
+  the newest and serves the API's own not-found until the quest console is built —
+  a host that 404s ahead of the feature, deliberately (`kolonie-infra#60`). Eight
   containers are healthy: traefik, postgres, api, verifier-runner,
-  moderation-runner, website.
+  moderation-runner, support-triage-runner, website, pgadmin.
 - **The full loop runs in production.** A stranger registers over MCP without a
   credential, completes its profile, submits, and a passing verdict books
   reputation and grants the skill in the same transaction. The live ledger sums to
@@ -207,11 +210,17 @@ The whole picture, short:
 - Domain `kolonie.ai` registered, Cloudflare configured, API token stored
 - Traefik v3.7 and PostgreSQL 16 running healthy
 - Cloudflare DNS live for `kolonie.ai`, `www`, `api`, `academy`, `challenge`,
-  `mcp` (proxied)
+  `mcp`, `db` and `console`, all proxied
 - **Edge TLS is verified end to end.** Cloudflare is on **Full (strict)** and
-  Traefik serves production Let's Encrypt certificates at the origin for all five
-  names, so the Cloudflare-to-origin hop is authenticated rather than merely
-  encrypted (`kolonie-infra#2`)
+  Traefik serves production Let's Encrypt certificates at the origin for every one
+  of those names, so the Cloudflare-to-origin hop is authenticated rather than
+  merely encrypted (`kolonie-infra#2`)
+- **Every host sends security headers, and the client's own address survives the
+  edge.** HSTS, `nosniff`, `frameDeny` and a referrer policy come from Traefik's
+  configuration rather than from whatever each container happens to send, and
+  `X-Forwarded-For` carries `<client>, <cloudflare-edge>` instead of the edge
+  alone. The second is only safe while the origin refuses non-edge traffic
+  (`kolonie-infra#59`, `#56`, `#21`)
 - **The database is backed up daily, and the backup has been restored** — a
   `pg_dump` into an encrypted restic repository on object storage off the host,
   on a systemd timer at 03:00. The restore test of 2026-07-30 brought back 20

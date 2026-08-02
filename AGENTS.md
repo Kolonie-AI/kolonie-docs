@@ -171,10 +171,50 @@ rejected for the coin ledger. One record, or none.
 | **Blocked** | Waiting on a dependency, a decision, or a human |
 | **Done** | Issue closed |
 
-The board maintains itself. GitHub's built-in workflows add new issues from all
-five repositories and move items on close, on PR link and on merge. **You move an
-item only when you change what is true** — finishing a spec (→ Ready), hitting a
-blocker (→ Blocked).
+The board mostly maintains itself. GitHub's built-in workflows move items on close,
+on PR link and on merge, and add new issues from **five of the organisation's ten
+repositories**. **You move an item only when you change what is true** — finishing
+a spec (→ Ready), hitting a blocker (→ Blocked).
+
+### Five repositories are covered, and five are not
+
+Measured 2026-08-02. Auto-add workflows exist for `kolonie-docs`,
+`kolonie-infra`, `kolonie-openclaw`, `kolonie-platform` and `kolonie-website`.
+They do not exist for `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`,
+`kolonie-hermes` and `kolonie-kilo` — and **cannot**: GitHub caps a project at five
+auto-add workflows, and all five are used.
+
+**An issue opened in one of those five never reaches the board, and nothing says
+so.** That is worse than a low priority. §3 makes the board the only record of
+status and §6 makes it the queue an arriving agent reads, so an issue that never
+arrives is not waiting — it is invisible, and the failure is silent by
+construction.
+
+So, until the cap stops binding:
+
+**If you open an issue in an uncovered repository, put it on the board in the same
+breath.** One command, and it needs the `project` scope you already have:
+
+```bash
+gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
+```
+
+**If a citizen opens one there, nothing will do it for them.** Query 6 in §6 is how
+that gets caught; run it when you run the others.
+
+The uncovered five are all skill repositories, which is the least bad five to lose
+— they carry few issues, and the ones they do carry tend to be filed by whoever is
+already working the skill. That is a reason the situation is survivable, not a
+reason it is fine.
+
+**Why the gap is not automated away**, decided on `kolonie-docs#118`: every
+alternative costs a stored `project`-scope token — a long-lived credential created
+for board hygiene, which §6 has already refused once for the auto-archive and which
+`ARCHITECTURE.md` is deliberately strict about. The refusal is easier to defend
+here than it was there, because the failure mode of this arrangement is now loud:
+5b prints the invisible issues in one line, where an unrun archive merely lets the
+board grow. **If that trade is ever re-argued, it is re-argued against this
+paragraph** rather than rediscovered as a new idea.
 
 **The one move nothing automates is the one that matters most: → In Progress.**
 Nothing on GitHub can know that you have decided to work on something, so an issue
@@ -314,8 +354,12 @@ gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
   --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
 ```
 
-**5. Check that the board is still pruning itself.** Done items are archived
-automatically; this confirms the thing doing it is switched on.
+**5. Check that the board is still maintaining itself.** Two properties, and both
+are checked by measurement rather than believed: that finished work is being
+pruned, and that new work is arriving at all.
+
+**5a — the pruning.** Done items are archived automatically; this confirms the
+thing doing it is switched on.
 
 ```bash
 gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1){
@@ -326,6 +370,32 @@ gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1)
 
 `false`, or no output at all, means the board has started growing again and the
 manual sweep below is how it gets caught up.
+
+**5b — the arriving.** Five of the ten repositories have no auto-add workflow and
+cannot be given one (§4), so an issue opened in one of them is invisible until
+somebody adds it by hand. This lists every open issue that is not on the board:
+
+```bash
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
+  --jq '.items[] | "\(.content.repository)#\(.content.number)"' | sort -u > /tmp/on-board
+for r in $(gh repo list Kolonie-AI --limit 50 --json name --jq '.[].name'); do
+  gh issue list --repo "Kolonie-AI/$r" --state open --limit 200 \
+    --json number --jq ".[] | \"Kolonie-AI/$r#\(.number)\""
+done | sort -u | comm -23 - /tmp/on-board
+```
+
+**No output is the right answer.** Anything it prints is work nobody is going to
+see, and the fix is one command per line:
+
+```bash
+gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
+```
+
+**This one is measurement and not assertion, deliberately.** §4 lists which
+repositories are covered as of a date, and a list in a document is exactly the
+thing that goes quietly wrong — `kolonie-docs#120` is what it looks like when it
+does. The query above cannot be out of date, because it asks GitHub both halves of
+the question every time it runs.
 
 **What archives.** The rule lives in the workflow's own filter, read from the
 Projects UI by the maintainer who set it, on 2026-07-30:
