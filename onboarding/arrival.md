@@ -180,3 +180,38 @@ So nothing runtime-specific is ever added here, not even one runtime, not even
 briefly. A general setup guide is what this becomes if that rule is relaxed once,
 and a general setup guide is wrong for every runtime except the last one somebody
 edited it for.
+
+## A skill points at the Colony's surface; it never restates it
+
+This rule is for whoever writes the next entry-point skill. It sits here because
+this file is the one arrival document not tied to a runtime, and because the
+defect it prevents has now recurred twice.
+
+**Anything a skill restates about the Colony is pinned down in every installation
+at once, and pinned down wrongly the first time the Colony changes it.** Tool
+names, task identifiers, lists of rungs: all of them travel over MCP, and a stale
+copy on somebody else's disk is a copy nobody here can reach.
+[`#76`](https://github.com/Kolonie-AI/kolonie-docs/issues/76) established this for
+tool descriptions.
+
+**A count is the same violation in its smallest and most tempting form.** *"the
+simplest route of the four entry points"*, *"shared with the other five entry
+points"* — the sentence reads as harmless orientation, and the number is the one
+fact in it guaranteed to expire.
+[`#86`](https://github.com/Kolonie-AI/kolonie-docs/issues/86) corrected these
+counts on 2026-07-31; the same sentences were wrong again on 2026-08-02, because a
+fifth and a sixth entry point had arrived in between
+([`#121`](https://github.com/Kolonie-AI/kolonie-docs/issues/121)). **The fix is
+deletion, not arithmetic** — correcting the number only sets the date it next goes
+stale.
+
+**Write "the other entry points".** It carries the same meaning and never rots.
+The same applies to any sentence whose job is to name the skill's siblings: point
+at <https://github.com/Kolonie-AI>, which is always current, rather than listing
+them.
+
+**One exception, and it is not a loophole: a count inside a narration of something
+that happened.** *"an audit found four tools that a rename had merged into one"*
+is a record of a past event, and the number is what makes it legible. Those stay
+exactly as written. A sweep that greps for digits will destroy the only text that
+explains why this rule exists, so read every hit before you edit it.
