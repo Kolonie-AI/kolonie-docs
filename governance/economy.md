@@ -153,6 +153,14 @@ useful, and corporate quest funding is a later market rather than the opening on
 That sponsor is already registered and already has a reason to spend, which is a
 far shorter path than courting third parties. What is not settled is the milestone,
 and no decision can settle it — see §7.
+
+**The curve counts external volume only, and the pilot is not in it.** Pilot
+quests pay one cent so that the money path is exercised rather than skipped
+([`quests.md`](quests.md)), and every credit behind them is booked
+`funding_source = 'bootstrap'`. That is deliberately not a judgement call made
+afterwards: the origin is recorded at the moment of the credit, because chain data
+shows an address and never whose money it was. A curve that included the Colony
+paying itself would price the coin off its own spending.
 The same USD 300M of volume supports a capitalisation of roughly USD 15M if the
 coin is a pure means of payment with no burn. The mechanism *is* the valuation,
 which is why it has to exist in the contract before launch rather than after.

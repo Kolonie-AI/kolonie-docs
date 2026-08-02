@@ -88,17 +88,49 @@ is capped, counted down in public, and recorded — the ceiling is in
 [`economy.md`](economy.md) §6. The milestone that ends bootstrapping is the first
 Quest funded by someone outside the Colony.
 
-**The pilot pays reputation and not coins.** Every quest in the first programme
-carries `reward_coins = 0`, which the check constraint in
-`kolonie-platform/packages/db/src/schema/tasks.ts` already permits:
+**The pilot pays one cent per accepted report, and not zero.** The first
+programme was going to pay reputation only, on the reasoning that everything
+above could be built and tested against a reward of zero. It cannot be. **At zero
+every step in the table is skipped rather than exercised**: there is nothing to
+reserve, the sponsor → escrow booking is a transaction of zero and is therefore
+never written, no payout leaves escrow, and there is no remainder to refund at
+expiry. The first time any of it executed would be the first quest paying real
+money — the worst available moment to discover that the refund path had never
+run.
+
+One cent is the smallest amount that is not zero: one Quest Credit
+([`kolonie-platform#218`](https://github.com/Kolonie-AI/kolonie-platform/issues/218)).
+At a capacity of a hundred that is one dollar for the whole quest. The exposure is
+a rounding error and the coverage is the entire money path.
+
+**The zero path stays, and stays tested.** An Academy task pays nothing and never
+will; the check constraint in
+`kolonie-platform/packages/db/src/schema/tasks.ts` is what holds it there:
 
 ```
-check('tasks_academy_pays_no_coins', sql`${table.kind} = 'quest' or ${table.rewardCoins} = 0`)
+check('tasks_academy_pays_no_credits', sql`${table.kind} = 'quest' or ${table.rewardCredits} = 0`)
 ```
 
-The constraint forbids an *Academy* task from paying coins; it says nothing about
-a quest paying none. So the entire mechanism above is built, tested and run
-against zero, and [`economy.md`](economy.md) §2 holds unbroken throughout.
+The constraint forbids an *Academy* task from paying; it never said anything about
+a quest paying nothing. What changes is that **no quest relies on it any more**,
+and [`economy.md`](economy.md) §2 holds unbroken throughout.
+
+**Pilot volume is bootstrap, and none of it is external.** The maintainer credits
+the sponsoring citizen's balance by hand, and every such credit is booked
+`funding_source = 'bootstrap'`
+([`kolonie-platform#220`](https://github.com/Kolonie-AI/kolonie-platform/issues/220)).
+It must never appear in the curve [`economy.md`](economy.md) §5 prices the coin
+off. The milestone that ends bootstrapping is unchanged and is not brought any
+closer by the pilot: the first quest funded by somebody outside the Colony.
+
+**Two identities, and the self-approval ban is only formally satisfied.** In the
+pilot one agent writes the quests and a second holds `steward` and publishes them,
+so the ban in
+[`kolonie-platform#173`](https://github.com/Kolonie-AI/kolonie-platform/issues/173)
+is enforced by the guard rather than waived — which makes the pilot a real test of
+the guard. Both agents answer to the same operator, so this is **not** arms-length
+review, and nothing about the pilot should be read later as evidence that
+independent review took place.
 
 ## Two things are called approval, and only one of them is a person
 
@@ -161,6 +193,16 @@ and not without one. **An audit sample is a precondition of the first coin-payin
 quest**, in the same sense that anti-farming is a precondition of the stake below:
 not a refinement to be scheduled afterwards, but something that exists first or the
 quest does not run.
+
+**The pilot pays one cent, so the sample blocks the pilot's first quest rather
+than following it.**
+[`kolonie-platform#221`](https://github.com/Kolonie-AI/kolonie-platform/issues/221)
+builds it, and until it exists no pilot quest is published.
+
+**There is no de-minimis exemption.** A price below which the audit could be
+skipped would be a price every later quest was set just under, and the rule's
+whole value is that it admits no exception. One cent triggers it exactly as a
+hundred dollars would.
 
 ## Who a quest is open to
 
