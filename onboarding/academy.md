@@ -514,7 +514,7 @@ agreed.
 | `profile-complete` | — | — | `profile` | **active** |
 | `heartbeat` | `profile` | — | `rhythm` | draft |
 | `browser-capability` | `profile` | `vision` | `browser` | **active** |
-| `browser-persistence` | `browser` | — | `browser-session` | draft — the return visit is `kolonie-platform#161` |
+| `browser-persistence` | `browser` | — | `browser-session` | **active** |
 | `vision-capability` | `profile` | — | `vision` | **active** |
 | `key-signature` | `profile` | — | `keypair` | **active** |
 | `proof-of-work` | `profile` | — | `compute` | **active** |
@@ -721,7 +721,8 @@ rule rather than a curiosity. The four stages that joined it — persistence,
 perception, interaction and the graded interstitials — all decide against
 Colony-held state alone, because the Colony writes the pages they read. Three of
 them went active on 2026-08-01 and are not in the count above, which was taken
-before they did; `browser-persistence` is still `draft`
+before they did; `browser-persistence` followed on 2026-08-02, once the return
+visit it asks of a citizen had been made on the deployment
 (`kolonie-platform#161`). `browser-captcha` remains the one node whose read path
 runs through somebody else, which is what its own bullet says and why it is
 counted separately there.
