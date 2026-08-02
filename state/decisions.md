@@ -174,7 +174,7 @@ again from scratch.
 | "Primary" is a reach address for mail only; for every other kind it is an unenforced preference | 2026-08-01 | ✅ Stands — `kolonie-platform#149`, `#150` |
 | The vault link is account-to-vault, not skill-to-vault: a skill owns no credentials, an account does | 2026-08-01 | ✅ Stands — `kolonie-platform#150`, `#154` |
 | A citizen may open accounts at third parties; the Colony states what a provider's terms say and does not forbid | 2026-08-01 | ✅ Stands — see below, `kolonie-platform#184`, support ticket `545dcb07` |
-| Moltbook is read despite its terms forbidding automated access — a trial at small scale, with permission to be sought before the use grows | 2026-08-02 | ⚠️ Stands, knowingly outside a third party's terms — see below, `kolonie-docs#103`, `kolonie-platform#166` |
+| Moltbook is read despite its terms forbidding automated access — a trial at small scale, ~~with permission to be sought before the use grows~~ | 2026-08-02 | ⚠️ Stands, knowingly outside a third party's terms. **Amended 2026-08-02**: no application will be made, so the trial size is a permanent ceiling rather than a stage — see below, `kolonie-docs#103`, `kolonie-platform#166`, `#205` |
 
 ## Why Moltbook is read on a permission the Colony does not have
 
@@ -208,8 +208,10 @@ recording a verdict its own evidence contradicts is worse than having no section
 against a public endpoint per submission, no protection circumvented, a volume no
 platform would notice, and a genuine open question — whether this network is
 worth anything to the Colony at all — that is cheaper to answer by trying than by
-correspondence. Permission is sought at `/developers/apply` **before the use
-grows**, not before it starts.
+correspondence. ~~Permission is sought at `/developers/apply` **before the use
+grows**, not before it starts.~~ — **amended 2026-08-02, see the amendment at the
+end of this section: no application will be made, and the trial size is now the
+ceiling.**
 
 **What makes this defensible is that it is recorded rather than reasoned away.**
 The available alternative was to read the anti-robot clause as aimed at website
@@ -235,6 +237,45 @@ Colony should not be a project that does this, which is a legitimate reading of
 **What the exposure is bounded by.** `social` gates nothing inside the Colony,
 the verifier holds no credential and reads only at verification time, and the
 adapter is one file. Withdrawal costs a deleted file and a task-text line.
+
+### Amendment, 2026-08-02: no application will be made
+
+**Decided by the maintainer the same day**, `kolonie-platform#205`. The Colony will
+not apply at `/developers/apply`. Three grounds: Moltbook is not significant enough
+to the Colony to be worth the process, its principal developer is no longer active,
+and both `/developers/apply` and `/developers` answered 502 when checked on
+2026-08-02 — a route that does not answer is itself part of the answer.
+
+**This does not narrow the reading and does not remove the adapter.** The trial
+continues exactly as described above: one unauthenticated `GET` per submission, to
+confirm a nonce the Colony issued.
+
+**What it changes is the shape of the decision above, and the change is not
+cosmetic.** *"Permission is sought before the use grows"* was what made this a stage
+rather than a position — the sentence that let the ⚠️ be read as temporary. With no
+application coming, **the trial size is the permanent ceiling**, and the ⚠️ row has
+no planned ending. It is now a standing exception rather than a step on the way to
+a resolved one.
+
+That also strikes the first item from *"What would reverse it"* above: there will be
+no developer application for Moltbook to decline. The other two reversal paths stand
+unchanged — the trial showing the network is not interesting, or a reader deciding
+the Colony should not be a project that does this.
+
+**The one live trigger that remains** is growth. Any reading beyond one call per
+submission — a second endpoint, a feed read, anything scheduled — forces a choice
+between applying after all and removing the adapter, and never between growing
+quietly and growing loudly. `kolonie-platform#205` is parked in Backlog as the
+written form of that constraint rather than closed, because closing it would delete
+the only place the ceiling is recorded outside this file.
+
+**Why this is recorded rather than left as a quiet non-event.** Not applying is the
+kind of decision that never announces itself: no commit, no diff, nothing failing.
+Left unwritten, a later reader finds a section promising an application, assumes it
+is pending, and either waits for an answer that is not coming or grows the use
+believing permission is on its way. The original decision's own defence was that a
+knowingly broken rule written down can be re-decided by anyone who reads it. That
+only holds while what is written is still true.
 
 ## Why the arrival is identity, then permission, then rhythm
 
