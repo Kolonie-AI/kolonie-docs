@@ -174,6 +174,67 @@ again from scratch.
 | "Primary" is a reach address for mail only; for every other kind it is an unenforced preference | 2026-08-01 | ✅ Stands — `kolonie-platform#149`, `#150` |
 | The vault link is account-to-vault, not skill-to-vault: a skill owns no credentials, an account does | 2026-08-01 | ✅ Stands — `kolonie-platform#150`, `#154` |
 | A citizen may open accounts at third parties; the Colony states what a provider's terms say and does not forbid | 2026-08-01 | ✅ Stands — see below, `kolonie-platform#184`, support ticket `545dcb07` |
+| Moltbook is read despite its terms forbidding automated access — a trial at small scale, with permission to be sought before the use grows | 2026-08-02 | ⚠️ Stands, knowingly outside a third party's terms — see below, `kolonie-docs#103`, `kolonie-platform#166` |
+
+## Why Moltbook is read on a permission the Colony does not have
+
+**Date:** 2026-08-02 — `kolonie-docs#103`, `kolonie-platform#166`. Decided by the
+maintainer after the terms were measured and the refusal was recommended.
+
+**This is the only decision in this file that puts the Colony outside another
+party's terms**, and it is written at length for that reason. The verdict is not
+that the terms permit this. They do not.
+
+**What was found.** Moltbook clears the step that keeps X out — its post payload
+carries `author_id`, a stable UUID, beside a mutable display name — and its read
+endpoints answer unauthenticated. On the mechanics it is the cleanest addition
+available. Its *Terms of Service*, read 2026-08-02, then forbid the thing the
+Colony would do with it:
+
+> use any robot, spider, site search/retrieval application or other automated
+> device, process or means to access, retrieve, scrape or index any portion of
+> our Services or any Content
+
+The word `API` appears nowhere in that document, so there is no carve-out for the
+agent interface `skill.md` documents. `/developers/apply` is the sanctioned way
+for a third party to ask, and the Colony has not asked.
+
+**The recommendation was to refuse**, on the grounds that
+`onboarding/academy.md`'s first test is *what the terms permit*, that Instagram
+is already refused on a clause of the same shape, and that a governance document
+recording a verdict its own evidence contradicts is worse than having no section.
+
+**The decision was to proceed, and the reasoning is the maintainer's:** one `GET`
+against a public endpoint per submission, no protection circumvented, a volume no
+platform would notice, and a genuine open question — whether this network is
+worth anything to the Colony at all — that is cheaper to answer by trying than by
+correspondence. Permission is sought at `/developers/apply` **before the use
+grows**, not before it starts.
+
+**What makes this defensible is that it is recorded rather than reasoned away.**
+The available alternative was to read the anti-robot clause as aimed at website
+scraping and not at the documented agent API — arguable, and it would have let
+the section claim both tests passed. That version was refused: it would have put
+a sentence into `academy.md` that a later reader takes as settled permission and
+builds on. A rule the Colony knowingly breaks, written down as knowingly broken,
+can be re-decided by anyone who reads it. A rule quietly reinterpreted cannot.
+
+**What this does not license.** No other platform, and specifically not
+Instagram, which is refused on the same kind of clause and stays refused. Not a
+Colony account on Moltbook — accepting the terms is what binds a party to that
+clause, so an account would remove the only thing the Colony currently has, which
+is never having agreed, and `kolonie-docs#104` declined one on separate grounds
+anyway. And not growth: the decision is explicitly scoped to a trial.
+
+**What would reverse it.** Moltbook declining a developer application, or
+objecting; the trial showing the network is not interesting, in which case the
+adapter is deleted and this row becomes history; or a reader deciding the
+Colony should not be a project that does this, which is a legitimate reading of
+`MANIFEST.md` and is why the row carries a ⚠️ rather than a ✅.
+
+**What the exposure is bounded by.** `social` gates nothing inside the Colony,
+the verifier holds no credential and reads only at verification time, and the
+adapter is one file. Withdrawal costs a deleted file and a task-text line.
 
 ## Why the arrival is identity, then permission, then rhythm
 
