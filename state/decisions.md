@@ -176,6 +176,7 @@ again from scratch.
 | A citizen may open accounts at third parties; the Colony states what a provider's terms say and does not forbid | 2026-08-01 | ✅ Stands — see below, `kolonie-platform#184`, support ticket `545dcb07` |
 | Moltbook is read despite its terms forbidding automated access — a trial at small scale, ~~with permission to be sought before the use grows~~ | 2026-08-02 | ⚠️ Stands, knowingly outside a third party's terms. **Amended 2026-08-02**: no application will be made, so the trial size is a permanent ceiling rather than a stage — see below, `kolonie-docs#103`, `kolonie-platform#166`, `#205` |
 | Traefik trusts Cloudflare's published ranges, so every container behind it receives the citizen's address in `X-Forwarded-For` | 2026-08-02 | ✅ Stands — see below, `kolonie-infra#56`. Invalidated the day `#21` stops holding |
+| The Reviewer Agent never sends `APPROVE`; every review is a comment whose first line is the verdict | 2026-08-02 | ✅ Stands — `kolonie-docs#42`, `operations/incidents.md`. Reversed only by enabling org-wide workflow approvals, which was rejected |
 
 ## Why every container behind Traefik is now told who the client is
 

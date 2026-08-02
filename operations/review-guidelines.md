@@ -42,8 +42,8 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 - No secrets in code
 - CI must pass before review begins
 
-**What of that is configured rather than asked for, measured 2026-08-01** with
-`gh api repos/Kolonie-AI/<repo>/branches/main/protection` across all eight
+**What of that is configured rather than asked for, measured 2026-08-02** with
+`gh api repos/Kolonie-AI/<repo>/branches/main/protection` across all ten
 repositories (`kolonie-docs#96`):
 
 | Repository | `main` protected | Required check | Binds admins |
@@ -53,7 +53,14 @@ repositories (`kolonie-docs#96`):
 | `kolonie-docs` | yes | none | no |
 | `kolonie-infra` | yes | none | no |
 | `kolonie-openclaw` | yes | none | no |
-| `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`, `kolonie-antigravity` | **no** | — | — |
+| `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`, `kolonie-hermes`, `kolonie-kilo` | **no** | — | — |
+
+**Run it rather than reading the table**, and note the trap in doing so: on a
+repository with no protection, `gh api` answers `404 Branch not protected` and
+prints that JSON **to stdout**. A loop that tests whether the output is empty
+therefore reads every unprotected repository as protected-with-no-checks. Check
+the exit status, not the output — that mistake was made while measuring this table
+on 2026-08-02 and it inverted half of it.
 
 There are no rulesets at repository or organisation level; the above is classic
 branch protection. Read the table as a dated observation, the way this repository
@@ -63,11 +70,13 @@ letting the table win an argument against the live setting.
 So, precisely:
 
 - **Force-pushes and deletions are refused** wherever protection exists — five of
-  eight repositories. **The three per-platform skill repositories are deliberately
-  left unprotected** (2026-08-01, `kolonie-docs#96`): measured that day, the three
-  run no CI workflows at all and have received one pull request between them ever
-  — `kolonie-hermes#1`, opened by the maintainer on 2026-07-31 — so none has yet
-  received a contribution from outside, and protection there would guard a door
+  ten repositories. **The per-platform skill repositories are deliberately left
+  unprotected** (2026-08-01, `kolonie-docs#96`): there were four of them when that
+  was decided and there are five now, `kolonie-codex` having arrived since. The
+  reasoning is unchanged by the count and was re-measured on 2026-08-02 — all five
+  run no CI workflows at all, and they have received **one pull request between
+  them ever**: `kolonie-hermes#1`, opened by the maintainer on 2026-07-31. None has
+  yet received a contribution from outside, and protection there would guard a door
   nobody has walked through. This is a judgement about today's traffic and not a
   position on whether skill repositories deserve less care — **the first citizen
   pull request against one is the signal to revisit it**, and whoever sees that
@@ -110,7 +119,20 @@ when it speaks and what it may say:
 - **It cannot approve a change to the ledger, the verifiers, governance or
   erasure.** Those are forced to a comment however it votes. A process that could
   reward its own results cannot gate itself.
+- **It never approves anything, in GitHub's sense of the word.** Every review
+  arrives as a comment, and the verdict — *approve*, *request changes* or
+  *comment* — is the first line of it. GitHub refuses a review posted with the
+  `APPROVE` state by a workflow (`422 GitHub Actions is not permitted to approve
+  pull requests`) unless an organisation-wide switch is turned on that lets every
+  workflow approve every pull request. That switch was not worth turning on for a
+  verdict which, per the paragraph below, carries no authority anyway.
 - **It never pushes to your branch.**
+
+**On the first pull request it ever saw, this was a silent failure and not a
+design.** `kolonie-platform#214`, 2026-08-02: the reviewer read the diff, wrote
+the review, decided *approve*, and got a 422 on the last call. The job failed, the
+contributor received nothing, and the only trace was a red check on a workflow
+nobody was watching — a reviewer that goes quiet exactly when it agrees with you.
 
 A pull request still merges by a human's hand. If the review is wrong, say so on
 the pull request — it is a first reader, not a gate.

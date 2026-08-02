@@ -386,6 +386,13 @@ jobs:
           event = {"approve": "APPROVE", "request_changes": "REQUEST_CHANGES"}.get(
               str(v.get("verdict", "")).lower(), "COMMENT")
 
+          # What the model decided, kept separately from what GitHub is asked to
+          # record. Every downgrade below changes the second; the heading reports
+          # the first, because "this reviewer would have approved" and "a human
+          # has to look at this one" are different things to tell a contributor
+          # and both arrive as event=COMMENT.
+          verdict = event
+
           caps = []
           # The cap that matters, and it is not advisory. AGENTS.md §87 in
           # kolonie-platform: a process that could reward its own results cannot
@@ -400,10 +407,32 @@ jobs:
           if os.environ.get("SELF_REVIEW") == "yes" and event != "COMMENT":
               caps.append("Downgraded to a comment: GitHub does not accept a verdict from the account that opened the pull request.")
               event = "COMMENT"
+          # **APPROVE is never sent, and this is a platform rule rather than a
+          # preference.** GitHub answers `422 GitHub Actions is not permitted to
+          # approve pull requests` for a review posted with the Actions token,
+          # unless an organisation setting is turned on that lets any workflow
+          # approve any pull request. Found on the first pull request this
+          # reviewer ever saw — kolonie-platform#214 on 2026-08-02, where the
+          # whole job succeeded up to the last call and the contributor received
+          # nothing at all. A reviewer that is silent exactly when it agrees with
+          # you is worse than one that does not run.
+          #
+          # The verdict is not lost, it moves into the body. That costs nothing
+          # here because the approval was never a gate: no repository requires a
+          # review to merge (kolonie-docs#96), and review-guidelines.md says a
+          # pull request still merges by a human's hand.
+          #
+          # The alternative — enabling "Allow GitHub Actions to create and
+          # approve pull requests" — was rejected. It is an organisation-wide
+          # switch that would let every workflow approve, for a verdict that
+          # already carries no authority.
+          if event == "APPROVE":
+              caps.append("Posted as a comment rather than an approval: GitHub does not let a workflow approve a pull request. The verdict above is the verdict.")
+              event = "COMMENT"
           if os.environ.get("TRUNCATED") == "yes":
               caps.append("**The diff was truncated at 240 KB.** Anything past that point was not read.")
 
-          out = [f"### Automated review — {event.replace('_', ' ').lower()}", "",
+          out = [f"### Automated review — {verdict.replace('_', ' ').lower()}", "",
                  v.get("summary", "").strip(), ""]
           for c in caps:
               out += [f"> {c}", ""]

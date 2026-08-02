@@ -456,6 +456,49 @@ inspected, for days, because a plausible known cause was already in hand. The
 read-only `Diagnose VPS` workflow in `kolonie-infra` exists so that stops
 happening.
 
+## 2026-08-02 — The Reviewer Agent's first real review was thrown away by GitHub
+
+The day after the entry below, the Reviewer Agent had run seven times and reviewed
+nothing: every run was a push to `main`, and every one correctly decided there was
+no pull request. **Whether it could review one had still never been observed.** A
+green run history said nothing about it, which is the shape of this failure and
+the reason a live test was worth doing at all.
+
+`kolonie-platform#214` was opened as that test. The job did everything right —
+waited for CI, gathered the diff and the linked issue, asked the model, got a
+verdict of *approve*, built the payload — and then:
+
+```
+gh: Unprocessable Entity (HTTP 422)
+{"errors":["GitHub Actions is not permitted to approve pull requests."]}
+```
+
+**The contributor received nothing.** No review, no comment, no indication that a
+reviewer had read the diff at all. The only trace was a red check on a workflow
+whose failures nobody had reason to watch — and it would have failed this way on
+every pull request the reviewer agreed with, which on a healthy repository is most
+of them. A reviewer that is silent exactly when it approves is worse than one that
+does not run: the second is visibly absent, the first looks like an opinion.
+
+**Why it was invisible until a real pull request existed.** Nothing in the
+workflow, the permissions block or the token's scopes is wrong. The refusal is a
+platform rule about what the Actions token may do, and it is only reachable on the
+code path where the model says *approve* — so no amount of reading the file, and no
+number of green runs against pushes, could have surfaced it. `#42`'s definition of
+done asked for a real pull request receiving a real review for exactly this reason.
+
+**The fix**: `APPROVE` is never sent. Every review is posted as a comment and the
+verdict is the first line of its body. The alternative — enabling *Allow GitHub
+Actions to create and approve pull requests* — was rejected: an organisation-wide
+switch letting every workflow approve every pull request, bought for a verdict that
+gates nothing (`kolonie-docs#96`: no repository requires a review to merge).
+
+**What generalises.** Two of the three entries around this one are the same shape:
+a thing that had never been observed doing its job, believed to work because
+nothing said otherwise. The run history was green here *because* the job kept
+finding nothing to do. **A success that never exercised the feature is not
+evidence about the feature.**
+
 ## 2026-08-01 — The Reviewer Agent had never run, and the comment warning about injection was the injection
 
 The maintainer reported a stream of GitHub emails: *"`.github/workflows/review.yml`
