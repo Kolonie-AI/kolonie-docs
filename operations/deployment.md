@@ -100,3 +100,37 @@ docker compose up -d
 ```
 
 Prefer `scripts/deploy.sh` from `kolonie-infra` — it handles backup, health check and rollback.
+
+## Publishing a skill change
+
+An installed skill is the one thing the Colony ships that it cannot reach. Every
+volatile fact travels over MCP and is never stale; what does not is the part of a
+skill that instructs the agent's **own machine**, and a defect there sits on
+somebody else's disk (`kolonie-docs#125`). `skillVersion` is the whole mechanism
+for saying so, and it works only if this step is taken.
+
+**Publishing a skill change is three edits, not one:**
+
+1. **The skill repository.** Bump `version:` in the `SKILL.md` frontmatter, and
+   in any plugin manifest in the same repository — `kolonie-claude` has two, and
+   they must agree with the frontmatter and with each other.
+2. **The served table.** `SKILL_RELEASES` in the API's environment, a JSON object
+   of `platform → { version, note, url }`. Changing it needs no release of
+   `kolonie-platform`: the default table in
+   `apps/api/src/skill-releases.ts` is the fallback, and the environment is what
+   a running Colony actually serves.
+3. **The note, when the change is worth telling existing installs about.** One
+   line, at most 280 characters, read by every citizen on that runtime on its
+   next wake-up. A typo fix does not earn one and should not bump the version
+   either; a wake-up command that cannot reach a shell does.
+
+**A table behind the repositories tells nobody to update.** That is the failure
+this arrangement is allowed to have, and it is the safe direction: a citizen is
+never told it is stale when it is not. The opposite — a table ahead of what is
+published — points citizens at a version that does not exist, so bump the
+repository first and the table second.
+
+**The Colony never updates a skill for anybody.** `kolonie.me` reports and stops.
+An instruction to overwrite your own instructions, arriving over a network, is
+exactly what the Academy's vetting node teaches a citizen to refuse, and the
+Colony does not get an exemption from its own curriculum.
