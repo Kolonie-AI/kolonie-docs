@@ -48,28 +48,60 @@ TITLE="The board has stopped maintaining itself"
 # Done items are archived automatically; this confirms the thing doing it is
 # switched on. `false`, or no output at all, means the board has started growing
 # again — which is what spends the budget.
-check_pruning() {
-  local answer err
-  err=$(mktemp)
-  answer=$(gh api graphql -f query='{ organization(login:"'"$ORG"'"){ projectV2(number:1){
-    workflows(first:30){ nodes{ name enabled } } } } }' \
-    --jq '.data.organization.projectV2.workflows.nodes[]
-          | select(.name=="Auto-archive items") | .enabled' 2>"$err")
+# **It measures the pruning, not the switch, and that is the better check of the
+# two.** §6 originally read `ProjectV2Workflow.enabled` — is auto-archive turned
+# on. That answers a question next to the one that matters: what the board needs
+# is for Done items to be *leaving*, and a switch reported as on is a promise
+# rather than an observation.
+#
+# It is also the only version a read-only credential can run. Reading a project's
+# workflows answers `Resource not accessible by personal access token` to a
+# fine-grained token at every read level, measured 2026-08-03 — so the switch
+# could only be read by a token that can also *write* the board, which is the
+# trade `AGENTS.md` §4 refused on `kolonie-docs#118`. Asking what is still on the
+# board needs nothing but Projects: Read.
+#
+# So this is `operations/incidents.md`'s own rule paying out again: **verify the
+# effect, not the call.**
+#
+# The window is 21 days against a filter of `updated:<@today-2w`, deliberately
+# slack. The filter turns on `updated:` and not `closed:` — GitHub offers no
+# `closed:`-relative term — so an issue still collecting comments after it closes
+# stays on the board longer than a fortnight, legitimately. A week of margin
+# means a busy issue is not reported as a failure of the archive.
+STALE_DAYS=21
 
-  case "$answer" in
-    true)  rm -f "$err"; return 0 ;;
-    false) echo "5a — **Auto-archive is switched off.** Done items will accumulate on the board, and \`--limit 1000\` will spend the GraphQL budget on them. Turn it back on in the Projects UI; §6 has the manual sweep for catching up." ;;
-    *)
-      # The reason is carried rather than guessed at. "Could not read it" covers
-      # a deleted workflow, a renamed one and a token without `project` scope,
-      # and those are three different things to do next.
-      echo "5a — **The auto-archive workflow could not be read at all**, so the pruning is unverified, which is the same position as it being off. What the API said:"
-      echo
-      sed 's/^/    /' "$err" | head -5
-      ;;
-  esac
+check_pruning() {
+  local err stale cutoff
+  err=$(mktemp)
+  cutoff=$(date -u -d "$STALE_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
+
+  stale=$(gh api graphql --paginate -f query='
+    query($endCursor:String){ organization(login:"'"$ORG"'"){ projectV2(number:1){
+      items(first:100, after:$endCursor){ pageInfo{ hasNextPage endCursor }
+        nodes{ fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue { name } }
+          content{ ... on Issue { number updatedAt repository { nameWithOwner } } } } } } } }' \
+    --jq '.data.organization.projectV2.items.nodes[]
+          | select(.fieldValueByName.name=="Done" and .content.updatedAt != null)
+          | "\(.content.updatedAt) \(.content.repository.nameWithOwner)#\(.content.number)"' 2>"$err" \
+    | awk -v c="$cutoff" '$1 < c { print $2 }')
+
+  if [ -s "$err" ] && [ -z "$stale" ]; then
+    echo "5a — **The board's Done column could not be read**, so the pruning is unverified, which is the same position as it having stopped. What the API said:"
+    echo
+    sed 's/^/    /' "$err" | head -3
+    rm -f "$err"
+    return 1
+  fi
   rm -f "$err"
-  return 1
+
+  if [ -n "$stale" ]; then
+    echo "5a — **Done items are not being archived.** These have sat in Done, untouched, for more than $STALE_DAYS days, and the archive filter is \`updated:<@today-2w\`. The board is growing again, which is what makes \`--limit 1000\` expensive. Check that *Auto-archive items* is still enabled in the Projects UI; §6 has the manual sweep for catching up."
+    echo
+    printf '%s\n' "$stale" | sed 's/^/    /' | head -20
+    return 1
+  fi
+  return 0
 }
 
 # --- 5b: the arriving --------------------------------------------------------

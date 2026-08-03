@@ -70,7 +70,17 @@ jobs:
       - name: Ask the board both questions
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A stored, **read-only** credential: Organization → Projects: Read and
+          # Repository → Issues: Read, and nothing else. The Actions token cannot
+          # reach an organisation project at all, and reading the project's
+          # *workflows* is refused to a fine-grained token at every read level —
+          # which is why 5a measures the pruning rather than the switch. Nothing
+          # this token can do writes to anything.
+          #
+          # The issue this workflow files is written by GITHUB_TOKEN in the steps
+          # below, deliberately: the stored credential stays read-only for its
+          # whole life, so a leak of it costs nothing that is not already public.
+          GH_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
           BREAK_IT: ${{ inputs.break_it }}
         run: |
           # No pipeline, and the status is captured rather than allowed to
@@ -82,8 +92,9 @@ jobs:
             # Point 5a at a workflow name that cannot match. Nothing on the board
             # changes; the query simply comes back empty, which is one of the two
             # ways 5a fails and the one that is safe to cause on purpose.
-            sed -i 's/name=="Auto-archive items"/name=="Auto-archive items (this cannot match)"/' \
-              .github/scripts/board-self-check.sh
+            # Nothing on the board changes; the window simply becomes one no
+            # real item can be inside, so every Done item reads as stale.
+            sed -i 's/^STALE_DAYS=21/STALE_DAYS=0/' .github/scripts/board-self-check.sh
             echo "::warning::running with 5a deliberately broken — this is the rehearsal, not a real finding"
           fi
           rc=0
@@ -97,12 +108,10 @@ jobs:
           # subject looks broken, which is `review-pull-request.yml`'s rule for
           # a missing model key and is right for the same reason.
           #
-          # **This is the state as of 2026-08-03 and the workflow is silent
-          # because of it.** Reading an organisation project needs `project`
-          # scope and the Actions `GITHUB_TOKEN` has none, so every scheduled
-          # run currently ends here. `kolonie-docs#132` did not anticipate it;
-          # the credential is a human's to grant (`AGENTS.md` §5, class 4) and
-          # §4 has refused this exact trade once already on `kolonie-docs#118`.
+          # It is reached when `BOARD_READ_TOKEN` is missing or has expired —
+          # the token is a fine-grained one and fine-grained tokens expire, so
+          # this branch is a certainty on a long enough timeline rather than a
+          # hypothetical.
           if [ "$rc" -eq 2 ]; then
             echo "::warning::the board could not be read — configuration gap, not a finding; see the job log"
             exit 0

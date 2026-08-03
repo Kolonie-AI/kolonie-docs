@@ -467,12 +467,23 @@ second copy in a document is a version that goes out of step without anybody
 editing it, which is the failure `#120` is named after. What the script does not
 hold is the *reasoning*, which is here:
 
-**5a — the pruning.** Done items are archived automatically, and 5a confirms the
-thing doing it is switched on. `false`, or no answer at all, means the board has
-started growing again and the manual sweep below is how it gets caught up. The
-two are not the same finding and the script says which: a setting turned off is
-a thing to turn on, and a workflow that cannot be read at all is a pruning
-nobody can vouch for, which is the same position as it being off.
+**5a — the pruning.** Done items are archived automatically, and 5a asks whether
+they are actually leaving: is anything still sitting in Done, untouched, for
+longer than the archive's fortnight plus a week of slack. Anything it names means
+the board has started growing again, and the manual sweep below is how it gets
+caught up.
+
+**It measures the pruning rather than the switch, and that is deliberate.** Until
+2026-08-03 it read `ProjectV2Workflow.enabled` — is auto-archive turned on — which
+answers a question next to the one that matters. What the board needs is for Done
+items to leave; a switch reported as on is a promise, and the number of items is
+an observation. It is also the only version a read-only credential can run: the
+`workflows` field answers `Resource not accessible by personal access token` to a
+fine-grained token at every read level, so the switch is legible only to a token
+that could also *write* the board — the trade §4 refused on `kolonie-docs#118`.
+The slack is because the archive filter turns on `updated:` and not `closed:`, so
+an issue still collecting comments after it closes stays longer than a fortnight,
+legitimately.
 
 **5b — the arriving.** Five of the ten repositories have no auto-add workflow and
 cannot be given one (§4), so an issue opened in one of them is invisible until

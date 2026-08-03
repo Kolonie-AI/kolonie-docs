@@ -34,7 +34,10 @@ echo "$*" >> "$GH_LOG"
 case "$1 $2" in
   "api graphql")
     if [[ "$*" == *"projectV2(number:1){ id }"* ]]; then cat "$GH_FIXTURES/readable" 2>/dev/null
-    else cat "$GH_FIXTURES/pruning" 2>/dev/null; fi ;;
+    else
+      cat "$GH_FIXTURES/pruning" 2>/dev/null
+      [ -s "$GH_FIXTURES/pruning_err" ] && cat "$GH_FIXTURES/pruning_err" >&2
+    fi ;;
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
   "issue list")
@@ -58,7 +61,11 @@ setup() {
   rm -rf "$GH_FIXTURES"; mkdir -p "$GH_FIXTURES"; : > "$GH_LOG"
   # A healthy board by default: archiving on, 25 items, every open issue on it.
   echo "PVT_kwDOEmwuYs4BebbB" > "$GH_FIXTURES/readable"
-  echo "true" > "$GH_FIXTURES/pruning"
+  # 5a reads Done items as "<updatedAt> <repo>#<n>". Everything recent by
+  # default, so the archive looks like it is doing its job.
+  RECENT=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+  { echo "$RECENT Kolonie-AI/kolonie-docs#10"; echo "$RECENT Kolonie-AI/kolonie-docs#11"; } > "$GH_FIXTURES/pruning"
+  : > "$GH_FIXTURES/pruning_err"
   for i in $(seq 1 25); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/board"
   echo "kolonie-docs" > "$GH_FIXTURES/repos"
   for i in $(seq 1 25); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/issues"
@@ -78,15 +85,25 @@ expect "the report file is empty" "$([ ! -s "$WORK/report" ] && echo yes || echo
 echo
 echo "5a — the pruning"
 
-setup; echo "false" > "$GH_FIXTURES/pruning"
+# The failure it exists for: something has sat in Done, untouched, for longer
+# than the archive filter's fortnight plus a week of slack.
+setup; echo "$(date -u -d '40 days ago' +%Y-%m-%dT%H:%M:%SZ) Kolonie-AI/kolonie-docs#7" >> "$GH_FIXTURES/pruning"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "auto-archive off fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
-expect "and says which setting" "$([[ "$out" == *"Auto-archive is switched off"* ]] && echo yes || echo no)" "$out"
+expect "a stale Done item fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names it" "$([[ "$out" == *"kolonie-docs#7"* ]] && echo yes || echo no)" "$out"
+expect "and points at the archive setting" \
+  "$([[ "$out" == *"Auto-archive items"* ]] && echo yes || echo no)" "$out"
 
-setup; : > "$GH_FIXTURES/pruning"
+# Slack is deliberate: the filter turns on `updated:`, so an item closed three
+# weeks ago but commented on yesterday is legitimately still there.
+setup; echo "$(date -u -d '16 days ago' +%Y-%m-%dT%H:%M:%SZ) Kolonie-AI/kolonie-docs#8" >> "$GH_FIXTURES/pruning"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "no answer at all fails, rather than reading as true" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
-expect "and says it is unverified" "$([[ "$out" == *"could not be read at all"* ]] && echo yes || echo no)" "$out"
+expect "an item inside the slack window is not a finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+setup; : > "$GH_FIXTURES/pruning"; echo "gh: Resource not accessible" > "$GH_FIXTURES/pruning_err"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an unreadable Done column fails, rather than reading as clean" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and carries what the API said" "$([[ "$out" == *"Resource not accessible"* ]] && echo yes || echo no)" "$out"
 
 echo
 echo "5b — the arriving"
@@ -162,7 +179,7 @@ echo "it never writes to the board"
 for fixture in healthy off missing; do
   setup
   case $fixture in
-    off)     echo "false" > "$GH_FIXTURES/pruning" ;;
+    off)     echo "$(date -u -d '40 days ago' +%Y-%m-%dT%H:%M:%SZ) Kolonie-AI/kolonie-docs#7" >> "$GH_FIXTURES/pruning" ;;
     missing) echo "Kolonie-AI/kolonie-docs#99" >> "$GH_FIXTURES/issues" ;;
   esac
   bash "$SCRIPT" check "$WORK/report" >/dev/null
