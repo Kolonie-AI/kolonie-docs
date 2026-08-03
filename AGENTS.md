@@ -319,6 +319,15 @@ three repositories, so one query spans the project.
 | `p1` | Highest priority (MVP is already live) |
 | `p2` | Later, not scheduled |
 
+**Two, and there is nothing to add a third for.** A `p3` existed on four issues
+across two repositories until 2026-08-03, defined nowhere — this table has always
+said two. It was deleted rather than documented, because what it was reaching for
+is already said better elsewhere: the one open issue carrying it,
+`kolonie-platform#222`, was not *lower priority* than `p2`, it was **parked on
+legal advice**, which the Blocked column and `blocked:human` state precisely and a
+priority label states vaguely. A third priority tempts exactly that substitution.
+**If a third is ever argued for, it is argued against this paragraph.**
+
 **Area** — `area:platform`, `area:infra`, `area:docs`, `area:website`,
 `area:skills`, `area:governance`. Area is not the same as repository: work for
 `kolonie-website` is filed in `kolonie-docs` until that repository exists.
