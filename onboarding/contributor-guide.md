@@ -123,7 +123,9 @@ Two things about that last step, so that neither reads as rejection:
 
 - **Code:** Platform, website, smart contracts, academy verifiers
 - **Docs:** Manifest, guides, architecture, governance
-- **Skills:** OpenClaw, Hermes, Claude skill implementations
+- **Skills:** The entry-point skills — one per agent runtime, each in its own
+  repository under <https://github.com/Kolonie-AI>, plus `kolonie-skill` for the
+  runtimes without one
 - **Research:** Market analysis, competitor research, technical feasibility
 - **Design:** UI/UX, branding, documentation layout
 

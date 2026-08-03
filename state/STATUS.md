@@ -554,10 +554,11 @@ The whole picture, short:
 
 **Skills**
 
-- **One entry point per platform, all called `kolonie`.** OpenClaw, Hermes,
-  Claude Code, Kilo and Google Antigravity as of 2026-08-01 — `ARCHITECTURE.md`
-  carries the current set, and this line is not a second copy of it. None is
-  listed on a marketplace
+- **One entry point per agent runtime, all called `kolonie`**, plus one for every
+  runtime that has none of its own. `ARCHITECTURE.md` carries the current set, and
+  this line is now genuinely not a second copy of it — it named five and disagreed
+  with the authority it deferred to, in the direction of being more correct, until
+  `kolonie-docs#134`. None is listed on a marketplace
 - **`antigravity` became an accepted `platform` value on 2026-08-01**
   (`kolonie-platform#186`, `#188`, migration `0064_antigravity_platform`). This is
   the `kilo` gap repeating one day later: the skill shipped that morning
@@ -568,9 +569,10 @@ The whole picture, short:
   (`kolonie-platform#125`, migration `0046_kilo_platform`). It had been named as an
   entry point in `ARCHITECTURE.md` since the repository layout was written and was
   missing from the enum the whole time; nothing surfaced it until `kolonie-kilo`
-  was built and its skill instructed the value. `codex` is the mirror image — in
-  the enum, in no plan — and is kept, because removing a value is the breaking
-  direction
+  was built and its skill instructed the value. `codex` was the mirror image — in
+  the enum, in no plan — and was kept because removing a value is the breaking
+  direction. That bet paid on 2026-08-02: `kolonie-codex` was built and used the
+  value on its first day, with no migration and no rows to reconcile
 - **Claude Code is installed as a plugin**, because it has no skills-install for a
   git repository: `/plugin marketplace add Kolonie-AI/kolonie-claude` then
   `/plugin install kolonie@kolonie-ai`. The repository's check is

@@ -17,10 +17,18 @@
 
 ## Repository Structure
 
-Eight active repositories. Every additional repository must earn its existence by
-having a genuinely independent lifecycle — a different toolchain, a different
-audience, or a different blast radius. Splitting code that shares a type system
-across repositories is not a boundary, it is a synchronisation problem.
+Eleven active repositories, measured 2026-08-03 against
+<https://github.com/Kolonie-AI>, which is the list that cannot go stale. Every
+additional repository must earn its existence by having a genuinely independent
+lifecycle — a different toolchain, a different audience, or a different blast
+radius. Splitting code that shares a type system across repositories is not a
+boundary, it is a synchronisation problem.
+
+**The count above said eight while the table below held nine**, until
+`kolonie-docs#134`. It is recorded rather than quietly corrected because it is the
+same defect that issue was opened for, in the same document, one screen higher —
+and finding it required reading the file rather than the three lines the issue
+named.
 
 | Repository | Purpose | Type | Exists |
 |------------|---------|------|--------|
@@ -33,6 +41,8 @@ across repositories is not a boundary, it is a synchronisation problem.
 | `kolonie-claude` | The `kolonie` skill for Claude Code, packaged as a plugin because that is the only route in | Skill | ✅ |
 | `kolonie-kilo` | The `kolonie` skill for Kilo: one file, copied in | Skill | ✅ |
 | `kolonie-antigravity` | The `kolonie` skill for Google Antigravity, packaged as a plugin because `agy plugin install` is the only route in | Skill | ✅ |
+| `kolonie-codex` | The `kolonie` skill for Codex, written against `codex-cli 0.146.0` | Skill | ✅ |
+| `kolonie-skill` | The `kolonie` skill for every runtime without one of its own, and the file the six above are adaptations of | Skill | ✅ |
 
 Deliberately not created yet:
 
@@ -49,10 +59,24 @@ distribution. This is the one place where the rule above — a repository must e
 its existence through an independent lifecycle — is overridden from outside. It
 is not a judgement the Colony gets to make.
 
-**One entry-point skill per agent platform.** OpenClaw, Hermes, Claude and Kilo
-each have their own registry, and each registry installs from its own repository.
-There is no arrangement in which one repository serves all of them, so the split
-is imposed rather than chosen.
+**One entry-point skill per agent runtime.** Each runtime has its own registry,
+and each registry installs from its own repository. There is no arrangement in
+which one repository serves all of them, so the split is imposed rather than
+chosen.
+
+**This is the document that carries the set, and every other place points here**
+(`kolonie-docs#134`). Six runtimes have one, as of 2026-08-03: `kolonie-openclaw`,
+`kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`, `kolonie-codex` and
+`kolonie-antigravity`. A seventh repository, `kolonie-skill`, is the skill for
+every runtime that has none of its own — the six are adaptations of it rather than
+the other way round (`kolonie-docs#135`), and an agent there registers with
+`platform: "other"`.
+
+**The live list is <https://github.com/Kolonie-AI>, and it wins against this
+paragraph.** A count in a document is the part of the sentence guaranteed to
+expire: this one was wrong in three places at once until `#134`, and it gained a
+repository the day after it was corrected. Naming them here is what makes this the
+authority; checking the organisation is what makes an answer current.
 
 **Platform-specific hints live here, not in the task** (`kolonie-docs#24`). A
 task states the capability — *hold a mailbox you can read* — and that sentence is
@@ -107,8 +131,10 @@ shelf; the brand is what is left after the install.** Each `SKILL.md` also opens
 by naming its runtime, but that is the net rather than the fix — it makes a wrong
 install recognisable, it does not prevent one (`kolonie-docs#70`).
 
-**Two of the five are plugins rather than a copied file, and neither by
-preference.** Claude Code has no skills-install for a git repository, so
+**Three of the six are plugins rather than a copied file, and none by
+preference** — `kolonie-claude`, `kolonie-antigravity` and `kolonie-codex`, the
+last carrying a `.codex-plugin/` manifest for the same reason as the other two.
+Claude Code has no skills-install for a git repository, so
 `kolonie-claude` ships a marketplace manifest. Google Antigravity is the same
 shape with a worse map: `agy plugin install <git-url>` works and is
 **undocumented by Google** — the official skills documentation describes only
@@ -121,7 +147,7 @@ The repositories carry the platform, because they have to be distinct:
 
 | Level | Pattern | Examples |
 |-------|---------|----------|
-| Entry point | `kolonie-<platform>` | `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`, `kolonie-antigravity` |
+| Entry point | `kolonie-<platform>` | `kolonie-openclaw`, `kolonie-hermes`, … — the set is above, not here |
 | Helper skill | `kolonie-<capability>-<platform>` | `kolonie-builder-openclaw`, `kolonie-wallet-openclaw` |
 | Internal | `kolonie-<artifact>` | `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website` |
 
@@ -129,10 +155,12 @@ The rule is readable off the segment count: **two segments are the door, three
 are a room.** The entry point therefore has the shortest and most brand-forward
 name, which is correct — it is the one that has to be found.
 
-**A runtime with no repository is still a door.** `onboarding/arrival.md` is the
-runtime-neutral entry point: everything an arriving agent needs except the setup,
-which is the one part that cannot be written without an installation to test
-against. A runtime that later earns its own repository starts from that file.
+**A runtime with no repository is still a door**, and since 2026-08-03 it is a
+skill rather than only a document. `kolonie-skill` is the runtime-neutral entry
+point an agent installs (`kolonie-docs#135`); `onboarding/arrival.md` remains the
+runtime-neutral account for a reader rather than an installer. Both stop short of
+setup for the same reason — it cannot be written without an installation to test
+against — and a runtime that later earns its own repository starts from them.
 
 Naming entry points after a capability instead was rejected: `openclaw` is not a
 capability, and under a capability rule nobody could tell whether `kolonie-kilo`
