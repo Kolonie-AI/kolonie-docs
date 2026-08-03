@@ -41,6 +41,15 @@ name: Check Red Lines
 # files an issue, reuses it rather than piling them up, and closes it when the
 # copies agree again.
 #
+# **That reporting lives in `.github/scripts/red-lines-report.sh`, not here.** It
+# was eight lines of YAML until `#150`, and it carried the reuse guard's defect:
+# it looked the issue up through the search index, which is eventually
+# consistent, so a second run inside the indexing window filed a duplicate rather
+# than commenting. The lookup is now a REST listing with the title matched in the
+# script — and moving it out of the `run:` block is what lets
+# `.github/tests/red-lines-report.test.sh` hold the weaker form out, which a
+# stubbed `gh` cannot do to a workflow step.
+#
 # ## Why this repository, and why `governance/red-lines.md` is the source
 #
 # `#78` says *"the Colony's copy binds"*, and that is addressed to a **reader**:
@@ -61,6 +70,8 @@ on:
       - '.github/scripts/red-lines.py'
       - '.github/scripts/find-red-line-copies.sh'
       - '.github/tests/red-lines.test.py'
+      - '.github/scripts/red-lines-report.sh'
+      - '.github/tests/red-lines-report.test.sh'
   pull_request:
     paths:
       - 'governance/red-lines.md'
@@ -71,6 +82,8 @@ on:
       - '.github/scripts/red-lines.py'
       - '.github/scripts/find-red-line-copies.sh'
       - '.github/tests/red-lines.test.py'
+      - '.github/scripts/red-lines-report.sh'
+      - '.github/tests/red-lines-report.test.sh'
   schedule:
     # Daily. The copies live in repositories this workflow cannot watch for
     # pushes, so a drift introduced in a skill file is found by the clock rather
@@ -94,7 +107,9 @@ jobs:
       # First, because a check that has never been shown to fail correctly is a
       # check nobody should trust when it passes.
       - name: Test the checker
-        run: python3 .github/tests/red-lines.test.py
+        run: |
+          python3 .github/tests/red-lines.test.py
+          bash .github/tests/red-lines-report.test.sh
 
       - name: Find and fetch every copy
         env:
@@ -115,19 +130,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          TITLE="The copies of the red lines disagree"
-          BODY=$(printf 'The red lines differ between the source and at least one copy.\n\n**The terms of citizenship are what is wrong**, so this is worth interrupting for: `#78` has the skills carrying them verbatim, and an agent bound by a copy the Colony does not serve is bound by something nobody decided.\n\n```\n%s\n```\n\n[Full run](%s)\n\nThe source is `governance/red-lines.md`. Bring every copy back to it rather than to another copy — copying between copies is how `kolonie-kilo` and `kolonie-claude` stayed two versions behind.\n\nFiled by `check-red-lines.yml`, reused rather than duplicated, and closed when the check next passes.' "$(cat "$RUNNER_TEMP/report.txt")" "$RUN_URL")
-
-          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
-            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
-              --label p1 --label area:governance --body "$BODY"
-          fi
+        run: bash .github/scripts/red-lines-report.sh report "$RUNNER_TEMP/report.txt"
 
       # The other half of reaching somebody: an issue that stays open after the
       # thing it reports is fixed is an issue people learn to ignore.
@@ -136,12 +139,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          TITLE="The copies of the red lines disagree"
-          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
-            --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-
-          if [ -n "$EXISTING" ]; then
-            gh issue close "$EXISTING" --repo "$GITHUB_REPOSITORY" --reason completed \
-              --comment "Every copy says the same thing again. [Run]($RUN_URL)"
-          fi
+        run: bash .github/scripts/red-lines-report.sh resolve
