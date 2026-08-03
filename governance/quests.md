@@ -165,14 +165,41 @@ it prices the difference.
 
 > **A softly verified Quest must never pay more than the reputation it risks.**
 
-| Tier | How it is proven | Payout |
+| Tier | How it is proven | Ceiling per accepted report |
 |---|---|---|
-| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | Full |
-| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | Reduced |
-| **Soft** | Only the citizen's own claim — *"visited this page"* | Capped low |
+| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | **1000 credits** ($10) |
+| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | **100 credits** ($1) |
+| **Soft** | Only the citizen's own claim — *"visited this page"* | **5 credits** ($0.05) |
 
 The ceiling belongs to the **tier**, not to the individual Quest. A sponsor cannot
 raise the payout on a soft Quest by offering more; the tier is what it is.
+
+**These three figures are decided here and the code follows.** They were first
+written as a TypeScript constant so that `kolonie-platform#177` could enforce a
+rule this document had only stated in words — *Full*, *Reduced*, *Capped low* —
+and a figure invented by an implementer and then quoted back by the code becomes
+doctrine by accident. Adopting them makes this document the source and the
+constant the copy, which is the direction round the rest of this file already
+works.
+
+**What each ceiling is an argument about:**
+
+- **Hard is capped too, and that is not a contradiction of the word.** *Full*
+  means the tier imposes no ceiling of its own — but an unbounded per-report
+  figure is one typo away from a quest that empties a balance on its first
+  accepted report, and the escrow bounds the total rather than the unit. Ten
+  dollars a report is far above anything the Colony has been asked for.
+- **Colony-judged is an order of magnitude below it**, because the evidence is
+  the Colony's own model reading the sponsor's own criteria. That is worth
+  paying for and it is not a third party saying yes.
+- **Soft is five cents**, which is the sentence above this table made into a
+  number: *a softly verified Quest must never pay more than the reputation it
+  risks.*
+
+All three are far above the pilot's one cent, so nothing the Colony runs today is
+constrained by them. They exist to be a ceiling before there is something to
+ceil, which is the only moment a ceiling can be set without an interested party
+in the room.
 
 ### Why the sponsor does not judge
 
