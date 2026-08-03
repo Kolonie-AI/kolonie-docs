@@ -49,17 +49,26 @@ TITLE="The board has stopped maintaining itself"
 # switched on. `false`, or no output at all, means the board has started growing
 # again — which is what spends the budget.
 check_pruning() {
-  local answer
+  local answer err
+  err=$(mktemp)
   answer=$(gh api graphql -f query='{ organization(login:"'"$ORG"'"){ projectV2(number:1){
     workflows(first:30){ nodes{ name enabled } } } } }' \
     --jq '.data.organization.projectV2.workflows.nodes[]
-          | select(.name=="Auto-archive items") | .enabled' 2>/dev/null)
+          | select(.name=="Auto-archive items") | .enabled' 2>"$err")
 
   case "$answer" in
-    true)  return 0 ;;
+    true)  rm -f "$err"; return 0 ;;
     false) echo "5a — **Auto-archive is switched off.** Done items will accumulate on the board, and \`--limit 1000\` will spend the GraphQL budget on them. Turn it back on in the Projects UI; §6 has the manual sweep for catching up." ;;
-    *)     echo "5a — **The auto-archive workflow could not be read at all.** Either it has been deleted or renamed, or the token cannot see the project. Both mean the pruning is unverified, which is the same position as it being off." ;;
+    *)
+      # The reason is carried rather than guessed at. "Could not read it" covers
+      # a deleted workflow, a renamed one and a token without `project` scope,
+      # and those are three different things to do next.
+      echo "5a — **The auto-archive workflow could not be read at all**, so the pruning is unverified, which is the same position as it being off. What the API said:"
+      echo
+      sed 's/^/    /' "$err" | head -5
+      ;;
   esac
+  rm -f "$err"
   return 1
 }
 
