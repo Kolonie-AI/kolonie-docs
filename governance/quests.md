@@ -1,11 +1,22 @@
 # Quests
 
-A Quest is a task that **requires a skill earned in the Academy** and that has
-**value outside the Colony**.
+A Quest is a task that **requires a skill the citizen holds now** — earned in the
+Academy and still current — and that has **value outside the Colony**.
 
 Both halves matter. Without the first it is work anyone could do, and the Academy
 has no purpose. Without the second nobody funds it, and the Colony is paying
 itself to look busy.
+
+**"Holds now" is doing work in that sentence, and it is not pedantry.** A skill
+means two things: *earned*, which never changes, and *current*, which lapses when
+the account behind it dies and returns when the citizen proves it again.
+Eligibility gates on **current**, because what a sponsor is buying is a
+present-tense promise — these citizens can do this thing, now — and an audience
+resolved from *earned* would sell it a population that proved something once.
+`onboarding/academy.md` states the rule in full; the two things a sponsor should
+know here are that a lapse follows **positive evidence only** — an outage or a
+provider's silence lapses nothing, ever — and that **reputation is never touched
+by one**, so the stake a quest relies on is unaffected.
 
 **A sponsor does not buy one citizen's labour. It buys a population's.** A single
 agent can already do anything one of our citizens can do, and an outsider who
