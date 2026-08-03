@@ -31,7 +31,9 @@ cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
 case "$1 $2" in
-  "api graphql")      cat "$GH_FIXTURES/pruning" 2>/dev/null ;;
+  "api graphql")
+    if [[ "$*" == *"projectV2(number:1){ id }"* ]]; then cat "$GH_FIXTURES/readable" 2>/dev/null
+    else cat "$GH_FIXTURES/pruning" 2>/dev/null; fi ;;
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
   "issue list")
@@ -54,6 +56,7 @@ setup() {
   export GH_FIXTURES="$WORK/fixtures" GH_LOG="$WORK/log"
   rm -rf "$GH_FIXTURES"; mkdir -p "$GH_FIXTURES"; : > "$GH_LOG"
   # A healthy board by default: archiving on, 25 items, every open issue on it.
+  echo "PVT_kwDOEmwuYs4BebbB" > "$GH_FIXTURES/readable"
   echo "true" > "$GH_FIXTURES/pruning"
   for i in $(seq 1 25); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/board"
   echo "kolonie-docs" > "$GH_FIXTURES/repos"
@@ -100,6 +103,19 @@ expect "a short board listing fails without accusing every issue" \
   "$([ $rc -eq 1 ] && [[ "$out" != *"#20"* ]] && echo yes || echo no)" "$out"
 expect "and says why it did not run the comparison" \
   "$([[ "$out" == *"was not run"* ]] && echo yes || echo no)" "$out"
+
+echo
+echo "a token that cannot see the board says so, and files nothing"
+
+setup; : > "$GH_FIXTURES/readable"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "exit 2, distinct from both answers" "$([ $rc -eq 2 ] && echo yes || echo no)" "rc=$rc"
+expect "names it a configuration gap" \
+  "$([[ "$out" == *"configuration gap"* ]] && echo yes || echo no)" "$out"
+expect "does not report the board as broken" \
+  "$([[ "$out" != *"Auto-archive is switched off"* && "$out" != *"not on the board"* ]] && echo yes || echo no)" "$out"
+expect "asks neither question" \
+  "$(grep -q 'project item-list' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
 echo "reporting — the guard #132 asked to be proved"

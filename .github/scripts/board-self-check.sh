@@ -106,9 +106,47 @@ check_arrivals() {
   return 0
 }
 
+# --- can this token see the board at all? ------------------------------------
+# **A credential that cannot reach the board must not be the reason the board
+# looks broken.** Without it, both queries come back empty and both read as
+# findings: 5a reports the pruning as unverified and 5b reports every open issue
+# in the organisation as missing. That is a hundred false lines filed daily by
+# something whose whole value is that it is silent unless something is wrong.
+#
+# It is not hypothetical. The Actions `GITHUB_TOKEN` cannot read an organisation
+# project — measured on the first scheduled run, 2026-08-03, where the API
+# answered `Could not resolve to a ProjectV2 with the number 1`. Reading the
+# board needs `project` scope, which only a stored token carries, and
+# `AGENTS.md` §4 has already refused that trade once (`kolonie-docs#118`) on the
+# grounds that it is a long-lived credential created for board hygiene.
+#
+# So this exits **2**, distinct from both answers, and the caller says so in the
+# log rather than on the board. The same shape `review-pull-request.yml` uses
+# for a missing model key: a configuration gap is reported as one.
+board_readable() {
+  local err
+  err=$(mktemp)
+  if gh api graphql -f query='{ organization(login:"'"$ORG"'"){ projectV2(number:1){ id } } }' \
+       --jq '.data.organization.projectV2.id' 2>"$err" | grep -q .; then
+    rm -f "$err"; return 0
+  fi
+  echo "This token cannot read the board, so neither question was asked. It is a configuration gap and not a finding — reading an organisation project needs \`project\` scope, which the Actions \`GITHUB_TOKEN\` does not carry. What the API said:"
+  echo
+  sed 's/^/    /' "$err" | head -3
+  rm -f "$err"
+  return 2
+}
+
 cmd_check() {
   local report="${1:-/dev/null}" status=0
   : > "$report"
+
+  if ! board_readable >> "$report"; then
+    cat "$report"
+    return 2
+  fi
+  : > "$report"
+
   check_pruning >> "$report" || status=1
   [ -s "$report" ] && echo >> "$report"
   check_arrivals >> "$report" || status=1

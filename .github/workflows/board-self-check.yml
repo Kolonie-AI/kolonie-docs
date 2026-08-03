@@ -83,6 +83,25 @@ jobs:
             echo "::warning::running with 5a deliberately broken — this is the rehearsal, not a real finding"
           fi
           bash .github/scripts/board-self-check.sh check "$RUNNER_TEMP/report.md" | tee "$RUNNER_TEMP/out.txt"
+          rc=${PIPESTATUS[0]}
+
+          # 2 is "this token cannot see the board", which is a configuration gap
+          # and not a finding. It is reported in the log and nowhere else — a
+          # check that cannot reach its subject must not be the reason the
+          # subject looks broken, which is `review-pull-request.yml`'s rule for
+          # a missing model key and is right for the same reason.
+          #
+          # **This is the state as of 2026-08-03 and the workflow is silent
+          # because of it.** Reading an organisation project needs `project`
+          # scope and the Actions `GITHUB_TOKEN` has none, so every scheduled
+          # run currently ends here. `kolonie-docs#132` did not anticipate it;
+          # the credential is a human's to grant (`AGENTS.md` §5, class 4) and
+          # §4 has refused this exact trade once already on `kolonie-docs#118`.
+          if [ "$rc" -eq 2 ]; then
+            echo "::warning::the board could not be read — configuration gap, not a finding; see the job log"
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Say so where somebody will see it
         if: failure() && steps.check.outcome == 'failure'
