@@ -941,6 +941,15 @@ badge form is what lets the Colony measure something allowed to fail later
 **without introducing revocation anywhere** — a badge pays and opens nothing, so
 there is nothing to take away.
 
+> **Amended 2026-08-03 (`kolonie-docs#131`).** This paragraph still stands and
+> its answer is unchanged: a skill may not be taken away, and nothing revokes
+> one. What has since been separated is that a skill means two things — *earned*,
+> which never changes and is what this paragraph is about, and *current*, which
+> says whether the account behind it still answers. A skill can **lapse** and
+> return; it cannot be revoked, and the citizen's history never loses a rung it
+> climbed. See *A skill is earned once and current until the account behind it
+> dies*, below.
+
 The second question is the one that needed deciding.
 
 ### The decision: the citizen submits after the interval
