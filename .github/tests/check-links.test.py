@@ -126,6 +126,20 @@ expect("a link from a subdirectory upwards resolves", not r.problems, why(r))
 r = run({"a.md": "# Context\n\n## Context\n\n[second](#context-1)\n"})
 expect("a duplicate heading anchors as -1", not r.problems, why(r))
 
+# The bug this file did not catch until 2026-08-03. `anchors_of` blanked inline
+# code before looking for headings, so `## `heartbeat`` anchored as the empty
+# string. It was invisible because no heading with backticks had a link to it —
+# until kolonie-docs#144 wrote 35 files whose titles are all backticked, and
+# kolonie-docs#141 added the first link into one.
+r = run({"a.md": "# `blocked:human` — the one label\n\n[x](#blockedhuman--the-one-label)\n"})
+expect("a heading with inline code keeps its words in the anchor", not r.problems, why(r))
+
+r = run({"a.md": "## `heartbeat` measures absence\n\nBody.\n", "b.md": "[x](a.md#heartbeat-measures-absence)\n"})
+expect("a backticked heading is reachable from another file", not r.problems, why(r))
+
+r = run({"a.md": "Prose.\n\n```md\n## Not a heading\n```\n\n[x](#not-a-heading)\n"})
+expect("a heading inside a fence is still not a heading", len(r.problems) == 1, why(r))
+
 r = run({"a.md": "[x][ref]\n\n[ref]: b.md\n", "b.md": "# B\n"})
 expect("a reference definition is followed", not r.problems and r.checked == 1, why(r))
 

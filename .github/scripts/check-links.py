@@ -118,7 +118,11 @@ def anchors_of(text: str) -> set[str]:
     """
     seen: dict[str, int] = {}
     out: set[str] = set()
-    for _, heading in HEADING.findall(strip_code(text)):
+    # Fences only, never inline code. A heading is very often `## `some-task``,
+    # and blanking the backticks here would anchor it as the empty string —
+    # which is what this did until 2026-08-03, silently, because the only file
+    # with such a heading had nothing linking to it yet (`kolonie-docs#141`).
+    for _, heading in HEADING.findall(strip_fences(text)):
         base = slugify(heading)
         if not base:
             continue
@@ -126,6 +130,26 @@ def anchors_of(text: str) -> set[str]:
         seen[base] = n + 1
         out.add(base if n == 0 else f"{base}-{n}")
     return out
+
+
+def strip_fences(text: str) -> str:
+    """Blank out fenced code blocks, keeping line numbering. Inline code stays."""
+    out: list[str] = []
+    fence: str | None = None
+    for line in text.split("\n"):
+        if fence is None:
+            m = FENCE.match(line)
+            if m:
+                fence = m.group(1)[0] * 3
+                out.append("")
+                continue
+        else:
+            if line.strip().startswith(fence):
+                fence = None
+            out.append("")
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def strip_code(text: str) -> str:

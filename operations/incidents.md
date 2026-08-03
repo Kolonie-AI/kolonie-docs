@@ -417,6 +417,14 @@ it afterwards.
 everything downstream treats as true. Here it only parked work, which is why it
 survived so long.
 
+**Closed on 2026-08-03 by `kolonie-docs#141`.** What was missing was not care but
+a definition: `blocked:human` meant *"somebody thought so once"*, and nothing a
+reader could hold the label against. `AGENTS.md` §5 now carries a closed list of
+six classes, so the label is checkable, a wrong one is visibly wrong rather than
+inherited, and the default flipped from *ask when unsure* to *proceed unless it
+is on the list*. The label was re-checked against every open issue carrying it in
+the same breath, which is the step that was missing here.
+
 ## 2026-07-28 — `kolonie-docs` published its origin address in history
 
 Three of the repository's 39 commits carried the VPS origin address — removed from

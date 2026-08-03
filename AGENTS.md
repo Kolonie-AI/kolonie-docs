@@ -327,6 +327,61 @@ three repositories, so one query spans the project.
 open decision), `decision` (needs an architectural decision recorded before work
 starts), plus the GitHub defaults `bug` and `documentation`.
 
+### `blocked:human` — the one label that gates autonomy
+
+**An issue is `blocked:human` if and only if it touches one of these six classes.
+Everything else is an agent's to finish.** That direction matters more than the
+list: the default is *proceed*, and the list is short enough to hold in mind
+while you read an issue.
+
+| | The class | A real issue in it |
+|---|---|---|
+| 1 | **Money that actually moves** — the treasury, a real payment, a price the Colony charges or pays | `kolonie-docs#128` — one billion at genesis and the bootstrap that funds it |
+| 2 | **Governance, the red lines, or `MANIFEST.md`** — anything that changes what the Colony *is* rather than what it does | `kolonie-docs#129` — who signs the Treasury, who inherits it, who issues the token |
+| 3 | **Legal form and contracts** — the entity, its jurisdiction, anything signed | `kolonie-platform#222` — the payout leg, which `#129` sequences legal advice under VARA to |
+| 4 | **A new external account or credential** — signing up somewhere, holding a key, choosing a provider | `kolonie-infra#69` — an uptime service off the VPS, which somebody has to open an account with |
+| 5 | **Anything irreversible** — deleting data, force-pushing, an erasure, taking a service down | `kolonie-platform#91` — `eraseAgent`, which burns a balance and deletes a citizen |
+| 6 | **Priority** — setting `p1` or `p2` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
+
+**Class 5 is about *running* it, not about *building* it, and the example is
+chosen to show the difference.** `kolonie-platform#91` shipped `eraseAgent` and
+was never `blocked:human`: writing the code path that deletes a citizen is
+ordinary work with tests. Pressing it against a real citizen's row is not. The
+same split holds for a migration, a force-push and a deploy that takes something
+down — the agent writes it, and a human is the one who cannot undo it.
+
+**Class 6 is already settled and is quoted in `inbound-triage.yml`:** *"`p1` and
+`p2` encode what the Colony is currently trying to achieve, which a contributor
+has no way to know and a workflow has no way to compute."*
+
+**An issue that touches none of the six is not `blocked:human`, whatever it costs
+and however large it is.** Size is not on the list, and neither is difficulty,
+risk or how much you would like a second opinion. A label that means *"this
+looks big"* stops meaning *"a human must decide this"* within a month, and then
+the pipeline has no way to tell the two apart.
+
+#### Why a closed list, and why it is checked rather than felt
+
+`operations/orchestration.md` carried the definition until 2026-08-03 and it read
+*"creating an external account, making a legal decision, or approving a sensitive
+change."* The first two are checkable. **`sensitive` is exactly the judgement an
+agent should not be making about its own work** — it is unfalsifiable, so a wrong
+label cannot be argued with, only inherited. A finite list is answered yes or no,
+and when it is wrong the disagreement is about membership rather than about
+taste.
+
+**The failure has already happened**, and `operations/incidents.md` records it:
+the `blocked:human` on `kolonie-infra#18` had been copied from `#19`, where a
+human really did have to sign up for hCaptcha, and nothing re-checked it
+afterwards. It only parked work, because a person was reading every issue. Take
+the person out and a wrong `blocked:human` costs the task permanently — and the
+mirror-image error, a **missing** one, is an agent quietly taking a decision that
+was not its to take.
+
+**So the label is re-checked on the issue rather than trusted from its history.**
+If you find one that does not match a class, remove it and say why in a comment.
+An inherited label is not evidence.
+
 **There is no `ready-to-build` label, and there is nothing to reintroduce it
 for.** It existed before status moved onto the board and was deleted with the
 other status labels; "this can be picked up now" is the **Ready** column, per §4.

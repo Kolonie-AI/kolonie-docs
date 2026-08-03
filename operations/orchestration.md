@@ -136,7 +136,9 @@ Before starting the next phase:
 
 ## Blocked on Human Action
 
-Some issues cannot proceed without a human doing something first: creating an external account, making a legal decision, or approving a sensitive change.
+Some issues cannot proceed without a human doing something first.
+
+**Which ones is defined in [`AGENTS.md` §5](../AGENTS.md#blockedhuman--the-one-label-that-gates-autonomy), as a closed list of six classes, and it is not restated here.** This document held its own prose until 2026-08-03 and the wording was *"creating an external account, making a legal decision, or approving a sensitive change"* — `sensitive` being exactly the judgement an agent should not make about its own work (`kolonie-docs#141`). The same rule as everywhere else in this repository: `AGENTS.md` holds the definition, and every other document links to it.
 
 The label `blocked:human` marks these issues across all repos. It works as a process convention, not a technical gate:
 
