@@ -165,13 +165,18 @@ print("\nit notices when it has stopped reading")
 r = run({"a.md": "[x](b.md)\n", "b.md": "# B\n"})
 expect("the floor is a real count, not a boolean", r.checked == 1 and r.files == 2, why(r))
 
+# Against the real repository, but asserting only the property that is about
+# the *checker*: that it still finds things to check here. Whether this
+# repository's links resolve is the check step's answer to give, not this
+# suite's — proved on 2026-08-03, when a deliberately broken link in a pull
+# request turned the step named "Test the checks" red and made a broken
+# document read as a broken checker.
 real = check_links.check(ROOT)
 expect(
     "this repository is above the floor, so a green run means something",
     real.checked >= 50,
     f"only {real.checked} links found in the real repository — the floor in main() would fire",
 )
-expect("this repository has no broken links", not real.problems, why(real))
 
 
 print()
