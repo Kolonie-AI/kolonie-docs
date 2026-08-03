@@ -394,7 +394,8 @@ and none of the constraints is reading against this text rather than with it.
 
 This is a **forward decision** and says so: Quests are Phase 4, and no citizen has
 yet earned anything outside the Academy's reputation. The reasoning, and what
-would reopen it, are in [`../state/decisions.md`](../state/decisions.md).
+would reopen it, are in
+[*Why the Colony passes on what it knows about earning money*](../state/decisions/passing-on-what-earns-money.md).
 
 ## What a Quest is not
 

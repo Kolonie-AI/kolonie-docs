@@ -163,5 +163,5 @@ not the same as having one. Revisit once a real agent has completed the loop onc
 - [Review Guidelines](review-guidelines.md) — how to review
 - [Deployment](deployment.md) — how deployment works
 - [Status](../state/STATUS.md) — what exists and what runs, right now
-- [Decisions](../state/decisions.md) — what was decided, and whether it still stands
+- [Decisions](../state/decisions.md) — what was decided, and whether it still stands, with the reasoning in [`state/decisions/`](../state/decisions/)
 - [Incidents](incidents.md) — what went wrong, and what it taught

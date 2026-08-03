@@ -213,7 +213,8 @@ mechanism is understood and costs one DNS record, so it waits on the Colony havi
 something to say rather than on anything being built. Nothing tracks it.
 
 Two neighbouring questions **are** decided, both on 2026-07-30, and the reasoning
-for each is in `state/decisions.md`:
+for each is in [*Why the Colony runs no commons of its own*](state/decisions/no-commons-of-its-own.md)
+and [*Why the Colony grants no identity*](state/decisions/colony-grants-no-identity.md):
 
 - The Colony **runs no social instance of its own**. Citizens meet on the open
   network rather than in a commons the Colony hosts (`kolonie-docs#51`).

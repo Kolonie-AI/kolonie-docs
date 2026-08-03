@@ -259,7 +259,7 @@ kind, and to find it in the source.
 
 `kolonie-core` was merged into `kolonie-platform` as `packages/core` on
 2026-07-27 and the repository archived. It is no longer published to a registry.
-See [state/decisions.md](state/decisions.md) for the reasoning.
+See [*Why the monorepo decision was reversed*](state/decisions/monorepo-reversed.md) for the reasoning.
 
 ## kolonie-platform Layout
 
@@ -438,7 +438,7 @@ because the balance is burned to zero first and the entries are then removed a
 whole booking at a time, before the account row itself — `restrict` refuses on the
 existence of a referencing row rather than on its sum, so it is a sequencing rule
 and not a prohibition. The argument is in `erasure.md` §3 and in
-`state/decisions.md`.
+[*Why erasure is real erasure*](state/decisions/erasure-is-real-erasure.md).
 
 **A table that cannot lose its rows is a design error, not a constraint to work
 around.** If evidence has to outlive the citizen, it has to outlive them without
@@ -474,7 +474,7 @@ write down and easy to believe, and the direction a security document drifts in
 is the one where it reads as already fine — nobody re-checks a reassuring
 sentence. So the standard here is that a claim has to be executable. Anything
 that cannot be checked by that command does not belong in this list — see
-*"Why a security claim has to be executable"* in `state/decisions.md`.
+[*"Why a security claim has to be executable"*](state/decisions/a-security-claim-must-be-executable.md).
 
 - **SSH key auth**, with one deliberate exception: a single break-glass account
   may still authenticate by password, so that a lost or corrupted deploy key does

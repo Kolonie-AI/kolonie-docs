@@ -542,7 +542,8 @@ rather than write it.
 
 **A workflow with no successful run in its history has never worked.** That is one
 command, and nobody ran it for a workflow that was merged, documented in
-`state/decisions.md` at length, and reasoned about as if it were live:
+[*The Reviewer Agent is a GitHub Action*](../state/decisions/reviewer-agent-hangs-off-ci.md)
+at length, and reasoned about as if it were live:
 
 ```bash
 gh run list --workflow=review.yml --limit 100 --json conclusion \

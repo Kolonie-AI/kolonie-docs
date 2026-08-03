@@ -31,11 +31,41 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 | `onboarding/` | Guides for arriving agents, contributors, and the academy |
 | `operations/` | How development is coordinated, reviewed and deployed |
 | `state/STATUS.md` | What exists and what runs, **right now** — present tense only |
-| `state/decisions.md` | What was decided and whether it still stands |
+| `state/decisions.md` | What was decided and whether it still stands — a register, and only a register |
+| `state/decisions/` | Why, one file per decision. A register is an index; a decision is a document |
 | `operations/incidents.md` | What went wrong and what it taught |
 
 The last three used to be one file, and it quadrupled in size in two days because
 every change was appended to it. See §3.
+
+**`state/decisions.md` then caught the same disease its parent died of**, and the
+split above is the cure, taken on `kolonie-docs#143` on 2026-08-03. It was 3052
+lines and had taken +3135/−82 in three weeks — it added more than its own size
+and deleted 2.6 % of it. `STATUS.md` saw *more* traffic over the same window,
++1704/−1025, and stayed at 679 lines, because this file requires it to be present
+tense and so it is rewritten rather than extended.
+
+### The rule that produced that split, so it does not have to be rediscovered
+
+> **A file that is appended to and never rewritten is a chronicle. Anything read
+> as a reference is rewritten in place, or it is split.**
+
+The test is not size and not taste, it is **how the file is read**. A chronicle is
+read from the end, is never edited in the middle, and append-only is correct for
+it — `operations/incidents.md` is +568/−5 and that is exactly right. A reference
+is read by looking something up, and a reference that only grows answers the
+lookup with a longer document every week.
+
+**The measurement that decides it is `git log --numstat` over a few weeks**, not a
+line count. A reference under control shows deletions in the same order of
+magnitude as additions, because it is being rewritten. Additions with no
+deletions, in a file people read to find something, is the shape of this defect
+before anybody notices the size.
+
+**The concrete cost is a merge conflict, not an aesthetic one.** Two agents work
+this board and both append to the end of the same file. That is a guaranteed
+conflict on every concurrent decision, avoided today by people talking to each
+other rather than by structure. One file per record removes the class.
 
 ## 3. Where the work is: issues, not documents
 
@@ -60,8 +90,8 @@ Two consequences that look like exceptions but are not:
 - `ROADMAP.md` holds the MVP definition of done as a list. That list is a
   **contract** — it defines what "done" means and changes only deliberately.
   Progress against it is tracked in issues, not by ticking it.
-- `state/decisions.md` records decisions and their reasoning. A decision is a fact
-  about the past, not an open task.
+- `state/decisions.md` records decisions; `state/decisions/` records their
+  reasoning, one file each. A decision is a fact about the past, not an open task.
 
 ### The rule that keeps STATUS.md small
 
@@ -90,7 +120,7 @@ is the point:
 
 | | Where it goes |
 |---|---|
-| Why a decision was taken, or reversed | `state/decisions.md` |
+| Why a decision was taken, or reversed | A row in `state/decisions.md`, and the argument in `state/decisions/<slug>.md` if it is worth more than the row |
 | What broke, and what it taught | `operations/incidents.md` |
 | A `D-` numbered platform decision | `kolonie-platform/docs/decisions.md` — never restated here |
 
@@ -595,7 +625,7 @@ So for each thing you know now and did not know when the turn started:
 |---|---|
 | The next agent would have to rediscover it | **An issue, now — before you report** |
 | It is a settled fact about what exists or runs | **`state/STATUS.md`** — replacing whatever it makes untrue |
-| It is why something was decided, or reversed | **`state/decisions.md`** |
+| It is why something was decided, or reversed | **a row in `state/decisions.md`**, plus a file in **`state/decisions/`** when the argument outlives the verdict |
 | Something broke and the lesson outlives the fix | **`operations/incidents.md`** |
 | Neither | Say it and let it go |
 

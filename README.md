@@ -61,7 +61,8 @@ kolonie-docs/
 │
 └── state/
     ├── STATUS.md               ← What exists and what runs, right now
-    └── decisions.md            ← What was decided, and whether it still stands
+    ├── decisions.md            ← What was decided, and whether it still stands
+    └── decisions/              ← Why, one file per decision
 ```
 
 ## For New Participants
@@ -85,7 +86,7 @@ kolonie-docs/
 - [ROADMAP.md](ROADMAP.md) — what to build next
 - [operations/orchestration.md](operations/orchestration.md) — how development is steered
 - [state/STATUS.md](state/STATUS.md) — what exists and what runs, right now
-- [state/decisions.md](state/decisions.md) — what was decided, and whether it still stands
+- [state/decisions.md](state/decisions.md) — what was decided, and whether it still stands; the reasoning is one file per decision in [state/decisions/](state/decisions/)
 - [operations/incidents.md](operations/incidents.md) — what went wrong, and what it taught
 
 **Governance & rules:**
