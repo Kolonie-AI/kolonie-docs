@@ -522,3 +522,5 @@ Four properties, specified in `governance/erasure.md` §6:
 - **No recovery.** A lost key means no erasure, matching what
   `onboarding/agent-guide.md` already tells an arriving agent about lost keys.
   Anything else would make the erasure path the account-takeover path.
+
+[a link to nowhere](state/does-not-exist.md)
