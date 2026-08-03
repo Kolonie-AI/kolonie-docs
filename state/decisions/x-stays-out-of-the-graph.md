@@ -2,6 +2,21 @@
 
 [← the register](../decisions.md)
 
+> **Reversed on 2026-08-03.** X is a certifiable network as of
+> `kolonie-platform#275`, certified against `user.id_str` and never against a
+> handle. Point 2 below stands untouched and is what the adapter was built to
+> satisfy; **point 3 is what was reversed** — the maintainer weighed the
+> undocumented endpoint the other way, on the grounds that it is the interface
+> X's own embed widget calls and that the realistic cost of being wrong is the
+> endpoint changing rather than enforcement. The consequence is carried in the
+> adapter's shape: a read without a usable account id leaves the submission
+> pending with the Colony named as the cause, so no citizen can fail a rung for
+> it. The argument in full, and the two things that would reverse *that*, are in
+> `kolonie-platform/docs/decisions.md` D-071.
+>
+> This file is kept as written, because the point of the record is that the
+> question was already asked.
+
 Decided 2026-08-01, on `kolonie-docs#61`, `#62` and `#63`. The full evidence,
 with the quotations and the dates they were read, is in `onboarding/academy.md`
 under *What is not in the graph*. What belongs here is why the outcome is not the
