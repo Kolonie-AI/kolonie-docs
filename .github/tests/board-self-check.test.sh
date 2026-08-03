@@ -25,6 +25,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
+# The stub has no index and no latency, so the visibility wait has nothing to
+# wait for. `existing_delay` is how a case asks for some anyway.
+export VISIBILITY_POLL=0 VISIBILITY_ATTEMPTS=4
 
 # The stub. Every case writes the answers it wants into $WORK before running.
 mkdir -p "$WORK/bin"
@@ -41,7 +44,13 @@ case "$1 $2" in
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
   "issue list")
-    if [[ "$*" == *"--label area:docs"* ]]; then cat "$GH_FIXTURES/existing" 2>/dev/null
+    if [[ "$*" == *"--label area:docs"* ]]; then
+      # `existing_delay` is how many of these answer empty before `existing`
+      # starts coming back — the propagation `await_visible` waits out.
+      n=$(cat "$GH_FIXTURES/.calls" 2>/dev/null || echo 0); n=$((n + 1))
+      echo "$n" > "$GH_FIXTURES/.calls"
+      d=$(cat "$GH_FIXTURES/existing_delay" 2>/dev/null || echo 0)
+      [ "$n" -gt "$d" ] && cat "$GH_FIXTURES/existing" 2>/dev/null
     else cat "$GH_FIXTURES/issues" 2>/dev/null; fi ;;
   *) : ;;
 esac
@@ -169,6 +178,21 @@ printf '5a — x\n' > "$WORK/report"
 bash "$SCRIPT" report "$WORK/report" >/dev/null
 expect "the lookup does not go through the search index" \
   "$(grep -q 'in:title' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# And dropping `--search` was not enough, which is what `kolonie-docs#150`
+# measured: no listing shows a just-filed issue either. So the filing run waits
+# for its own issue rather than leaving the next run to race it.
+setup; echo '2' > "$GH_FIXTURES/existing_delay"; echo '77' > "$GH_FIXTURES/existing"
+printf '5a — x\n' > "$WORK/report"
+out=$(bash "$SCRIPT" report "$WORK/report")
+expect "a filed issue is waited for until it is findable" \
+  "$([[ "$out" == *"findable as #77"* ]] && echo yes || echo no)" "$out"
+
+setup; echo '99' > "$GH_FIXTURES/existing_delay"; echo '77' > "$GH_FIXTURES/existing"
+printf '5a — x\n' > "$WORK/report"
+out=$(bash "$SCRIPT" report "$WORK/report")
+expect "and the wait is bounded and loud rather than a hang" \
+  "$([[ "$out" == *"::warning::"* ]] && echo yes || echo no)" "$out"
 
 echo
 echo "it never writes to the board"

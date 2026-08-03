@@ -47,6 +47,15 @@ on:
         required: false
         default: false
 
+# `board-self-check.sh` waits for its own issue to become findable before it
+# exits (`kolonie-docs#150`); this stops a `break_it` dispatch from starting
+# while the scheduled run is inside that wait — which is exactly the pair of
+# runs `#132`'s rehearsal made, and how the duplicate was found. Queued, never
+# cancelled: a cancelled run is one that filed and then did not wait.
+concurrency:
+  group: board-self-check-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   # To say so where somebody will see it. Nothing here writes to the board, and

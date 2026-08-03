@@ -30,13 +30,23 @@ trap 'rm -rf "$WORK"' EXIT
 
 export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
+# The stub has no index and no latency, so the wait has nothing to wait for.
+export VISIBILITY_POLL=0 VISIBILITY_ATTEMPTS=4
 
 mkdir -p "$WORK/bin"
+# `existing_delay` is how many `issue list` calls answer empty before `existing`
+# starts being returned — the propagation the script has to wait out, which is
+# the one thing a stub can model about an eventually consistent index.
 cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
 case "$1 $2" in
-  "issue list") cat "$GH_FIXTURES/existing" 2>/dev/null ;;
+  "issue list")
+    n=$(cat "$GH_FIXTURES/.calls" 2>/dev/null || echo 0); n=$((n + 1))
+    echo "$n" > "$GH_FIXTURES/.calls"
+    d=$(cat "$GH_FIXTURES/existing_delay" 2>/dev/null || echo 0)
+    [ "$n" -gt "$d" ] && cat "$GH_FIXTURES/existing" 2>/dev/null
+    ;;
   *) : ;;
 esac
 exit 0
@@ -86,6 +96,39 @@ expect "when the copies agree again, the issue is closed" \
 setup
 bash "$SCRIPT" resolve >/dev/null
 expect "and closing nothing is not an error" "$(logged 'issue close' && echo no || echo yes)"
+
+echo
+echo "a filed issue is waited for, because no listing shows it straight away"
+
+# The half `#150` did not anticipate: every way of listing issues is behind, so
+# the duplicate is prevented by the *filing* run refusing to exit while its own
+# issue is still invisible — not by a better lookup.
+setup; echo '2' > "$GH_FIXTURES/existing_delay"; echo '147' > "$GH_FIXTURES/existing"
+out=$(bash "$SCRIPT" report "$WORK/report"); rc=$?
+expect "with nothing findable, it files" "$(logged 'issue create' && echo yes || echo no)"
+expect "and does not return until the issue is findable" \
+  "$([[ "$out" == *"findable as #147"* ]] && echo yes || echo no)" "$out"
+expect "which took more than one look" \
+  "$([ "$(grep -c 'issue list' "$GH_LOG")" -gt 2 ] && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and it is not an error" "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc"
+
+# Bounded, and loud. A guard that quietly gave up would be this issue again.
+setup; echo '99' > "$GH_FIXTURES/existing_delay"; echo '147' > "$GH_FIXTURES/existing"
+out=$(bash "$SCRIPT" report "$WORK/report"); rc=$?
+expect "it gives up rather than hanging a daily workflow" \
+  "$([ "$(grep -c 'issue list' "$GH_LOG")" -le 6 ] && echo yes || echo no)" "$(grep -c 'issue list' "$GH_LOG") looks"
+expect "and says so on the run summary" \
+  "$([[ "$out" == *"::warning::"* ]] && echo yes || echo no)" "$out"
+expect "and names the consequence" \
+  "$([[ "$out" == *"may file a duplicate"* ]] && echo yes || echo no)" "$out"
+
+# The wait belongs to the filing branch alone. Commenting on an issue that is
+# already there has nothing to wait for, and a wait there would be 60 seconds
+# added to every run that finds one.
+setup; echo '147' > "$GH_FIXTURES/existing"
+bash "$SCRIPT" report "$WORK/report" >/dev/null
+expect "commenting does not wait" \
+  "$([ "$(grep -c 'issue list' "$GH_LOG")" -eq 1 ] && echo yes || echo no)" "$(cat "$GH_LOG")"
 
 echo
 echo "the guard #150 was opened for"

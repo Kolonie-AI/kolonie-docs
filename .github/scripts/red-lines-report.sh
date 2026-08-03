@@ -8,12 +8,11 @@
 # ## Why this is a file and not eight lines of YAML
 #
 # It was eight lines of YAML, and they carried the defect `kolonie-docs#150`
-# reports: the reuse lookup went through `--search "… in:title"`. The fix is one
-# line. **Moving it here is what makes the fix testable**, which is the half of
-# `#150` that keeps the weaker form from coming back — a stub can run a script,
-# and cannot run a `run:` block. `board-self-check.sh` next door is the same
-# shape for the same reason, and `.github/tests/red-lines-report.test.sh` is the
-# suite this exists to be exercised by.
+# reports: a second run filed a duplicate instead of commenting. **Moving it here
+# is what makes the fix testable** — a stubbed `gh` can run a script and cannot
+# run a `run:` block. `board-self-check.sh` next door is the same shape for the
+# same reason, and `.github/tests/red-lines-report.test.sh` is the suite this
+# exists to be exercised by.
 #
 # ## What it must never do
 #
@@ -25,26 +24,65 @@ set -uo pipefail
 
 TITLE="The copies of the red lines disagree"
 
+# How long to wait for GitHub to admit an issue exists. See `await_visible`.
+# Measured at 8 seconds on 2026-08-03, so 30 attempts two seconds apart is that
+# with room. Counted in attempts rather than elapsed seconds so the tests can set
+# the interval to zero — a stub has no latency to wait out — without the bound
+# becoming unreachable.
+VISIBILITY_ATTEMPTS=${VISIBILITY_ATTEMPTS:-30}
+VISIBILITY_POLL=${VISIBILITY_POLL:-2}
+
 # --- the reuse lookup --------------------------------------------------------
-# **Listed and filtered here, never `--search`.** `--search "… in:title"` goes
-# through GitHub's search index, which is eventually consistent: an issue filed a
-# moment ago is not findable yet, so the guard passes and a second issue is
-# opened (`kolonie-docs#150`). It was measured next door — the `#132` rehearsal
-# on 2026-08-03 filed `#147`, and the very next call filed `#148` instead of
-# commenting on it.
+# **Not `--search`.** `--search "… in:title"` goes through GitHub's search index,
+# which is eventually consistent, and that is the defect `#150` was opened for.
 #
-# The window here is narrow, because this workflow runs daily and its push and
-# pull_request triggers do not report at all. Narrow is not closed: a manual
-# dispatch beside the scheduled run is two calls inside one indexing window, and
-# every duplicate makes the next lookup ambiguous.
+# It is also not the whole defect, which is the part `#150` inherited from next
+# door and got wrong. `board-self-check.sh` says a plain `gh issue list` "reads
+# the REST issues endpoint, which is immediately consistent". **Measured on
+# 2026-08-03, against this repository, it is not.** An issue created and then
+# looked for straight away is missing from all three of:
 #
-# `gh issue list` without `--search` reads the REST issues endpoint, which is
-# immediately consistent. The label narrows it — this workflow files with `p1`
-# and `area:governance` — and the title is matched exactly here rather than by a
-# search engine's idea of a title.
+#   gh issue list --label area:governance      (GraphQL)      MISS
+#   gh api repos/…/issues?labels=…             (REST)         MISS
+#   gh api repos/…/issues                      (REST, plain)  MISS
+#
+# and became findable 8 seconds later. So there is no listing to switch to. Every
+# way of asking *which issues exist* is behind, and a guard built on any of them
+# is the same guard with a shorter window.
+#
+# The listing is still the right one to ask — the label narrows it and the title
+# is compared here rather than by a search engine's idea of a title — but it
+# cannot be trusted alone, which is what `await_visible` is for.
 existing_issue() {
   gh issue list --repo "$GITHUB_REPOSITORY" --state open --label area:governance --limit 100 \
     --json number,title --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty"
+}
+
+# --- and the part that closes the window -------------------------------------
+# **A run does not finish until its own issue is findable.** The duplicate needs
+# two things: run A files, and run B looks before A's issue has propagated. The
+# lookup cannot fix that, because B's lookup is honest — the issue genuinely is
+# not in the index yet. What can fix it is A refusing to exit while it is still
+# invisible, which turns "eventually consistent" into a wait that A pays rather
+# than a duplicate B files.
+#
+# Bounded, because a hung run holds a daily workflow, and **loud** if the bound
+# is reached: `::warning` puts it on the run summary. Silence there would recreate
+# exactly the failure this issue is about — a guard that stopped working and
+# nothing said so.
+await_visible() {
+  local attempt=0 seen
+  while [ "$attempt" -lt "$VISIBILITY_ATTEMPTS" ]; do
+    seen=$(existing_issue)
+    if [ -n "$seen" ]; then
+      echo "findable as #$seen after $((attempt * VISIBILITY_POLL))s"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep "$VISIBILITY_POLL"
+  done
+  echo "::warning::the issue just filed was still not findable after $((VISIBILITY_ATTEMPTS * VISIBILITY_POLL))s — the next run may file a duplicate"
+  return 1
 }
 
 cmd_report() {
@@ -59,6 +97,7 @@ cmd_report() {
   else
     gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
       --label p1 --label area:governance --body "$body"
+    await_visible
   fi
 }
 

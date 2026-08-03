@@ -204,12 +204,50 @@ cmd_check() {
 # The stub-based test could not have caught it, because a stub has no index and
 # no latency. That is the argument for the rehearsal being a criterion at all.
 #
-# `gh issue list` without `--search` reads the REST issues endpoint, which is
-# immediately consistent. The label narrows it; the title is matched exactly here
-# rather than by a search engine's idea of a title.
+# **This file used to claim `gh issue list` without `--search` "reads the REST
+# issues endpoint, which is immediately consistent". Measured on 2026-08-03, it
+# does not.** An issue created and then looked for straight away was missing from
+# the GraphQL listing this function makes, from `gh api repos/…/issues?labels=…`,
+# and from the plain REST listing with no label at all — and became findable 8
+# seconds later. Dropping `--search` narrowed the window and did not close it, so
+# the guard `#132` asked to be proved was still a race. `kolonie-docs#150` is
+# where that was found, in the copy of this shape next door.
+#
+# The listing is still the right thing to ask: the label narrows it, and the
+# title is compared here rather than by a search engine's idea of a title. What
+# it cannot be is the whole guard — see `await_visible`.
 existing_issue() {
   gh issue list --repo "$GITHUB_REPOSITORY" --state open --label area:docs --limit 100 \
     --json number,title --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty"
+}
+
+# --- and the part that closes the window -------------------------------------
+# **A run does not finish until its own issue is findable.** The duplicate needs
+# run A to file and run B to look before A's issue has propagated. B's lookup is
+# honest — the issue really is not in the index yet — so the fix cannot live in
+# the lookup. It lives in A refusing to exit while it is still invisible, which
+# turns an eventually consistent index into a wait A pays rather than a duplicate
+# B files.
+#
+# Bounded, because a hung run holds a daily workflow, and loud if the bound is
+# reached. Counted in attempts rather than seconds so the tests can set the
+# interval to zero without the bound becoming unreachable.
+VISIBILITY_ATTEMPTS=${VISIBILITY_ATTEMPTS:-30}
+VISIBILITY_POLL=${VISIBILITY_POLL:-2}
+
+await_visible() {
+  local attempt=0 seen
+  while [ "$attempt" -lt "$VISIBILITY_ATTEMPTS" ]; do
+    seen=$(existing_issue)
+    if [ -n "$seen" ]; then
+      echo "findable as #$seen after $((attempt * VISIBILITY_POLL))s"
+      return 0
+    fi
+    attempt=$((attempt + 1))
+    sleep "$VISIBILITY_POLL"
+  done
+  echo "::warning::the issue just filed was still not findable after $((VISIBILITY_ATTEMPTS * VISIBILITY_POLL))s — the next run may file a duplicate"
+  return 1
 }
 
 cmd_report() {
@@ -226,6 +264,7 @@ cmd_report() {
   else
     gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
       --label p1 --label area:docs --body "$body"
+    await_visible
   fi
 }
 

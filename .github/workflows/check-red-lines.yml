@@ -91,6 +91,18 @@ on:
     - cron: '0 4 * * *'
   workflow_dispatch:
 
+# The second half of `#150`'s fix, and the cheaper half. `red-lines-report.sh`
+# waits for its own issue to become findable before it exits; this stops a
+# manual dispatch from starting *while* the scheduled run is inside that wait,
+# which is the one window the wait cannot cover from inside. Queued, never
+# cancelled: a cancelled run is one that filed and then did not wait.
+#
+# Grouped by ref, so a pull request's own run is not held behind main's. Those
+# runs do not report at all.
+concurrency:
+  group: check-red-lines-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   # To file the divergence where somebody will see it. Nothing else here writes.
