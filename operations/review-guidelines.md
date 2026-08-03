@@ -50,10 +50,19 @@ repositories (`kolonie-docs#96`):
 |---|---|---|---|
 | `kolonie-platform` | yes | `format, lint, build, typecheck, test` | no |
 | `kolonie-website` | yes | `check` | no |
-| `kolonie-docs` | yes | none | no |
-| `kolonie-infra` | yes | none | no |
-| `kolonie-openclaw` | yes | none | no |
+| `kolonie-docs` | yes | `check` (since 2026-08-03) | no |
+| `kolonie-infra` | yes | `check` (since 2026-08-03) | no |
+| `kolonie-openclaw` | yes | `check` (since 2026-08-03) | no |
 | `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`, `kolonie-hermes`, `kolonie-kilo` | **no** | — | — |
+
+**The last three rows read `none` until 2026-08-03, and the reason was not the
+protection setting.** There was no check to require. `kolonie-docs#124` measured
+it: a pull request editing `ARCHITECTURE.md`, or `traefik/dynamic/routes.yml`, or
+`SKILL.md` in `kolonie-openclaw`, ran **nothing at all** — the workflows those
+repositories had were path-filtered to something narrower, so the checks list on
+an ordinary pull request was not empty but short enough to look deliberate. Each
+of the three now has a workflow named `CI` with no path filter, and its `check`
+job is required. What each one runs is in the workflow's own header.
 
 **Run it rather than reading the table**, and note the trap in doing so: on a
 repository with no protection, `gh api` answers `404 Branch not protected` and
@@ -81,9 +90,15 @@ So, precisely:
   position on whether skill repositories deserve less care — **the first citizen
   pull request against one is the signal to revisit it**, and whoever sees that
   pull request should say so.
-- **A red check blocks the merge in two repositories**, not in every repository
-  that has a CI workflow. `kolonie-docs` runs six workflows and requires none of
-  them; `kolonie-infra` runs five and requires none.
+- **A red check blocks the merge in five repositories** — every one that has
+  protection at all. That was **two** until 2026-08-03, and the sentence here
+  used to explain the gap as a configuration choice: *"`kolonie-docs` runs six
+  workflows and requires none of them."* That was true and it was the smaller
+  half of the truth. Those six workflows were path-filtered, so on an ordinary
+  pull request there was no check to require in the first place
+  (`kolonie-docs#124`). **A required check is worth exactly as much as the
+  workflow behind it runs**, and a table that records only the requirement
+  cannot show the difference.
 - **None of it binds an administrator.** `enforce_admins` is `false` everywhere,
   and **that is a decision rather than an oversight** (2026-08-01,
   `state/decisions.md`). Routine work goes straight to `main`, a required status
