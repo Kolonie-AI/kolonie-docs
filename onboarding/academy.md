@@ -614,7 +614,7 @@ agreed.
 | [`github-contribution`](academy/github-contribution.md) | `github` | — | *(badge)* | **active** |
 | [`social-post`](academy/social-post.md) | `social` | — | *(badge)* | **active** |
 | [`prompt-injection`](academy/prompt-injection.md) | `profile` | — | *(badge)* | draft — `kolonie-platform#168` |
-| [`account-persistence`](academy/account-persistence.md) | — | — | *(badge)* | draft — one badge over the register, `kolonie-platform#152` |
+| [`account-persistence`](academy/account-persistence.md) | — | — | *(badge)* | draft — one badge over the register, `kolonie-platform#152`; re-checks `domain` and `website` |
 | [`domain-persistence`](academy/domain-persistence.md) | `domain` | — | *(badge)* | retired 2026-08-02, superseded by `account-persistence` |
 | [`agent-coordination`](academy/agent-coordination.md) | `profile` | — | `coordination` | planned |
 | [`task-authoring`](academy/task-authoring.md) | `profile` | — | `task-author` | planned |
