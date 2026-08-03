@@ -1,0 +1,77 @@
+name: CI
+
+# The general slot. `kolonie-docs#124` measured that a pull request editing
+# `ARCHITECTURE.md` here ran **nothing** — `Check Red Lines` is path-filtered to
+# six files and `Rehearse` to `.github/**`, so most pull requests arrived with a
+# checks list that was short enough to look deliberate rather than empty.
+#
+# ## Why the name is exactly `CI`
+#
+# `review-pull-request.yml` is called by `on: workflow_run: workflows: [CI]`.
+# The name is the wiring: with it, the Reviewer Agent attaches to this
+# repository by a copy of the caller that already exists in `kolonie-website`,
+# with nothing to redesign. `#124` calls this the load-bearing detail and it is.
+#
+# ## Why these two checks and not something more impressive
+#
+# `#124`: *"a check that exists to satisfy a trigger is worse than no check,
+# because it makes the checks list look answered."* Both of these are things
+# somebody has run by hand here after an edit.
+#
+# **The link check** is this repository's characteristic breakage. It is a set of
+# documents that point at each other, and a link that stops resolving is invisible
+# to every reader who does not happen to click it. It found two on the day it was
+# written, both in `onboarding/academy.md`, both pointing at a heading whose
+# anchor carries two hyphens where the link wrote one.
+#
+# **The red lines, unconditionally.** `Check Red Lines` stays exactly as it is —
+# `#124` is explicit that this issue adds the general slot rather than replacing
+# the specific checks — and this job runs the same comparison with no path filter.
+#
+# **That second one couples this repository's CI to five others**, because the
+# copies it compares live in the skill repositories. A divergence introduced
+# somewhere else turns every pull request here red, including one that changes a
+# typo. That is a real cost and it was accepted deliberately in `#124`'s decision
+# table rather than overlooked: the red lines are the terms of citizenship, the
+# divergence is silent by construction, and a repository whose pull requests are
+# blocked until the copies agree is a repository that fixes them. **If that trade
+# is re-argued, it is re-argued against this paragraph** — the alternative on the
+# table was the link check alone.
+
+on:
+  push:
+    branches: [main]
+  # No path filter. That is the entire point of this workflow and it is an
+  # acceptance criterion of #124, not an oversight to be tidied up later.
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both checks are tested before either runs, which is `check-red-lines.yml`'s
+      # rule and `rehearse.yml`'s lesson before it: a check nobody verifies is a
+      # suite nobody runs with a shorter fuse. The link check needs it more than
+      # most — a parser bug there does not make it red, it makes it find nothing
+      # and pass.
+      - name: Test the checks
+        run: |
+          python3 .github/tests/check-links.test.py
+          python3 .github/tests/red-lines.test.py
+
+      - name: Every internal Markdown link resolves
+        run: python3 .github/scripts/check-links.py .
+
+      - name: The copies of the red lines still agree
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          bash .github/scripts/find-red-line-copies.sh "$RUNNER_TEMP/copies"
+          python3 .github/scripts/red-lines.py "$RUNNER_TEMP/copies"

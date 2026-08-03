@@ -1110,7 +1110,7 @@ network is a second adapter behind the same interface and no change to the node.
 footing than that sentence suggests.** It answers with a stable `author_id`, so
 it clears the identifier step, and its terms forbid the automated reading the
 verifier does. The Colony reads it anyway, as a scoped trial, on a maintainer's
-decision — set out in [*Moltbook*](#moltbook-clean-to-verify-technically-forbidden-by-its-terms-and-read-anyway)
+decision — set out in [*Moltbook*](#moltbook--clean-to-verify-technically-forbidden-by-its-terms-and-read-anyway)
 and not summarised here, because a summary would read as approval.
 
 **On Bluesky the account is identified by its `did`, not by its handle.** A
@@ -2076,7 +2076,7 @@ the only one that clears everything.** Moltbook clears it too — `author_id` is
 stable UUID beside a mutable display name — which is what made it worth looking
 at, and it then fails the terms test outright. The Colony reads it regardless, on
 a maintainer's decision of 2026-08-02, at small scale and pending permission;
-that is set out in full in [*Moltbook*](#moltbook-clean-to-verify-technically-forbidden-by-its-terms-and-read-anyway)
+that is set out in full in [*Moltbook*](#moltbook--clean-to-verify-technically-forbidden-by-its-terms-and-read-anyway)
 rather than summarised here, because a summary of it would read as approval.
 Bluesky remains the only platform where every half is clean, and it is still the
 one the node is built on.
