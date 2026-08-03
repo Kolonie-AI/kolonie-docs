@@ -172,19 +172,25 @@ rejected for the coin ledger. One record, or none.
 | **Done** | Issue closed |
 
 The board mostly maintains itself. GitHub's built-in workflows move items on close,
-on PR link and on merge, and add new issues from **five of the organisation's ten
-repositories**. **You move an item only when you change what is true** — finishing
-a spec (→ Ready), hitting a blocker (→ Blocked).
+on PR link and on merge, and add new issues from **five of the organisation's
+eleven repositories**. **You move an item only when you change what is true** —
+finishing a spec (→ Ready), hitting a blocker (→ Blocked).
 
-### Five repositories are covered, and five are not
+### Five repositories are covered, and six are not
 
-Measured 2026-08-02. Auto-add workflows exist for `kolonie-docs`,
+Measured 2026-08-03. Auto-add workflows exist for `kolonie-docs`,
 `kolonie-infra`, `kolonie-openclaw`, `kolonie-platform` and `kolonie-website`.
 They do not exist for `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`,
-`kolonie-hermes` and `kolonie-kilo` — and **cannot**: GitHub caps a project at five
-auto-add workflows, and all five are used.
+`kolonie-hermes`, `kolonie-kilo` and `kolonie-skill` — and **cannot**: GitHub caps
+a project at five auto-add workflows, and all five are used.
 
-**An issue opened in one of those five never reaches the board, and nothing says
+**The uncovered side is the side that grows.** It was five on 2026-08-02 and six
+the next day, because `kolonie-skill` (`kolonie-docs#135`) was created and the cap
+was already spent — so every skill repository the Colony adds from here arrives
+uncovered by construction. That is not an argument against adding them; it is the
+reason the check below is a measurement rather than this list.
+
+**An issue opened in one of those six never reaches the board, and nothing says
 so.** That is worse than a low priority. §3 makes the board the only record of
 status and §6 makes it the queue an arriving agent reads, so an issue that never
 arrives is not waiting — it is invisible, and the failure is silent by
@@ -202,7 +208,7 @@ gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<re
 **If a citizen opens one there, nothing will do it for them.** Query 6 in §6 is how
 that gets caught; run it when you run the others.
 
-The uncovered five are all skill repositories, which is the least bad five to lose
+The uncovered ones are all skill repositories, which is the least bad set to lose
 — they carry few issues, and the ones they do carry tend to be filed by whoever is
 already working the skill. That is a reason the situation is survivable, not a
 reason it is fine.

@@ -45,11 +45,13 @@ How many there are and which they are is the board's answer, not this file's —
 
 The whole picture, short:
 
-- **Nine repositories exist, are green, and are public** (2026-08-01) —
-  `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website`, and one
-  per agent platform: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
-  `kolonie-kilo`, `kolonie-antigravity`. `kolonie-core` was merged into the
-  platform and archived.
+- **Eleven repositories exist, are green, and are public** (2026-08-03) —
+  `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website`; one per
+  agent runtime: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
+  `kolonie-kilo`, `kolonie-antigravity`, `kolonie-codex`; and `kolonie-skill` for
+  every runtime without one of its own, which the six runtime skills are
+  adaptations of (`kolonie-docs#135`). `kolonie-core` was merged into the platform
+  and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp`, `challenge` and `console` all answer `/health` with 200
   and valid TLS. `db` answers 401 until a maintainer authenticates. `console` is
