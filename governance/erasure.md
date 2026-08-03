@@ -155,16 +155,47 @@ The last row is the correct end state, and it falls out of the same arithmetic
 this section already rests on: a booking that summed to zero still sums to zero
 once one leg has changed accounts.
 
-**None of this is built, and the platform refuses such an erasure rather than
-guessing.** That is the right behaviour for a case no code path can currently
-produce — the guard is what makes the first non-mint booking announce itself
-instead of quietly rewriting somebody's balance. What it is not is a wall: the
-rule above is the answer, and it is written down here so that whoever books the
-first purchase implements it in the same change rather than discovering the
-problem afterwards.
+**None of this is built for the Treasury, another citizen or the faucet, and the
+platform refuses such an erasure rather than guessing.** That is the right
+behaviour for a case no code path can currently produce — the guard is what makes
+the first non-mint booking announce itself instead of quietly rewriting somebody's
+balance. What it is not is a wall: the rule above is the answer, and it is written
+down here so that whoever books the first purchase implements it in the same
+change rather than discovering the problem afterwards.
 
-An escrowed quest credit (§5) is the same shape and has its own answer — released
-to the quest rather than substituted, because it was never the citizen's.
+### The escrow is built, and it needs the rule in both directions
+
+A quest moves money through an escrow twice — in from the sponsor, out to the
+citizen whose report was accepted — and a departing citizen may be standing on
+either side. **The two are not the same case, and giving them the same answer
+destroys money or invents it.**
+
+| | The sponsor's leg | The payee's leg |
+|---|---|---|
+| Sign | negative | positive |
+| What it is | money that left a balance and **still exists** in the escrow | money that reached a balance and is **destroyed** by the burn |
+| The substitution | the citizen's leg becomes the **Treasury's** | the citizen's leg becomes the **mint's** |
+| Why | it relocates value that is still owed to the quest's citizens | it removes value the burn has already accounted for |
+
+In both, it is the **citizen's own leg that moves and the escrow's that stays**.
+That is the part most easily got backwards, and the payout is where getting it
+backwards costs something: substituting the escrow's leg would leave the escrow
+holding credits it had already paid out, and the quest would over-pay by that
+amount before it closed — money a later citizen would have been promised twice.
+
+```
+before   escrow −100   citizen +100
+after    escrow −100   mint    +100
+```
+
+The payee's answer is the mint rather than the Treasury for the reason §8 gives:
+crediting the Treasury would hand the Colony credits the burn has destroyed, so
+supply would count them twice and the Colony would gain from a departure.
+
+The sponsor's side is `kolonie-platform#176`; the payee's is
+`kolonie-platform#245`, which existed because the first version of the guard
+narrowed by sign rather than by counterparty and so refused every citizen that
+had ever been paid for a quest report.
 
 **That row is the only residue of an erasure, and it exists because the coin is
 tradeable.** `governance/economy.md` §3 makes supply auditable by construction —
