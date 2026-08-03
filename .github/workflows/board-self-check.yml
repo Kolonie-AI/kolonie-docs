@@ -73,7 +73,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BREAK_IT: ${{ inputs.break_it }}
         run: |
-          set -o pipefail
+          # No pipeline, and the status is captured rather than allowed to
+          # propagate. Actions runs `run:` under `bash -e`, so `script | tee`
+          # with `pipefail` aborts the step on the script's own exit code before
+          # any line below can read it — which is how the first attempt at this
+          # turned a configuration gap into a red run (2026-08-03).
           if [ "${BREAK_IT:-false}" = "true" ]; then
             # Point 5a at a workflow name that cannot match. Nothing on the board
             # changes; the query simply comes back empty, which is one of the two
@@ -82,8 +86,10 @@ jobs:
               .github/scripts/board-self-check.sh
             echo "::warning::running with 5a deliberately broken — this is the rehearsal, not a real finding"
           fi
-          bash .github/scripts/board-self-check.sh check "$RUNNER_TEMP/report.md" | tee "$RUNNER_TEMP/out.txt"
-          rc=${PIPESTATUS[0]}
+          rc=0
+          bash .github/scripts/board-self-check.sh check "$RUNNER_TEMP/report.md" \
+            > "$RUNNER_TEMP/out.txt" || rc=$?
+          cat "$RUNNER_TEMP/out.txt"
 
           # 2 is "this token cannot see the board", which is a configuration gap
           # and not a finding. It is reported in the log and nowhere else — a
