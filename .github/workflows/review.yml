@@ -1,0 +1,76 @@
+name: Reviewer Agent
+
+# The review a pull request gets here without waiting for the operator
+# (`#42`, extended to this repository by `#123`).
+#
+# ## This repository defines the reviewer and did not call it
+#
+# `review-pull-request.yml` beside this file is `on: workflow_call` and nothing
+# else — it is the reusable definition every other repository points at. So
+# `kolonie-platform` and `kolonie-website` had their pull requests reviewed by
+# rules that live here, and pull requests **to** this repository had no review at
+# all. That is `#123`'s table read one line further down than it was written.
+#
+# ## Why `workflow_run` on CI is available now and was not on 2026-08-02
+#
+# `#123` said the reviewer could not simply be copied outwards, because
+# `review.yml` hangs off a workflow named `CI` and three of the four repositories
+# had nothing of the kind — this one ran `Check Red Lines`, path-filtered to six
+# files, and `Rehearse`, path-filtered to `.github/**`. A pull request editing a
+# document ran neither, so there was no build for a reviewer to wait on.
+#
+# **`#124` is what changed the answer.** It added a `CI` here, in `kolonie-infra`
+# and in `kolonie-openclaw`, deliberately without a path filter — an acceptance
+# criterion of that issue rather than an oversight. Measured 2026-08-03, all
+# three now run `CI` on every pull request, which is exactly the property
+# `kolonie-website` was singled out for having. So the trigger is a copy after
+# all; what `#123` asked to be decided per repository is what counts as sensitive
+# in it, below.
+#
+# `secrets: inherit` rather than naming one: the called workflow declares
+# `OPENROUTER_API_KEY` as optional, and the organisation secret of that name is
+# granted to this repository (measured 2026-08-03), so the reviewer runs with a
+# model rather than logging that it has none.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  actions: read
+
+jobs:
+  review:
+    uses: Kolonie-AI/kolonie-docs/.github/workflows/review-pull-request.yml@main
+    secrets: inherit
+    # The callee's default is written for `kolonie-platform` — verifier packages,
+    # the ledger, erasure paths. Almost none of that exists here, and the things
+    # that are worth a human's eye here are different in kind: this repository
+    # holds no runtime, so what a bad merge costs is a rule nobody decided.
+    #
+    # `governance/`, `GOVERNANCE.md` and any copy of the red lines, because `#78`
+    # makes those binding on every agent that arrives and `check-red-lines.yml`
+    # exists because a wrong copy is silent. **`onboarding/arrival.md` by name**,
+    # because it is one of those copies and its filename does not say so — it is
+    # listed in `check-red-lines.yml`'s path filter for exactly that reason, and
+    # a pattern of `red-lines` alone would have let it through as ordinary prose.
+    # `AGENTS.md`, because it is binding on
+    # anyone taking over orchestration and is the one file an arriving agent is
+    # told to trust completely. `.github/`, because a pull request that edits a
+    # workflow edits what runs with this repository's token — the reviewer
+    # included.
+    #
+    # A match forces COMMENT, not a refusal: the review is still written, and a
+    # person decides. The cost of a false positive is a maintainer reading a pull
+    # request they were going to read anyway.
+    with:
+      sensitive_paths: "(^|/)governance/|GOVERNANCE\\.md|AGENTS\\.md|red-lines|onboarding/arrival\\.md|(^|/)\\.github/"
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      actions: read
