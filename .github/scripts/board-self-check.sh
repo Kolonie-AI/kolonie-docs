@@ -163,9 +163,21 @@ cmd_check() {
 # One issue, reused rather than duplicated. A monitor that files a fresh issue
 # every morning is a monitor people mute, and `check-red-lines.yml` already
 # settled this shape in this repository.
+# **Listed and filtered here, never `--search`.** `--search "… in:title"` goes
+# through GitHub's search index, which is eventually consistent: an issue this
+# script filed a moment ago is not findable yet, so the guard passes and a second
+# issue is opened. Measured on 2026-08-03 — the rehearsal `kolonie-docs#132` asks
+# for filed `#147`, and the very next call filed `#148` instead of commenting.
+#
+# The stub-based test could not have caught it, because a stub has no index and
+# no latency. That is the argument for the rehearsal being a criterion at all.
+#
+# `gh issue list` without `--search` reads the REST issues endpoint, which is
+# immediately consistent. The label narrows it; the title is matched exactly here
+# rather than by a search engine's idea of a title.
 existing_issue() {
-  gh issue list --repo "$GITHUB_REPOSITORY" --state open \
-    --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty'
+  gh issue list --repo "$GITHUB_REPOSITORY" --state open --label area:docs --limit 100 \
+    --json number,title --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty"
 }
 
 cmd_report() {

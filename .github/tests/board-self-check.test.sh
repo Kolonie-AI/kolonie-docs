@@ -10,7 +10,8 @@
 # to exercise the branch where an issue already exists without filing one.
 #
 # The stub records every `gh` invocation to a log and answers from files the
-# case sets up. That makes the board-touching assertion exhaustive rather than a
+# case sets up. It does not run jq, so the `existing` fixture holds the *answer*
+# the lookup would produce — a bare issue number, or nothing. That makes the board-touching assertion exhaustive rather than a
 # reading of the script: any `item-add`, `item-edit` or `archive` would appear in
 # the log, whatever code path produced it.
 set -uo pipefail
@@ -37,7 +38,7 @@ case "$1 $2" in
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
   "issue list")
-    if [[ "$*" == *"in:title"* ]]; then cat "$GH_FIXTURES/existing" 2>/dev/null
+    if [[ "$*" == *"--label area:docs"* ]]; then cat "$GH_FIXTURES/existing" 2>/dev/null
     else cat "$GH_FIXTURES/issues" 2>/dev/null; fi ;;
   *) : ;;
 esac
@@ -141,6 +142,16 @@ expect "when both answers are right again, the issue is closed" \
 setup; : > "$GH_FIXTURES/existing"
 bash "$SCRIPT" resolve >/dev/null
 expect "and closing nothing is not an error" "$(logged 'issue close' && echo no || echo yes)"
+
+# The guard is not `--search`, and this case says why in the suite as well as in
+# the script: search is eventually consistent, so a second run inside the
+# indexing window would file a second issue. A stub cannot reproduce that
+# latency, which is why the criterion also required a live rehearsal.
+setup; echo '77' > "$GH_FIXTURES/existing"
+printf '5a — x\n' > "$WORK/report"
+bash "$SCRIPT" report "$WORK/report" >/dev/null
+expect "the lookup does not go through the search index" \
+  "$(grep -q 'in:title' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
 echo "it never writes to the board"
