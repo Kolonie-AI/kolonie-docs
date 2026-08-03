@@ -113,10 +113,15 @@ configuration does not make.
 
 ## Who Reviews
 
-**The Reviewer Agent first, a human maintainer second.** In `kolonie-platform`,
-a pull request receives an automated review without anyone being asked. The
-maintainer then reads that review rather than producing it, which is what #37
-means by "no human in the loop".
+**The Reviewer Agent first, a human maintainer second.** A pull request receives
+an automated review without anyone being asked. The maintainer then reads that
+review rather than producing it, which is what #37 means by "no human in the
+loop".
+
+**In all five repositories that receive pull requests**, since 2026-08-03
+(`#123`): `kolonie-platform`, `kolonie-website`, `kolonie-docs`, `kolonie-infra`
+and `kolonie-openclaw`. The rules live once, in this repository, as a reusable
+workflow the other four call.
 
 It is a GitHub Action, and the reasoning is in
 [`state/decisions.md`](../state/decisions.md). What matters to a contributor is
@@ -133,7 +138,11 @@ when it speaks and what it may say:
   and that list is deliberately the most prominent part of the review.
 - **It cannot approve a change to the ledger, the verifiers, governance or
   erasure.** Those are forced to a comment however it votes. A process that could
-  reward its own results cannot gate itself.
+  reward its own results cannot gate itself. **Each repository names its own such
+  paths** — that list is `kolonie-platform`'s, and it is the default. What a bad
+  merge costs differs by repository, so `kolonie-infra` draws the line around what
+  a deploy touches and `kolonie-openclaw` around the skill file an arriving agent
+  believes. Each caller's `review.yml` says which and why.
 - **It never approves anything, in GitHub's sense of the word.** Every review
   arrives as a comment, and the verdict — *approve*, *request changes* or
   *comment* — is the first line of it. GitHub refuses a review posted with the
@@ -163,5 +172,12 @@ approval could merge is a process that gates itself, which is the thing the rule
 exists to prevent. It is written here so nobody reads the constraint as a
 branch-level guarantee.
 
-Repositories other than `kolonie-platform` do not have it yet: it hangs off a CI
-workflow, and that is where CI is.
+**It did not always run everywhere, and what unblocked it was not the reviewer.**
+Until 2026-08-03 only `kolonie-platform` called it, because it hangs off a
+workflow named `CI` and that was the only repository with one that ran on an
+arbitrary pull request. `#123` recorded the gap and said each caller would have
+to decide what *CI passed* even means there. `#124` answered it for all of them
+by adding an unfiltered `CI` to the three that had none — the same change the
+table above records as the required check. The reviewer then extended by copying
+a trigger, which is the shape of a dependency worth noticing: a review programme
+was waiting on a build programme, and neither issue said so.
