@@ -464,6 +464,43 @@ inspected, for days, because a plausible known cause was already in hand. The
 read-only `Diagnose VPS` workflow in `kolonie-infra` exists so that stops
 happening.
 
+## 2026-08-02 — The board's self-check had no scheduler, and the project ran out of API budget
+
+The GraphQL budget was exhausted at **4,998 of 5,000 points in a single working
+session**, while REST sat at **45 of 5,000**. Board columns could not be set on
+three issues that had just been created, and the orchestration loop could not
+read its own state until the hourly reset.
+
+**Every point went to `gh project item-list --limit 1000`** — the query `AGENTS.md`
+§6 tells the loop to run, and tells it to run with an unreachable limit rather
+than one sized to the board. That argument is correct and it rests on a premise:
+that the board stays small. The board had stopped being small, because the
+auto-archive workflow was off and had been for long enough that §6's own opening
+note recorded the shape of it on 2026-07-30 — *"Done items dominate the board and
+come first — 92 of those 146."*
+
+**§6 query 5a exists to catch exactly this**, and it had been in the document the
+whole time. Nobody ran it.
+
+**The lesson is not "turn the workflow on".** That was done the same day and it
+would have been done in any case. The lesson is that **the orchestration loop
+contained a check with no scheduler behind it**, and that a self-check depending
+on somebody remembering to run it has the reliability of the thing it is
+checking — which is to say, none of its own. It surfaced as a rate limit during
+unrelated work, so nothing in the symptom pointed at the cause.
+
+Closed by `kolonie-docs#132`: 5a and 5b run daily in `board-self-check.yml`,
+silent when both answers are right, and opening one issue — reused, not
+duplicated — when either is wrong. It fixes nothing by itself, deliberately: 5a's
+fix is a dashboard setting no API can reach, and 5b's is a write to the board
+that ought to be a decision.
+
+**What this did not change.** `--limit 1000` stays, for the reason §6 already
+gives. If the budget becomes tight again with a small board, the answer is a
+GitHub App installation token — 12,500 points an hour for an organisation rather
+than 5,000 — and that is a separate issue with these measurements as its
+evidence.
+
 ## 2026-08-02 — The Reviewer Agent's first real review was thrown away by GitHub
 
 The day after the entry below, the Reviewer Agent had run seven times and reviewed

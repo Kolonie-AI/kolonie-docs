@@ -449,38 +449,47 @@ gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
 are checked by measurement rather than believed: that finished work is being
 pruned, and that new work is arriving at all.
 
-**5a — the pruning.** Done items are archived automatically; this confirms the
-thing doing it is switched on.
+**This one runs by itself, daily**, and that is the change `kolonie-docs#132`
+made on 2026-08-03. Running it by hand is a spot check now, not the only defence
+— which it was on 2026-08-02, when nobody had run it for long enough that the
+project exhausted its GraphQL budget at 4,998 of 5,000 points in one working
+session. Board columns could not be set on three issues that had just been
+created. **The check was right and nothing ran it**, which is the only part of
+that failure worth remembering.
 
 ```bash
-gh api graphql -f query='{ organization(login:"Kolonie-AI"){ projectV2(number:1){
-  workflows(first:30){ nodes{ name enabled } } } } }' \
-  --jq '.data.organization.projectV2.workflows.nodes[]
-        | select(.name=="Auto-archive items") | "Auto-archive items: \(.enabled)"'
+bash .github/scripts/board-self-check.sh check
 ```
 
-`false`, or no output at all, means the board has started growing again and the
-manual sweep below is how it gets caught up.
+**That script is the one copy of both queries, and this section deliberately no
+longer carries them.** `#132` required them to exist in exactly one place; a
+second copy in a document is a version that goes out of step without anybody
+editing it, which is the failure `#120` is named after. What the script does not
+hold is the *reasoning*, which is here:
+
+**5a — the pruning.** Done items are archived automatically, and 5a confirms the
+thing doing it is switched on. `false`, or no answer at all, means the board has
+started growing again and the manual sweep below is how it gets caught up. The
+two are not the same finding and the script says which: a setting turned off is
+a thing to turn on, and a workflow that cannot be read at all is a pruning
+nobody can vouch for, which is the same position as it being off.
 
 **5b — the arriving.** Five of the ten repositories have no auto-add workflow and
 cannot be given one (§4), so an issue opened in one of them is invisible until
-somebody adds it by hand. This lists every open issue that is not on the board:
-
-```bash
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
-  --jq '.items[] | "\(.content.repository)#\(.content.number)"' | sort -u > /tmp/on-board
-for r in $(gh repo list Kolonie-AI --limit 50 --json name --jq '.[].name'); do
-  gh issue list --repo "Kolonie-AI/$r" --state open --limit 200 \
-    --json number --jq ".[] | \"Kolonie-AI/$r#\(.number)\""
-done | sort -u | comm -23 - /tmp/on-board
-```
-
+somebody adds it by hand. 5b lists every open issue that is not on the board.
 **No output is the right answer.** Anything it prints is work nobody is going to
 see, and the fix is one command per line:
 
 ```bash
 gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
 ```
+
+**Neither answer is acted on automatically, and that is a decision.** 5a's fix is
+a dashboard setting no API can reach — `ProjectV2Workflow` exposes `enabled` and
+no mutation that sets it. 5b's fix is a write to the board, and a board write
+ought to be somebody's decision rather than a nightly job's. The daily run opens
+one issue, reuses it rather than filing a second, and closes it when both
+answers are right again.
 
 **This one is measurement and not assertion, deliberately.** §4 lists which
 repositories are covered as of a date, and a list in a document is exactly the

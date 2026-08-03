@@ -1,0 +1,101 @@
+name: Board self-check
+
+# `AGENTS.md` §6 queries 5a and 5b, on a schedule, because on 2026-08-02 nobody
+# ran them and the project ran out of GitHub API budget — 4,998 of 5,000 GraphQL
+# points in one working session, every point spent by the `--limit 1000` listing
+# the orchestration loop is told to use. Board columns could not be set on three
+# issues that had just been created.
+#
+# **The check was correct and the document was right. Nothing ran it**
+# (`kolonie-docs#132`), which is the whole of the defect and the whole of the fix.
+#
+# ## Why daily
+#
+# The failure takes weeks to become expensive — Done items accumulate, the
+# listing gets heavier, and one day a session hits the ceiling. A check every
+# hour would spend the budget it exists to protect, which would be a fine joke
+# and a bad monitor.
+#
+# ## Where the queries are
+#
+# In `.github/scripts/board-self-check.sh`, which is the only copy. §6 says what
+# 5a and 5b check and points at the script to run them. `#132` required exactly
+# one copy and left the choice of which; the alternative was a workflow that
+# executes code out of a Markdown file, and that is a class of clever that fails
+# quietly and reads as fine in review.
+#
+# ## What it may never do
+#
+# **Fix anything.** 5a reports a dashboard setting no API can reach; 5b's fix is
+# a write to the board that ought to be a decision. The script reads and reports,
+# and `.github/tests/board-self-check.test.sh` proves it against a stubbed `gh`
+# rather than asking to be believed.
+
+on:
+  schedule:
+    # 05:00 UTC, an hour after check-red-lines so the two do not contend for the
+    # same GraphQL budget in the same minute.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      break_it:
+        description: >-
+          Deliberately fail 5a, to exercise the reporting path. `#132`'s
+          definition of done requires this to have been done once and the issue
+          it opens inspected. It changes nothing on the board.
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  # To say so where somebody will see it. Nothing here writes to the board, and
+  # no `project` scope is requested — the read of the board comes from the
+  # token's ability to read a public organisation's project.
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because a check nobody has verified is a check nobody should
+      # trust when it passes — and this one is silent when it passes, which is
+      # the hardest kind to notice has stopped working.
+      - name: Test the check
+        run: bash .github/tests/board-self-check.test.sh
+
+      - name: Ask the board both questions
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BREAK_IT: ${{ inputs.break_it }}
+        run: |
+          set -o pipefail
+          if [ "${BREAK_IT:-false}" = "true" ]; then
+            # Point 5a at a workflow name that cannot match. Nothing on the board
+            # changes; the query simply comes back empty, which is one of the two
+            # ways 5a fails and the one that is safe to cause on purpose.
+            sed -i 's/name=="Auto-archive items"/name=="Auto-archive items (this cannot match)"/' \
+              .github/scripts/board-self-check.sh
+            echo "::warning::running with 5a deliberately broken — this is the rehearsal, not a real finding"
+          fi
+          bash .github/scripts/board-self-check.sh check "$RUNNER_TEMP/report.md" | tee "$RUNNER_TEMP/out.txt"
+
+      - name: Say so where somebody will see it
+        if: failure() && steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/board-self-check.sh report "$RUNNER_TEMP/report.md"
+
+      # The other half of reaching somebody: an issue that stays open after the
+      # thing it reports is fixed is an issue people learn to ignore.
+      - name: Close it once both answers are right again
+        if: success() && inputs.break_it != true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/board-self-check.sh resolve
