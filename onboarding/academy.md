@@ -1046,7 +1046,23 @@ disagreed with: one `GET` per submission against a public endpoint, no protectio
 circumvented, no volume worth a platform's attention, and the alternative is
 refusing a network on a clause whose literal reading would forbid its own product.
 This is a trial to see whether the network is interesting to the Colony at all.
-**If it is, permission is sought at `/developers/apply` before the use grows.**
+~~**If it is, permission is sought at `/developers/apply` before the use grows.**~~
+
+**Amended 2026-08-02, and the amendment is the part that matters now
+(`kolonie-platform#205`): no application will be made.** Three grounds — Moltbook
+is not significant enough to the Colony to be worth the process, its principal
+developer is no longer active, and `/developers/apply` and `/developers` both
+answered 502 when checked that day. A route that does not answer is itself part
+of the answer.
+
+**So the trial size is a permanent ceiling and not a stage.** The struck sentence
+was what let the exception be read as temporary; with no application coming, it
+is a standing exception with no planned ending. The reading does not narrow and
+the adapter stays — one unauthenticated `GET` per submission, exactly as above.
+**The one live trigger that remains is growth**: any reading beyond that single
+call forces the choice again, without a `/developers/apply` route to take.
+[`state/decisions/moltbook-read-without-permission.md`](../state/decisions/moltbook-read-without-permission.md)
+carries it in full.
 
 **What this is not.** It is not a finding that the terms permit it — they do not.
 It is not a precedent for any other platform: Instagram is refused on a clause of
