@@ -154,7 +154,10 @@ cmd_gather() {
   {
     echo "### Errors and warnings per service, last 24 hours"
     echo
-    echo "| service | level | total | peak hour |"
+    # "most in one hour" and not "peak hour": both columns are counts, and a
+    # column named for a time of day that holds a count is the same class of
+    # mislabelling as the dates below.
+    echo "| service | level | total | most in one hour |"
     echo "|---|---|---|---|"
     jq -r '.data.result // [] | .[]
            | [(.metric.service // "«unlabelled»"), .metric.level,
@@ -180,13 +183,34 @@ cmd_gather() {
       echo "None."
     fi
     echo
-    echo "### The same counts, one row per day, last 7 days"
+    echo "### The same counts per day, over as much history as the store holds"
     echo
-    echo "| service | level | daily totals, oldest first |"
+    # **How many days this actually covers is stated, and every value carries its
+    # date.** Rendered as bare numbers it did real damage on the first run: Loki
+    # had been installed an hour earlier, the table held a single bucket showing
+    # `1`, and the model read it as *"1 per day for the past 7 days"* — a
+    # confident weekly baseline invented out of one hour. The model read what it
+    # was given correctly; the table was the lie.
+    #
+    # A window is asked for, not promised. Nothing here can make history exist
+    # that was never recorded, so the honest move is to say how much there is.
+    days=$(jq -r '[.data.result // [] | .[] | .values[][0]] | unique | length' "$dir/history.json" 2>/dev/null)
+    echo "Asked for 7 days. The store answered with **${days:-0}** daily bucket(s) — anything"
+    echo "less than 7 means Loki has not been collecting for that long, and no baseline"
+    echo "older than the earliest date below exists."
+    echo
+    echo "| service | level | count per day, oldest first |"
     echo "|---|---|---|"
-    jq -r '.data.result // [] | .[]
+    # **The step is subtracted, and that is not an off-by-one.** Loki aligns a
+    # range query's steps to absolute epoch multiples and stamps each sample with
+    # the **end** of the window it covers — so today's `[24h]` bucket comes back
+    # stamped midnight *tomorrow*. Printed raw it labelled today's counts with
+    # tomorrow's date, which is a worse lie than the bare number it replaced.
+    # Measured 2026-08-04: one bucket at 1785888000, `2026-08-05T00:00:00Z`,
+    # holding data written on the 4th.
+    jq -r --argjson step 86400 '.data.result // [] | .[]
            | [(.metric.service // "«unlabelled»"), .metric.level,
-              ([.values[][1]] | join(", "))]
+              ([.values[] | "\((.[0] - $step) | gmtime | strftime("%Y-%m-%d")): \(.[1])"] | join(" · "))]
            | @tsv' "$dir/history.json" 2>/dev/null \
       | sort | awk -F'\t' '{printf "| `%s` | %s | %s |\n", $1, $2, $3}'
   } > "$dir/numbers.md"

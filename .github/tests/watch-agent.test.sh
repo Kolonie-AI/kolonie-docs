@@ -214,6 +214,34 @@ expect "a missing judgement is stated, not hidden" \
   "$([[ "$body" == *"No judgement was written"* ]] && echo yes || echo no)"
 
 echo
+echo "the history says how much history there is"
+
+# The defect the first real run produced: Loki had one hour of data, the table
+# held one bucket rendered as a bare `1`, and the model reported "1 per day for
+# the past 7 days" — a weekly baseline invented from one hour. The model read
+# what it was given correctly. The table was the lie.
+setup
+# 1785888000 is 2026-08-05T00:00:00Z — the shape Loki really returns: the
+# *end* of the window, for data written on the 4th.
+printf '{"data":{"result":[{"metric":{"service":"api","level":"error"},"values":[[1785888000,"1"]]}]}}\n' > "$FIX/history"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "one bucket is reported as one bucket" \
+  "$(grep -q 'answered with \*\*1\*\* daily bucket' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(grep -n 'bucket' "$WORK/out/numbers.md")"
+expect "and the date is the day covered, not the window's end" \
+  "$(grep -q '2026-08-04: 1' "$WORK/out/numbers.md" && ! grep -q '2026-08-05' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/count per day/,+3p' "$WORK/out/numbers.md")"
+
+# And a genuine week is reported as one, so the fix does not cost the case it
+# was built for.
+setup
+printf '{"data":{"result":[{"metric":{"service":"api","level":"error"},"values":[[1785715200,"2"],[1785801600,"3"],[1785888000,"1"]]}]}}\n' > "$FIX/history"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "three buckets are reported as three" \
+  "$(grep -q 'answered with \*\*3\*\* daily bucket' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(grep -n 'bucket' "$WORK/out/numbers.md")"
+
+echo
 echo "the rehearsal takes the same path a real finding takes"
 
 # `#133`'s definition of done needs a forced failure, and a rehearsal that does
