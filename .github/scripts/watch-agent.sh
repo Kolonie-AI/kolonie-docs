@@ -131,6 +131,16 @@ cmd_gather() {
   comm -23 <(q_service_values "$WEEK_AGO" "$NOW") <(q_service_values "$DAY_AGO" "$NOW") \
     > "$dir/silent.txt"
 
+  # The rehearsal's fabricated silent service, and it belongs **here** rather
+  # than in the workflow step after `gather` has run. Appended afterwards it
+  # reached `decide` but not `numbers.md`, so the first rehearsal filed an issue
+  # that said "Services that logged nothing: None." — a report contradicting the
+  # reason it was written. Measured on 2026-08-04 against `kolonie-docs#156`.
+  #
+  # Injected at this point it takes exactly the path a real silent service takes,
+  # which is the only version of a rehearsal worth having.
+  [ -n "${WATCH_FORCE_SILENT:-}" ] && echo "$WATCH_FORCE_SILENT" >> "$dir/silent.txt"
+
   q_hourly > "$dir/hourly.json"
   q_slugs  > "$dir/slugs.json"
   # Seven days of the same counts, one point per day. This is what replaces a

@@ -91,7 +91,13 @@ jobs:
         id: gather
         env:
           LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
-          BREAK_IT: ${{ inputs.break_it }}
+          # A service that has certainly not logged in the last day, because it
+          # has never existed. `watch-agent.sh` appends it while it is still
+          # building the report, so it appears in the issue body as well as in
+          # the decision — appended afterwards it reached the decision only, and
+          # the first rehearsal filed an issue saying nothing was silent.
+          # Nothing on the host is touched either way.
+          WATCH_FORCE_SILENT: ${{ inputs.break_it && 'a-service-that-does-not-exist' || '' }}
         run: |
           # No pipeline, and the status is captured rather than allowed to
           # propagate: Actions runs `run:` under `bash -e`, so `script | tee`
@@ -112,11 +118,7 @@ jobs:
           fi
           [ "$rc" -eq 0 ] || exit "$rc"
 
-          if [ "${BREAK_IT:-false}" = "true" ]; then
-            # A service that has certainly not logged in the last day, because it
-            # has never existed. It goes through exactly the path a real silent
-            # service takes, and nothing on the host is touched.
-            echo "a-service-that-does-not-exist" >> "$RUNNER_TEMP/watch/silent.txt"
+          if [ -n "${WATCH_FORCE_SILENT:-}" ]; then
             echo "::warning::running with a fabricated silent service — this is the rehearsal, not a real finding"
           fi
           echo "skip=false" >> "$GITHUB_OUTPUT"

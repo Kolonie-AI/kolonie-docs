@@ -214,6 +214,26 @@ expect "a missing judgement is stated, not hidden" \
   "$([[ "$body" == *"No judgement was written"* ]] && echo yes || echo no)"
 
 echo
+echo "the rehearsal takes the same path a real finding takes"
+
+# `#133`'s definition of done needs a forced failure, and a rehearsal that does
+# not go through the real path proves nothing about it. The first version
+# appended the fabricated service *after* gather had rendered the report, so the
+# issue it filed said "Services that logged nothing: None." while being filed
+# because one had. Found against kolonie-docs#156 on 2026-08-04.
+setup; WATCH_FORCE_SILENT=a-service-that-does-not-exist bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the fabricated service reaches the decision" \
+  "$(bash "$SCRIPT" decide "$WORK/out" >/dev/null; [ $? -eq 1 ] && echo yes || echo no)"
+expect "and the report, not only the decision" \
+  "$(grep -q 'a-service-that-does-not-exist' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/logged nothing/,+3p' "$WORK/out/numbers.md")"
+
+# And it is off by default, so an ordinary run cannot fabricate one.
+setup; bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "nothing is fabricated without the switch" \
+  "$([ ! -s "$WORK/out/silent.txt" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
+
+echo
 echo "an unreachable store is a configuration gap, not a finding"
 
 setup; echo 401 > "$FIX/http_code"
