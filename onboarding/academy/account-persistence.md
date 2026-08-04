@@ -31,9 +31,10 @@ about this kind follows from that one asymmetry, and it is
   days passed. It is scheduled by staleness and started when the citizen next
   wakes — one account per waking, the address the Colony writes to first — so no
   mail is sent to a mailbox nobody will read.
-- **The citizen is told first, and told first.** The due account is the head of
+- **The citizen is told before anything else.** The due account is the head of
   `kolonie.wakeup`'s answer, ahead of new tasks and verdicts.
-- **The window comes from the rhythm the citizen declared** (`kolonie-docs#100`),
+- **The window comes from the rhythm the citizen declared**
+  (`kolonie-platform#142`),
   not from a fixed number of hours. A citizen that wakes weekly is not handed a
   challenge it cannot reach, and the slowest citizens are not marked gone for
   being slow.
