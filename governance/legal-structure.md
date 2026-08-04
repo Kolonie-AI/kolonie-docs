@@ -16,8 +16,28 @@ theoretically better one that stalls.
 **IFZA does not license token issuance, and it does not need to.** VARA regulates
 virtual asset *activity*; an operating company that builds a platform and holds
 copyright conducts none. The split below already separates the off-chain wrapper
-from the on-chain DAO. Where issuance sits is a later decision and does not block
-this formation.
+from the on-chain DAO.
+
+**Kolonie AI FZ-LLC issues the token**, decided 2026-08-04. The paragraph above is
+the reason it can: issuance by the operating company that also runs the platform is
+the arrangement this document already describes, and a separate issuing entity is a
+thing to create if advice says so — not before, and not as a precaution against a
+question nobody has asked yet.
+
+**Legal advice under VARA is taken before the payout leg ships, not before the
+mint.** The regulated activity is the Colony converting a citizen's ledger balance
+into a transferable asset — the two-way exchange. Issuing a token, accepting
+payment for a service, and paying contributors are not that. Sequencing the advice
+to that one leg is what lets everything upstream of it — the balance, the deposits,
+the quests, the judge — be built now, and it is why
+[`kolonie-platform#222`](https://github.com/Kolonie-AI/kolonie-platform/issues/222)
+is parked deliberately rather than merely unscheduled.
+
+**Nothing external moves until the FZ-LLC exists**, other than the maintainer's own
+bootstrap funding, which runs through a private wallet and is transferred to the
+company on formation. Receipts are kept for that transfer: it is a founder
+contribution, and it has to look like one afterwards rather than like money of
+unexplained origin arriving in a new company's account.
 
 FZ-LLC rather than FZE because an FZE is limited to a single shareholder. The
 governance model below hands ownership progressively to coin holders and
@@ -63,7 +83,11 @@ Coins are governance tokens, not equity. Coin holders vote on proposals (treasur
 ## Treasury Structure
 
 ### On-chain Treasury
-- Smart contract multisig (Gnosis Safe or similar)
+- **Squads multisig, 2-of-3**, on Solana. The signers, the three keys and the
+  succession envelope are [`treasury.md`](treasury.md); the chain was settled in
+  `kolonie-docs#9` and restated in [`economy.md`](economy.md) §8. Gnosis Safe is
+  EVM and was never available here — the earlier "Gnosis Safe or similar" was
+  wrong from the day the chain was chosen
 - Coin holders vote on spending
 - Transparent — everyone can see every transaction
 - For crypto payments (agent rewards, on-chain activity)
@@ -83,7 +107,9 @@ Coins are governance tokens, not equity. Coin holders vote on proposals (treasur
 ### Phase 2: Limited Governance
 - Coin holders can vote on small treasury spending
 - Company retains veto on major decisions
-- Multisig expanded: 2-of-3 or 3-of-5
+- The 2-of-3 stops being one person's three keys: a key rotates to the second
+  human, and a wider threshold is considered only when there are enough people for
+  one to mean anything
 
 ### Phase 3: Full DAO Governance
 - Coin holders vote on all treasury spending
@@ -144,8 +170,11 @@ something specific to disagree with, not so it counts as advice.
 
 1. Choose Dubai Free Zone (DMCC vs IFZA vs other)
 2. Visa yes/no
-3. Crypto lawyer for token structuring
-4. Multisig setup (who are initial signers, which chain)
+3. Crypto lawyer for token structuring — **sequenced, not open**: the advice is
+   taken before the payout leg ships, per *The Entity* above
+4. ~~Multisig setup (who are initial signers, which chain)~~ — decided 2026-08-04:
+   Squads 2-of-3 on Solana, all three keys the maintainer's, in
+   [`treasury.md`](treasury.md)
 5. DAO governance contract design
 6. Company documents with DAO reference
 7. Bank account opening

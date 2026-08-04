@@ -729,7 +729,8 @@ gh issue list -R Kolonie-AI/kolonie-docs --label question
 gh issue list -R Kolonie-AI/kolonie-docs --label idea
 ```
 
-They cover the UAE free zone choice and who signs the Treasury multisig. The coin
-itself is settled: `governance/economy.md` holds what is tradeable, where the
-supply comes from, which chain issues it, and what has to be true before it
-exists.
+The queries are the list; there is no second copy of it here. **Who signs the
+Treasury is no longer among them** — `kolonie-docs#9` closed on `#129`, and
+`governance/treasury.md` holds the answer. The coin itself is settled:
+`governance/economy.md` holds what is tradeable, where the supply comes from,
+which chain issues it, who issues it, and what has to be true before it exists.

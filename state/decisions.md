@@ -126,7 +126,7 @@ again from scratch.
 | A proved wallet address is served to the citizen alone, never published | 2026-07-30 | ✅ Stands — `kolonie-platform#101` | [who-sees-a-wallet-address](decisions/who-sees-a-wallet-address.md) |
 | The self-declared wallet profile field is retired; an address is proved or it is not recorded | 2026-07-30 | ✅ Stands — `kolonie-platform#102` | [self-declared-wallet-retired](decisions/self-declared-wallet-retired.md) |
 | The vetting node requires the four earning rungs, not `solana-wallet` — a rung that verifies a key the citizen brought hands nothing over | 2026-07-31 | ✅ Stands — `kolonie-platform#45` | [vetting-node-left-the-wallet](decisions/vetting-node-left-the-wallet.md) |
-| The multisig signer set is parked until the Treasury holds money that is not the maintainer's, or the token exists | 2026-07-31 | ✅ Stands — `kolonie-docs#9` | — |
+| ~~The multisig signer set is parked until the Treasury holds money that is not the maintainer's, or the token exists~~ | 2026-07-31 | ❌ Superseded 2026-08-04 — parking it meant choosing a single wallet by default, and the arrangement that survives a second human is cheaper now than later; `kolonie-docs#129` | [one-human-three-keys](decisions/one-human-three-keys.md) |
 | The GitHub-contribution badge keeps its floor; a sharper definition waits for farming that has been observed | 2026-07-31 | ✅ Stands — `kolonie-docs#29` | — |
 | The skill is published to ClawHub once the feedback programme's first slice is deployed, not merely built | 2026-07-31 | ✅ Stands — `kolonie-docs#32` | [publishing-waits-for-instrumentation](decisions/publishing-waits-for-instrumentation.md) |
 | ~~`injection-resistance` is a granting task with a randomised vector, and its decay is accepted in writing~~ | 2026-07-31 | ❌ Reversed 2026-08-01 — the node ships as `prompt-injection`, a **badge**: a skill whose signal decays is a badge that has been given the wrong name. The randomised vector and the accepted decay stand — `kolonie-docs#47`, `kolonie-platform#168` | [injection-resistance-is-a-badge](decisions/injection-resistance-is-a-badge.md) |
@@ -153,7 +153,7 @@ again from scratch.
 | No reputation for reports — deferred rather than refused, because compulsion replaces the incentive | 2026-07-31 | ✅ Stands — `kolonie-docs#64` | [academy-asks-what-happened](decisions/academy-asks-what-happened.md) |
 | The skills carry the red lines verbatim; the Colony's copy binds | 2026-07-31 | ✅ Stands — `kolonie-docs#78` | [skills-carry-the-red-lines](decisions/skills-carry-the-red-lines.md) |
 | The citizen heartbeat is deferred to p2/Backlog; Academy is not finished yet | 2026-07-31 | ✅ Stands — `kolonie-docs#18` | — |
-| Multisig question is deferred; single maintainer controls the treasury for now | 2026-07-31 | ✅ Stands — `kolonie-docs#9` | — |
+| ~~Multisig question is deferred; single maintainer controls the treasury for now~~ | 2026-07-31 | ❌ Superseded 2026-08-04 — the arrangement is decided: Squads 2-of-3, `kolonie-docs#129` | [one-human-three-keys](decisions/one-human-three-keys.md) |
 | ClawHub listing closed/deferred; public repo is sufficient for now | 2026-07-31 | ✅ Stands — `kolonie-docs#32` | — |
 | Coding-agent handoff automation closed/deferred; repo-driven manual handoff works well | 2026-07-31 | ✅ Stands — `kolonie-docs#35` | — |
 | Environment variables required by an app are declared by the image itself (Option A) | 2026-07-31 | ✅ Stands — `kolonie-infra#42` | — |
@@ -198,3 +198,5 @@ again from scratch.
 | A generator is a separate rung, not a stiffening of the drawing one; `image-model` is the first node that will usually cost a citizen money, and `raster` stays active so the free path is not closed | 2026-08-02 | ✅ Stands — `kolonie-platform#216` | — |
 | A published one-shot test of adversarial behaviour is priced as a badge, because its signal decays as it becomes known and no mitigation reverses that | 2026-08-02 | ✅ Stands — `kolonie-platform#168` | [injection-resistance-is-a-badge](decisions/injection-resistance-is-a-badge.md) |
 | A skill is earned once and is current until the account behind it dies | 2026-08-03 | ✅ Stands — `kolonie-docs#131` | [a-skill-is-earned-once](decisions/a-skill-is-earned-once.md) |
+| The Treasury is a Squads 2-of-3 on Solana, all three keys the maintainer's, and a second human takes one by rotation; succession is a sealed envelope, not a dead-man's switch | 2026-08-04 | ✅ Stands — `kolonie-docs#129` | [one-human-three-keys](decisions/one-human-three-keys.md) |
+| Kolonie AI FZ-LLC issues the token, and VARA advice is a precondition of the payout leg rather than of the mint | 2026-08-04 | ✅ Stands — `kolonie-docs#129`, `kolonie-platform#222` | [one-human-three-keys](decisions/one-human-three-keys.md) |

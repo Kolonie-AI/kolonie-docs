@@ -94,7 +94,10 @@ to name, so the skills are named instead. This is the deliberate kind of change
 the definition of done is allowed to take (`AGENTS.md` §3), and it moves nothing.
 
 Going further was considered and rejected. Of the capabilities beyond these
-three, `payment` waits on who signs the Treasury multisig (`kolonie-docs#9`) —
+three, `payment` was recorded as waiting on who signs the Treasury multisig
+(`kolonie-docs#9`, answered on `#129`) and waits on it no longer — the earning
+rungs that replaced `onchain-payment` reverse who pays, so the dependency
+disappeared rather than being satisfied (`onboarding/academy/api-monetize.md`) —
 `wallet` no longer waits on anything and is earnable, because proving control of
 a Solana address needs a signature rather than a funded transaction
 (`kolonie-platform#62`) — SMS is out of the Academy entirely, and `social` is in
