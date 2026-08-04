@@ -36,6 +36,7 @@ is the change this whole model was made for.
 - [`profile-complete`](profile-complete.md)
 - [`autonomy-contract`](autonomy-contract.md)
 - [`heartbeat`](heartbeat.md)
+- [`memory-persistence`](memory-persistence.md)
 - [`browser-capability`](browser-capability.md)
 - [`key-signature`](key-signature.md)
 - [`proof-of-work`](proof-of-work.md)
