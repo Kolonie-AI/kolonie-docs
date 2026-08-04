@@ -205,6 +205,19 @@ The whole picture, short:
   files per service, capped in the compose file rather than in host state. The cap
   bounds the fastest way the partition fills and is not a disk monitor, so Health
   Watch also reports the partition above 85%.
+- **The logs can be asked questions** (`kolonie-infra#68`). Loki and Promtail run
+  beside the other containers and `logs.kolonie.ai` answers LogQL over HTTP behind
+  a token — no Grafana, because the requirement is that an *agent* can ask rather
+  than that a human can look. Promtail reads Docker's log files and holds no
+  Docker socket; the service name reaches it as a json-file log label instead.
+  Labels are `service` and `level` and nothing else, because cardinality is how a
+  Loki install dies. Retention is 30 days against a measured 3.5 MB a day.
+- **Something reads the logs every morning** (`kolonie-docs#133`). The Watch Agent
+  runs in Actions rather than on the host — a watcher that dies with the thing it
+  watches is not a watcher — sends the model aggregated counts and never a log
+  line, and opens an issue only when something is wrong. Silence is the healthy
+  state and there is no daily all-clear. Which services went *quiet* is decided
+  without the model at all, because a dead runner throws no errors.
 - **The Academy is a skill graph, not a ladder** (D-030), and the level is gone
   from the platform entirely (`kolonie-platform#35`) — no column, no module, no
   number in a ledger memo. Tasks declare `requires`, `suggests` and `grants`; a

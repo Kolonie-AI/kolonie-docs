@@ -1,0 +1,144 @@
+name: Watch Agent
+
+# Reads yesterday out of Loki, decides whether anything is wrong, and opens an
+# issue when it is. Silence when it is not. `kolonie-docs#133`.
+#
+# ## Why it runs here and not on the VPS
+#
+# **A watcher that dies with the thing it watches is not a watcher.** Everything
+# it reads lives on one host; if that host goes, a monitor on it goes with it and
+# reports nothing, which looks exactly like a quiet night. So it runs in Actions,
+# and the cost is that Loki has to be reachable from outside behind a token —
+# which `kolonie-infra#68` provides at `logs.kolonie.ai`.
+#
+# ## The failure this workflow itself has
+#
+# **GitHub disables scheduled workflows in a repository with no activity for 60
+# days.** A repository nobody touches loses its watchdog silently, which is
+# precisely the shape of failure this exists to catch. Nothing here can fix that
+# — a workflow cannot notice it has been switched off.
+#
+# What covers it is `kolonie-infra#69`: a liveness check that runs off this host
+# *and* off Actions. If that issue is ever closed as not-worth-doing, this
+# paragraph is the argument against, and it should be re-read first.
+#
+# The lesser failure is covered: a run that fails notifies through GitHub in the
+# ordinary way, and `kolonie-docs#132` is the day nobody ran a check for long
+# enough that it mattered.
+#
+# ## What it may never do
+#
+# **It reads.** It restarts nothing, edits nothing, and closes no issue — not
+# even its own, which is where it deliberately differs from `board-self-check.yml`
+# next door. A bad day in the logs does not become untrue; whoever reads the
+# issue decides when it is finished with.
+#
+# ## Two halves, and only one of them needs a model
+#
+# `watch-agent.sh` runs the queries and answers *which services said nothing*,
+# with no model call and no key. `watch-judge.py` asks whether the counts are
+# normal, and every way it can fail ends in exit 0 with no judgement written —
+# the numbers then stand on their own and the issue says the judgement was
+# skipped. A provider outage costs an opinion, never the check.
+
+on:
+  schedule:
+    # 06:00 UTC — an hour after board-self-check, so two daily jobs that both
+    # talk to the GitHub API do not contend in the same minute, and late enough
+    # that the 24-hour window it reads is yesterday as somebody in Europe would
+    # mean it.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      break_it:
+        description: >-
+          Force a finding, to exercise the reporting path end to end. `#133`'s
+          definition of done requires this to have happened once and the issue it
+          opens inspected. It queries a service name that does not exist, so the
+          silent-service check finds it missing — nothing on the host is touched.
+        type: boolean
+        required: false
+        default: false
+
+# `watch-agent.sh` waits for its own issue to become findable before it exits
+# (`kolonie-docs#150`), and this stops a `break_it` dispatch from starting while
+# the scheduled run is inside that wait. Queued, never cancelled: a cancelled run
+# is one that filed and then did not wait.
+concurrency:
+  group: watch-agent-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The only write it holds, and the whole of `#133`'s "it holds no write access
+  # beyond opening an issue". No `pull-requests`, no `actions`, no `packages`.
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because this check is silent when it passes, and a silent check
+      # nobody has exercised is one nobody should trust. Same argument as
+      # board-self-check.yml's.
+      - name: Test the agent
+        run: bash .github/tests/watch-agent.test.sh
+
+      - name: Read yesterday
+        id: gather
+        env:
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
+          BREAK_IT: ${{ inputs.break_it }}
+        run: |
+          # No pipeline, and the status is captured rather than allowed to
+          # propagate: Actions runs `run:` under `bash -e`, so `script | tee`
+          # would abort the step on the script's own exit code before any line
+          # below could read it. board-self-check.yml learned this on 2026-08-03.
+          rc=0
+          bash .github/scripts/watch-agent.sh gather "$RUNNER_TEMP/watch" > "$RUNNER_TEMP/out.txt" || rc=$?
+          cat "$RUNNER_TEMP/out.txt"
+
+          if [ "$rc" -eq 2 ]; then
+            # The store could not be read. Reported in the log and nowhere else:
+            # a check that cannot reach its subject must not be the reason the
+            # subject looks broken — and here it would file "every service is
+            # silent", which would be true and useless.
+            echo "::warning::Loki could not be read — configuration gap, not a finding; see the job log"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
+
+          if [ "${BREAK_IT:-false}" = "true" ]; then
+            # A service that has certainly not logged in the last day, because it
+            # has never existed. It goes through exactly the path a real silent
+            # service takes, and nothing on the host is touched.
+            echo "a-service-that-does-not-exist" >> "$RUNNER_TEMP/watch/silent.txt"
+            echo "::warning::running with a fabricated silent service — this is the rehearsal, not a real finding"
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Ask whether it is normal
+        if: steps.gather.outputs.skip != 'true'
+        env:
+          # Its own key, so the Watch Agent's spend is separable from every other
+          # model caller's (kolonie-infra#70). Optional by design — see the
+          # workflow comment above and watch-judge.py's docstring.
+          OPENROUTER_API_KEY_WATCH: ${{ secrets.OPENROUTER_API_KEY_WATCH }}
+          MODEL: deepseek/deepseek-v4-flash
+        run: python3 .github/scripts/watch-judge.py "$RUNNER_TEMP/watch"
+
+      - name: Say so, if there is something to say
+        if: steps.gather.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if bash .github/scripts/watch-agent.sh decide "$RUNNER_TEMP/watch"; then
+            echo "nothing was wrong — filing nothing, which is the healthy outcome"
+            exit 0
+          fi
+          bash .github/scripts/watch-agent.sh report "$RUNNER_TEMP/watch"
