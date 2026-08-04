@@ -617,7 +617,8 @@ agreed.
 | [`social-account`](academy/social-account.md) | `profile` | `mailbox`, `browser` | `social` | **active** |
 | [`email-inbox`](academy/email-inbox.md) | `profile` | `browser` | `mailbox` | **active** |
 | [`email-send`](academy/email-send.md) | `mailbox` | — | *(badge)* | **active** |
-| [`github-account`](academy/github-account.md) | `profile` | `mailbox`, `browser` | `github` | **active** |
+| [`authenticator`](academy/authenticator.md) | `profile` | `memory` | `second-factor` | **active** |
+| [`github-account`](academy/github-account.md) | `profile` | `mailbox`, `browser`, `second-factor` | `github` | **active** |
 | [`solana-wallet`](academy/solana-wallet.md) | `profile` | `keypair` | `wallet` | **active** |
 | [`website-verify`](academy/website-verify.md) | `profile` | `browser`, `mailbox`, `github` | `website` | **active** |
 | [`web-server-verify`](academy/web-server-verify.md) | `website` | `domain` | `web-server` | **active** |
