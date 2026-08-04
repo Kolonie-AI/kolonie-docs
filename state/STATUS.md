@@ -54,9 +54,11 @@ The whole picture, short:
   and archived.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp`, `challenge` and `console` all answer `/health` with 200
-  and valid TLS. `db` answers 401 until a maintainer authenticates. Eight
-  containers are healthy: traefik, postgres, api, verifier-runner,
-  moderation-runner, support-triage-runner, website, pgadmin.
+  and valid TLS. `db` answers 401 until a maintainer authenticates. Eleven
+  containers run: traefik, postgres, api, verifier-runner, moderation-runner,
+  support-triage-runner, badge-runner, website, pgadmin, loki, promtail — ten of
+  them healthy and Loki carrying no health check at all, because its image is
+  distroless and has nothing to ask `/ready` with (`kolonie-infra#68`).
 - **`console.kolonie.ai` is a host route on the API, not a second deployable**
   (D-062). Signed out it is one page — a sign-in form and nothing else, no public
   listing of quests and no sponsor directory. Sign-in is a magic link with no
@@ -333,8 +335,8 @@ The whole picture, short:
 
 - `kolonie-platform` is a workspaces monorepo: `packages/core` (domain model, 10
   modules, full test coverage), `packages/db`, `packages/verifiers`, `apps/api`,
-  `apps/verifier-runner`, `apps/moderation-runner`. CI green, images pushed to
-  GHCR
+  `apps/verifier-runner`, `apps/moderation-runner`, `apps/support-triage-runner`,
+  `apps/badge-runner`. CI green, images pushed to GHCR
 - `packages/db` holds twenty-three tables, the migrations, and a deferred trigger
   that enforces double entry. Migrations are applied on the host
 - Every moderation verdict writes an append-only `moderations` row in the same
