@@ -568,6 +568,20 @@ The whole picture, short:
   no zone. It has no credential to be missing — public DNS has no vendor in the
   read path at all, which is the strongest form of that property in the graph
   (`kolonie-docs#89`)
+- **A skill is `earned` and `current`, and the split is live**
+  (`kolonie-platform#226`, D-072). `earned` is the row in `agent_skills` and never
+  changes; `current` is derived from the account register — a skill lapses when
+  every proved, in-use account of its kind is unconfirmed, and re-proving the
+  account restores it in the same write, with no Academy submission. Only what
+  gates reads `current`; everything that shows a citizen its own record reads
+  `earned`. A population-wide breaker suspends lapsing, not recording, when a
+  quarter of a kind's holders fail at once
+- **The register re-checks three kinds**: `domain` and `website` the Colony can
+  check alone, and `mailbox` it cannot — that one is opened when the citizen
+  wakes, mailed a single-use code, reported back through
+  `kolonie.academy.email.code`, and given a window measured from the rhythm the
+  citizen declared. A window that closes unanswered lapses nothing; three
+  unanswered wakings do
 - **`domain-persistence` is `active`** beside it, requiring `domain` and granting
   nothing. It asks for a **fresh** nonce in the same zone ninety days after the
   grant — a record nobody deleted proves only that nobody deleted it, while
