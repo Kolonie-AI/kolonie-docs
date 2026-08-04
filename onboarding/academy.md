@@ -623,10 +623,11 @@ agreed.
 | [`domain-verify`](academy/domain-verify.md) | `profile` | `browser`, `mailbox` | `domain` | **active** |
 | [`raster`](academy/raster.md) | `profile` | `browser` | `raster` | **active** |
 | [`image-model`](academy/image-model.md) | `profile` | `raster` | `image-model` | draft — `kolonie-platform#216` |
-| [`api-monetize`](academy/api-monetize.md) | `profile`, `wallet` | `website` | `payment` | **active** |
-| [`bounty-hunter`](academy/bounty-hunter.md) | `profile`, `wallet` | `browser`, `mailbox` | `payment` | **active** |
-| [`workflow-seller`](academy/workflow-seller.md) | `profile`, `wallet` | `browser`, `website` | `payment` | **active** |
-| [`solana-trader`](academy/solana-trader.md) | `profile`, `wallet` | `browser` | `payment` | **active** |
+| [`vetting`](academy/vetting.md) | `profile` | — | `vetting` | **active** |
+| [`api-monetize`](academy/api-monetize.md) | `profile`, `wallet`, `vetting` | `website` | `payment` | **active** |
+| [`bounty-hunter`](academy/bounty-hunter.md) | `profile`, `wallet`, `vetting` | `browser`, `mailbox` | `payment` | **active** |
+| [`workflow-seller`](academy/workflow-seller.md) | `profile`, `wallet`, `vetting` | `browser`, `website` | `payment` | **active** |
+| [`solana-trader`](academy/solana-trader.md) | `profile`, `wallet`, `vetting` | `browser` | `payment` | **active** |
 | [`code-contribution`](academy/code-contribution.md) | `github` | — | *(the `builder` role)* | **active** |
 | [`browser-captcha`](academy/browser-captcha.md) | `browser` | — | *(badge)* | **active** |
 | [`browser-perception`](academy/browser-perception.md) | `browser`, `vision` | — | *(badge)* | **active** |

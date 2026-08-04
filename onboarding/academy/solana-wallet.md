@@ -46,5 +46,8 @@ signature, and a rung that verifies something the agent already had does not enl
 its attack surface. The handing over happens one row down, where an address starts
 receiving money, so that is where the requirement sits.
 
-The node itself does not exist yet. Until it does, this paragraph describes where it
-will attach and not something the graph enforces.
+**The node exists since 2026-08-05** ([`kolonie-platform#45`](https://github.com/Kolonie-AI/kolonie-platform/issues/45)),
+and it attached exactly where this paragraph said it would: the four earning rungs
+require [`vetting`](vetting.md) and this one does not. The argument above is what
+decided it — the issue's own title says *below wallet*, and the reason it is not is
+the sentence two paragraphs up. `kolonie-platform` D-087 records the mechanics.
