@@ -37,6 +37,43 @@ the boundary in `quests.md` is what closes it.
 
 ## 3. Where a coin comes from: burn and mint
 
+### The day-one supply: one billion, minted once
+
+**1,000,000,000 $KOL are minted at genesis and never again.** Everything below
+this heading is a rule about a supply that already exists; without a starting
+point it describes a closed loop with no entry, because the burn cannot happen
+until somebody holds a coin to burn. After genesis the supply only falls: the mint
+for a quest can never exceed 95% of the burn that funded it, and an erasure burns
+without minting anything at all.
+
+| Bucket | Share | Release |
+|---|---|---|
+| Liquidity | 15% | at launch, paired and locked |
+| Ecosystem & contributor grants | 30% | linear over 4 years |
+| Team | 15% | 1 year cliff, then linear over 3 years |
+| Reserve | 40% | linear over 5 years, spendable only by governance |
+
+**The allocation is public and every bucket vests on-chain** (Streamflow). A supply
+held in one wallet by the issuer is an overhang the market prices in permanently,
+and a coin nobody will hold at a meaningful price is not a funding instrument —
+which is the only thing this token is for.
+
+**There is no rewards bucket, and its absence is the point.** A quest payout is
+minted from the burn that funded it, so an allocation for rewards would be a second
+source of new coins standing next to a mechanism written specifically to have only
+one — the exact shape §2 rejects.
+
+**There is no land bucket.** §4 already decided that real assets are bought with
+the stablecoin fee and that the Colony never sells its own coin to fund a purchase;
+a land allocation denominated in $KOL would be that sale with a different name on
+it.
+
+**Contributions are paid from the ecosystem bucket**, which is what
+[`treasury.md`](treasury.md) already says — *"earn coins from a capped allocation,
+not from emission"* — and the table above is that cap.
+
+### The quest cycle
+
 A quest is funded in $KOL and paid out in $KOL, with a USD-denominated credit in
 between so that neither side carries the token's volatility across the quest.
 
@@ -49,6 +86,25 @@ between so that neither side carries the token's volatility across the quest.
 therefore permanently removed from supply. As the Colony works, the coin gets
 scarcer, and it gets scarcer in proportion to the value of the work rather than
 to a schedule someone picked.
+
+### How a sponsor pays: USDC in, and it never touches a DEX
+
+**A sponsor pays in USDC. The Colony routes it to $KOL through Jupiter and burns
+what it receives, priced at execution.** A sponsor holding $KOL already may send
+that instead, and most will not.
+
+This changes none of the economics above — the same burn happens and the same
+credits are produced — and it removes the one step that would have cost the Colony
+its first sponsors. A sponsor made to find $KOL on a thin market before it can buy
+anything pays a slippage tax to enter, twice: once in money, and once in the
+impression that this is complicated. The routing is one API call against an
+aggregator that already exists on the chain §8 chose.
+
+**Before the token exists, a deposit is credited as-is and nothing is burned.**
+There is no synthetic burn, no placeholder and no accrued burn liability recorded
+against a future mint. The burn begins when the token does, and until then the
+ledger says what actually happened — which is what `kolonie-platform` builds first
+and what the deposits already in production do today.
 
 ### The mint is bounded by its own burn
 
@@ -165,19 +221,39 @@ The same USD 300M of volume supports a capitalisation of roughly USD 15M if the
 coin is a pure means of payment with no burn. The mechanism *is* the valuation,
 which is why it has to exist in the contract before launch rather than after.
 
-## 6. Bootstrapping, and its cap
+## 6. Bootstrapping: the record, not the ceiling
 
 There are no external sponsors at the start, so the Colony sponsors itself. #14
-requires that this be deliberate, capped and recorded rather than discovered
-later.
+requires that this be deliberate and recorded rather than discovered later.
 
-- The maintainer funds the bootstrap directly, in stablecoins, **before any token
-  exists**. The initial commitment is USD 5,000.
-- That figure is a **ceiling, counted down in public**. When it is spent, only
-  externally funded quests remain.
-- The contribution is recorded when it is made, with the terms under which it
-  converts at launch. Undocumented founder funding becomes a dispute at exactly
-  the moment the Colony starts admitting strangers.
+> **Every credit to a sponsor balance records where the money came from:
+> `bootstrap` if it originated with the maintainer, `external` if a third party
+> spent its own.**
+
+The maintainer funds the bootstrap directly, in stablecoins, **before any token
+exists**, and the contribution is recorded when it is made, with the terms under
+which it converts at launch. Undocumented founder funding becomes a dispute at
+exactly the moment the Colony starts admitting strangers.
+
+**Friendship is not the test; origin is.** A friend who spends their own USD 500
+because they want the quest run is an external sponsor and is the #16 milestone. A
+friend the maintainer reimburses is `bootstrap`, whatever the transfer looked like.
+Neither case can be reconstructed afterwards from bank records or chain data, which
+is why the origin is recorded at the moment of the credit rather than derived from
+it later.
+
+**Why this is not bookkeeping hygiene.** §5 prices the coin off external quest
+volume. A bootstrap credit counted as external inflates the one curve the coin's
+thesis rests on, and the Colony would be deceiving itself first and its holders
+second.
+
+**Until 2026-08-04 this section fixed the bootstrap at USD 5,000 and called it a
+ceiling counted down in public.** The intent was that founder funding could not run
+on unnoticed, and the figure is not what achieves that — the record is. A number the
+maintainer may never spend, or may exceed by USD 200 on a Tuesday, makes the
+document wrong rather than the funding disciplined. **The commitment is therefore to
+record, not to a sum.** Funding may be USD 500 or USD 5,000; what may not happen is
+funding that is invisible.
 
 ## 7. What must be true before a token exists
 
@@ -188,11 +264,19 @@ The token is the last step, not the first. Before it is issued:
   the ledger is internal and is a printer with a public price the day it is not.
 - **The Quest system runs**, with escrow, and quests have been completed.
 - **#16 is answered in production**, not on paper: the milestone is the first
-  quest funded by someone outside the Colony.
+  quest funded by someone outside the Colony. §6's provenance is what makes that a
+  query rather than a judgement call taken afterwards.
 - **External quest volume has run for a full quarter** and can be drawn as a
   curve. The burn is that curve; without it the coin has no thesis on day one.
-- **A legal entity exists and has taken advice.** A token issued by a private
-  individual cannot be unissued.
+- **A legal entity exists and is the issuer.** Kolonie AI FZ-LLC, decided in
+  `kolonie-docs#129`. A token issued by a private individual cannot be unissued.
+  **Which advice, and when, is the part that changed**: VARA advice is a
+  precondition of the *payout leg* — the Colony converting a citizen's ledger
+  balance into a transferable asset — and not of the mint, because that exchange
+  is the regulated activity and issuance by an operating company is not. The
+  entity is still a precondition of the token; the counsel is sequenced one leg
+  later, which is what lets everything upstream of the payout be built now
+  ([`legal-structure.md`](legal-structure.md), `kolonie-platform#222`).
 - **The contract is audited**, the mint bound to its burn as in §3.
 
 Until then the economy runs exactly as it does now, as double-entry bookkeeping in

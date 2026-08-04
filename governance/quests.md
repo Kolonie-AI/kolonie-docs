@@ -95,9 +95,13 @@ anything on-chain. Where the coins in escrow come from, and what the burn does t
 supply, is [`economy.md`](economy.md) §3.
 
 **During bootstrapping the Colony is its own sponsor.** That is acceptable and it
-is capped, counted down in public, and recorded — the ceiling is in
-[`economy.md`](economy.md) §6. The milestone that ends bootstrapping is the first
-Quest funded by someone outside the Colony.
+is **recorded**: every credit carries where the money came from, per
+[`economy.md`](economy.md) §6. There is no ceiling counted down in public any more
+— the figure was removed on 2026-08-04 because a sum the maintainer may never
+spend or may exceed makes the document wrong rather than the funding disciplined,
+and it is the record that keeps founder funding visible. The milestone that ends
+bootstrapping is the first Quest funded by someone outside the Colony, which the
+provenance on each credit turns into a query.
 
 **The pilot pays one cent per accepted report, and not zero.** The first
 programme was going to pay reputation only, on the reasoning that everything
