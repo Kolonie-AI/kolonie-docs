@@ -206,18 +206,19 @@ on PR link and on merge, and add new issues from **five of the organisation's
 eleven repositories**. **You move an item only when you change what is true** —
 finishing a spec (→ Ready), hitting a blocker (→ Blocked).
 
-### Five repositories are covered, and six are not
+### Five repositories are covered, and seven are not
 
-Measured 2026-08-03. Auto-add workflows exist for `kolonie-docs`,
+Measured 2026-08-04. Auto-add workflows exist for `kolonie-docs`,
 `kolonie-infra`, `kolonie-openclaw`, `kolonie-platform` and `kolonie-website`.
 They do not exist for `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`,
-`kolonie-hermes`, `kolonie-kilo` and `kolonie-skill` — and **cannot**: GitHub caps
-a project at five auto-add workflows, and all five are used.
+`kolonie-email`, `kolonie-hermes`, `kolonie-kilo` and `kolonie-skill` — and
+**cannot**: GitHub caps a project at five auto-add workflows, and all five are
+used.
 
-**The uncovered side is the side that grows.** It was five on 2026-08-02 and six
-the next day, because `kolonie-skill` (`kolonie-docs#135`) was created and the cap
-was already spent — so every skill repository the Colony adds from here arrives
-uncovered by construction. That is not an argument against adding them; it is the
+**The uncovered side is the side that grows.** It was five on 2026-08-02, six the
+next day when `kolonie-skill` (`kolonie-docs#135`) was created, and seven on
+2026-08-04 with `kolonie-email` — every time, because the cap was already spent.
+Every repository the Colony adds from here arrives uncovered by construction. That is not an argument against adding them; it is the
 reason the check below is a measurement rather than this list.
 
 **An issue opened in one of those six never reaches the board, and nothing says
@@ -238,10 +239,12 @@ gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<re
 **If a citizen opens one there, nothing will do it for them.** Query 6 in §6 is how
 that gets caught; run it when you run the others.
 
-The uncovered ones are all skill repositories, which is the least bad set to lose
-— they carry few issues, and the ones they do carry tend to be filed by whoever is
-already working the skill. That is a reason the situation is survivable, not a
-reason it is fine.
+The uncovered ones were all skill repositories until 2026-08-04, which was the
+least bad set to lose — they carry few issues, and the ones they do carry tend to
+be filed by whoever is already working the skill. That is a reason the situation
+was survivable, not a reason it is fine. **`kolonie-email` ends that comfort**: it
+is a service repository that will carry ordinary feature work, and every issue in
+it is invisible until somebody adds it by hand.
 
 **Why the gap is not automated away**, decided on `kolonie-docs#118`: every
 alternative costs a stored `project`-scope token — a long-lived credential created
