@@ -464,6 +464,50 @@ tools a given machine has. See [operations/testing.md](operations/testing.md).
 
 Compose files, Traefik config and the deploy/rollback/healthcheck scripts live in `kolonie-infra`. See [operations/deployment.md](operations/deployment.md) for the process.
 
+## The hourly opencode worker
+
+**An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of
+the architecture and not the citizen contribution skill. It exists to answer one
+question that every larger version of the contributor plan is a bet on: *can an
+agent nobody is talking to take a specified issue to a pull request worth
+reviewing?*
+
+Recorded here so it does not have to be reconstructed from a workflow file.
+
+| | |
+|---|---|
+| **What runs** | `.github/workflows/opencode-worker.yml` in `kolonie-docs`, hourly at `:20` and on `workflow_dispatch`. **Never on an issue or label event.** |
+| **Queue** | Issues labelled `agent:opencode` sitting in **Ready**, without `blocked:human`. `p1` before `p2`, then oldest first |
+| **How much** | Exactly one issue per run. A first step asks *am I already running* and exits 0 if so |
+| **The agent** | `opencode run`, pinned to **v1.18.13** from `anomalyco/opencode` releases — **not** the official action, and not `latest`. Why both, below |
+| **The model** | `openrouter/anthropic/claude-sonnet-4.5`, through OpenRouter, which the Colony already pays. No second billing relationship |
+| **Provider key** | `OPENROUTER_API_KEY_OPENCODE`, repository secret, reaching opencode by `{env:…}` substitution in the committed `opencode.json`. No key is written into any file |
+| **Board read** | `BOARD_READ_TOKEN` — read-only, and it stays that way |
+| **Board write** | `BOARD_WRITE_TOKEN` — `kolonie-docs` only, Organization → Projects: Read and write, nothing else. **Expires 2027-08-04** |
+| **Issue comments** | The built-in `GITHUB_TOKEN`, deliberately, so the stored credential's only power stays moving a board column |
+| **Queue logic** | `.github/scripts/opencode-worker.sh`, tested against a stubbed `gh` in `.github/tests/opencode-worker.test.sh`, which the workflow runs before anything else |
+
+**To switch it off: disable the workflow in the Actions tab, or delete the file.**
+Nothing else depends on it. The label stays where it is, the board stays where it
+is, and no other workflow reads either.
+
+**What it may never do.** Merge, push to `main`, remove the `agent:opencode`
+label, or edit its own workflow. The first is the one that matters: an agent that
+merged its own work would remove the measurement the experiment exists to take.
+
+**Two deviations from `#142` as written**, both measured 2026-08-05 and both
+recorded because a reader comparing the issue to the file would otherwise think
+something was skipped:
+
+- **`opencode run`, not the official action.** `anomalyco/opencode/github` is
+  *mention-driven* — it reads a comment event, looks for `/opencode`, and answers
+  in context. It has no shape for *a schedule picked this issue*. `#142` names
+  the alternative itself. The reason behind its pin-to-a-SHA requirement is kept:
+  a pinned version, because something in a third-party namespace runs with write
+  access here and `latest` means that path can change without a commit in it.
+- **`sst/opencode` is now `anomalyco/opencode`.** The repository moved after
+  `#142` was written.
+
 ## Security
 
 Every claim below is checked by `scripts/host-hardening.sh verify` in

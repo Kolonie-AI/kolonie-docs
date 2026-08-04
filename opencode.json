@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "openrouter": {
+      "options": {
+        "apiKey": "{env:OPENROUTER_API_KEY_OPENCODE}"
+      }
+    }
+  },
+  "model": "openrouter/anthropic/claude-sonnet-4.5",
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git push*": "deny",
+      "git push --force*": "deny",
+      "gh pr merge*": "deny",
+      "gh release*": "deny",
+      "gh secret*": "deny",
+      "gh auth*": "deny"
+    }
+  },
+  "instructions": ["AGENTS.md"]
+}

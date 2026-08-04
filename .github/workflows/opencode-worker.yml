@@ -1,0 +1,258 @@
+name: opencode worker
+
+# One issue an hour, taken from a queue, turned into a pull request (`#142`).
+#
+# **This is an experiment with a stated end**, not the citizen contribution skill
+# and deliberately not a general dispatcher. Development here is trunk-based and
+# fast — `kolonie-platform` took 279 commits in the 30 days to 2026-08-03, of
+# which 3 were merges — so there is no throughput problem being solved. The
+# question underneath is the one every larger version of the contributor plan is
+# a bet on: **can an agent nobody is talking to take a specified issue to a pull
+# request worth reviewing?**
+#
+# ## Why a queue and not a trigger
+#
+# The obvious design is `on: issues: [labeled]`, and it is wrong here. Labelling
+# five issues would start five runs at once, against a repository where two
+# agents already collide. A schedule that takes exactly one item is strictly one
+# worker, whatever anybody does to the labels.
+#
+# `agent:opencode` is therefore **queue membership — not a status and not a
+# trigger**. The board column says what is happening to an issue; the label says
+# who is allowed to work it. Nothing here ever removes it.
+#
+# ## Two deviations from `#142` as written, both deliberate
+#
+# **1. `opencode run`, not the official action.** `#142` says to pin
+# `anomalyco/opencode/github` to a commit SHA. Measured 2026-08-05: that action is
+# **mention-driven** — it reads an `issue_comment` or `pull_request_review_comment`
+# event, looks for `/opencode`, and answers in context. It has no shape for *a
+# schedule picked this issue*, and bending it into one would mean synthesising a
+# comment event, which is a class of clever that fails quietly. `#142` itself
+# names the alternative: *"`opencode run --model provider/model` as its
+# non-interactive mode"*. That is what this uses.
+#
+# The reason behind the pinning requirement is untouched and is the reason the
+# binary below is pinned to a version and checked against a SHA-256: something in
+# a third-party namespace runs with write access here, and `latest` means this
+# repository's write path can change without a commit in it.
+#
+# **2. `sst/opencode` is now `anomalyco/opencode`.** The repository moved between
+# `#142` being written and this being built. Named here because a workflow that
+# silently follows a redirect is a workflow nobody can audit by reading.
+#
+# ## How to switch the whole thing off
+#
+# Disable this workflow in the Actions tab, or delete this file. Nothing else
+# depends on it: the label stays where it is, the board stays where it is, and no
+# other workflow reads either. `ARCHITECTURE.md` says the same in the one place
+# somebody looking for it would look.
+
+on:
+  schedule:
+    # Hourly, at :20 — clear of `check-red-lines` (04:00) and `board-self-check`
+    # (05:00), so an hour that contains one of those does not spend its GraphQL
+    # budget in the same minute as the thing that exists to protect it.
+    - cron: '20 * * * *'
+  workflow_dispatch:
+
+# A backstop and **not** the mechanism. The job asks *am I already running* in its
+# first step, explicitly, so a person reading the log sees the decision rather
+# than inferring it from a cancelled run. This is here for the case that step
+# cannot answer — an API failure — and it queues rather than cancels, because a
+# cancelled run is one that claimed an issue and then did not release it.
+concurrency:
+  group: opencode-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    # Longer than the interval on purpose: overlap is handled by the first step,
+    # and a run cut off at sixty minutes would abandon a pull request halfway.
+    # Bounded all the same, because a hung run holds the queue — and the release
+    # step below is what puts the issue back when this fires.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because a check nobody has verified is one nobody should trust.
+      # `board-self-check.yml`'s rule, and it matters more here: this workflow
+      # writes to the board and opens pull requests.
+      - name: Test the queue logic
+        run: bash .github/tests/opencode-worker.test.sh
+
+      # Step 1. Explicit, so the log says *a previous run is still working* in as
+      # many words rather than leaving a person to notice a missing run.
+      - name: Am I already running?
+        id: solo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          running=$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow opencode-worker.yml --status in_progress \
+            --limit 10 --json databaseId --jq 'length')
+          echo "in_progress runs, counting this one: $running"
+          if [ "$running" -gt 1 ]; then
+            echo "a previous run is still working. Exiting, and taking nothing."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Step 2 and 3. A quiet hour must be *visibly* quiet — indistinguishable
+      # from a broken job is the failure mode this line exists to prevent.
+      - name: Is there anything to do?
+        id: queue
+        if: steps.solo.outputs.skip != 'true'
+        env:
+          # Read-only, and it is the token that can see the board. The write
+          # below uses a different one on purpose.
+          GH_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
+        run: |
+          number=$(bash .github/scripts/opencode-worker.sh pick)
+          if [ -z "$number" ]; then
+            echo "nothing queued this hour. Exiting 0."
+            exit 0
+          fi
+          echo "taking #$number"
+          echo "issue=$number" >> "$GITHUB_OUTPUT"
+
+      # Step 4, and the real lock. An issue in In Progress no longer matches the
+      # query above, so even two overlapping runners could not take the same one.
+      #
+      # **A board write that fails stops the run here**, before any work, while
+      # nothing needs undoing. `#142` names an issue parked in In Progress by an
+      # expired token as the one failure this design cannot recover from alone —
+      # `BOARD_WRITE_TOKEN` expires 2027-08-04 and that is a certainty, not a
+      # hypothesis.
+      - name: Claim it
+        if: steps.queue.outputs.issue
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/opencode-worker.sh claim "${{ steps.queue.outputs.issue }}"
+
+      # Comments are `GITHUB_TOKEN`'s job, deliberately: the stored credential's
+      # only power stays moving a board column, so a leak of it costs a column.
+      - name: Say so on the issue
+        if: steps.queue.outputs.issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "$GITHUB_REPOSITORY" --body \
+            "Taken by the hourly opencode worker (\`#142\`), moved to **In Progress**: $RUN_URL
+
+          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, a person reviews and merges — it never merges its own work. If the run fails, this issue goes back to **Ready** with a comment saying which run failed."
+
+      - name: Install opencode
+        if: steps.queue.outputs.issue
+        env:
+          # Pinned to a version, not to `latest`, for the reason `#142` gives
+          # about pinning an action: this runs with write access here, and
+          # `latest` means the write path can change without a commit in it.
+          OPENCODE_VERSION: v1.18.13
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/opencode.tar.gz \
+            "https://github.com/anomalyco/opencode/releases/download/${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"
+          mkdir -p "$HOME/.opencode/bin"
+          tar -xzf /tmp/opencode.tar.gz -C "$HOME/.opencode/bin"
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Work it
+        id: work
+        if: steps.queue.outputs.issue
+        env:
+          # Reaches opencode by `{env:…}` substitution in the committed
+          # `opencode.json`, so no key is ever written into this file.
+          OPENROUTER_API_KEY_OPENCODE: ${{ secrets.OPENROUTER_API_KEY_OPENCODE }}
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ steps.queue.outputs.issue }}
+        run: |
+          set -euo pipefail
+          git config user.name "opencode worker"
+          git config user.email "noreply@kolonie.ai"
+          branch="opencode/issue-${ISSUE}"
+          git switch -c "$branch"
+
+          gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+            --json number,title,body,comments > /tmp/issue.json
+
+          opencode run --model openrouter/anthropic/claude-sonnet-4.5 "$(cat <<PROMPT
+          You are working issue #${ISSUE} in this repository, unattended. Nobody is
+          watching and nobody will answer a question, so if the issue is ambiguous,
+          make the smallest defensible change and say in the pull request body
+          exactly what you were unsure about.
+
+          The issue, with its comments, is in /tmp/issue.json.
+
+          Read AGENTS.md first — it is binding, and it is the entry point.
+
+          Rules for this run:
+          - Change only what the issue asks for. An adjacent improvement is out of
+            scope even when it is obviously right; another agent may be in that file.
+          - Do not push and do not merge. Commit to the current branch and stop.
+          - Do not edit .github/workflows/ or opencode.json. This workflow may not
+            rewrite itself.
+          - If you conclude the issue cannot be done as specified, do not guess.
+            Commit nothing, and write why to /tmp/refusal.txt.
+          PROMPT
+          )"
+
+          if [ -s /tmp/refusal.txt ]; then
+            echo "the agent declined the issue:"
+            cat /tmp/refusal.txt
+            exit 1
+          fi
+
+          if git diff --quiet HEAD; then
+            echo "no changes were made — nothing to open a pull request for"
+            exit 1
+          fi
+
+          git push --set-upstream origin "$branch"
+          url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "$(git log -1 --pretty=%s)" \
+            --body "Opened by the hourly opencode worker for #${ISSUE}, unattended.
+
+          Closes #${ISSUE}
+
+          Nobody reviewed this before it was opened. It is part of \`#142\`, an experiment with a stated end: five issues go through this and each outcome is recorded. **The worker does not merge** — an agent that merged its own work would remove the measurement the experiment exists to take.")
+          echo "pull request: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Move it to In Review
+        if: success() && steps.queue.outputs.issue
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/opencode-worker.sh review "${{ steps.queue.outputs.issue }}"
+
+      # **The recovery path.** Without it the first crash parks an issue in In
+      # Progress forever, and `#142` observes that it will be the issue that most
+      # needed attention. `failure()` rather than `always()`, so a successful run
+      # does not undo its own claim; `cancelled()` too, because a cancelled run
+      # holds a claim exactly as a failed one does.
+      - name: Put it back
+        if: (failure() || cancelled()) && steps.queue.outputs.issue
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/opencode-worker.sh release "${{ steps.queue.outputs.issue }}"
+
+      - name: Say why on the issue
+        if: (failure() || cancelled()) && steps.queue.outputs.issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "$GITHUB_REPOSITORY" --body \
+            "The hourly opencode worker failed on this issue and has put it back in **Ready**: $RUN_URL
+
+          The \`agent:opencode\` label is untouched, so it is queued again and will be tried on a later hour. If it fails repeatedly, that is a finding worth recording on \`#142\` rather than a reason to keep retrying."

@@ -399,10 +399,39 @@ for.** It existed before status moved onto the board and was deleted with the
 other status labels; "this can be picked up now" is the **Ready** column, per §4.
 `operations/coding-agents.md` described a workflow that triggered on it until
 2026-07-29 — the workflow never existed either, which is how a deleted label kept
-looking like a live part of the process for two months (`kolonie-docs#4`). If a
-dispatch automation is ever built, it may need one label because Actions triggers
-on labels and not on columns; that is a decision to take then, with this
-paragraph as the thing being changed.
+looking like a live part of the process for two months (`kolonie-docs#4`).
+
+**That decision has now been taken, and this paragraph is what changed**
+(`kolonie-docs#142`). There is one automation label and it is
+**`agent:opencode`**.
+
+> **`agent:opencode` is queue membership. It is not a status and it is not a
+> trigger.**
+
+The distinction is the whole of it and is worth reading twice, because the
+obvious reading is wrong in both halves:
+
+- **Not a status.** The board column says what is happening to an issue. The
+  label says *who is allowed to work it*. An issue may carry the label in any
+  column; only the ones in **Ready** are in the queue.
+- **Not a trigger.** `.github/workflows/opencode-worker.yml` runs on a
+  **schedule** and takes exactly one issue an hour. It does not run on
+  `issues: [labeled]`, deliberately: labelling five issues would start five runs
+  at once against a repository where two agents already collide.
+
+**The workflow never removes it.** Removing it would be deciding an issue may
+never be tried again, which is not a worker's decision to take.
+
+**Who may apply it, and to what.** Anyone — the maintainer, an agent, the human.
+Only to an issue that is in **Ready** and is one of: a defect with a reproduction
+in the issue; a documented statement the repository contradicts; a mechanical
+change across named files. **Anything containing a decision is out of scope**, and
+an issue carrying `blocked:human` is out of scope by construction.
+
+It is an experiment with a stated end — five issues, then a written answer to
+*would we let this run on issues nobody looked at first?* — and not the citizen
+contribution skill. `ARCHITECTURE.md` records what runs it and how to switch it
+off in one step.
 
 ## 6. The orchestration loop
 
