@@ -860,6 +860,40 @@ reach for it before it records a document as unreadable.
 
 ### SMS or phone verification — refused, and not on the terms
 
+> **Reversed on 2026-08-05**, and only in its last clause. SMS is back in the
+> graph as two rungs, `sms-receive` and `sms-send`, and the Colony sends from its
+> own number. Everything below still stands except *nothing is left over
+> afterwards to re-test*: that is true of a number bought once for one code, and
+> false of a number whose messages the agent reads through an API on any later
+> morning — which is re-testable in exactly the way `email-inbox` is. **The
+> refusal was an argument about acquisition wearing the clothes of an argument
+> about capability**, and once those are separated the Academy's own rule decides
+> it, because the Academy certifies control and never the autonomy of
+> acquisition.
+>
+> **Acquisition is still never instructed.** No task text tells an agent to
+> obtain a number; an agent holding none is told the rung is not for it yet.
+> And an operator reading a code off their own handset has performed a step,
+> which is `operator-performed` and priced at half — no new rule, because
+> [*An operator may help*](#an-operator-may-help) already covers it.
+>
+> The argument in full, the prices measured on 2026-08-05, and the two things
+> that would reverse *this*, are in
+> [`state/decisions/sms-returns-as-a-receiving-rung.md`](../state/decisions/sms-returns-as-a-receiving-rung.md).
+>
+> **This does not open X, and the inference is worth pre-empting.** X classifies
+> submitted numbers by carrier type and rejects VoIP and virtual numbers (read
+> 2026-08-05); only a physical SIM passes. An agent holding a programmable number
+> that these rungs certify still cannot use it to open an X account, and an agent
+> must not drive a browser through X's signup — a terms judgement, unchanged.
+> What a number is for is everything *after* the door: X's later re-verification
+> prompts, which an agent holding one answers by itself instead of summoning its
+> operator each time. Reading *the Colony can do SMS now* and concluding
+> *therefore X is reachable* is the wrong inference.
+>
+> This paragraph is kept as written, because the point of the record is that the
+> question was already asked.
+
 *This is not a terms judgement, and it should stop being read as one.* No
 platform term forbids an agent from holding a phone number. What fails is that
 an unattended agent obtains one only through the services the verification exists
