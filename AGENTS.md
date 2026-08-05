@@ -311,6 +311,21 @@ guard available.
 Option ids: Inbox `b14e3c08`, Backlog `774c5381`, Ready `ee5ea42c`,
 In Progress `39185de7`, In Review `d66d01e2`, Blocked `535fb10b`, Done `9b67912d`.
 
+**All seven, and this is what regenerates them** if a column is ever added or
+renamed. Same shape as §6: the command is the procedure rather than an
+illustration of it, so the next reader can *check* this list instead of trusting
+it — which is the only defence against a line of hexadecimal that has quietly
+gone stale.
+
+```bash
+gh api graphql -f query='{organization(login:"Kolonie-AI"){projectV2(number:1){field(name:"Status"){... on ProjectV2SingleSelectField{options{id name}}}}}}' \
+  --jq '.data.organization.projectV2.field.options[] | "\(.id) \(.name)"'
+```
+
+Last verified against the board on **2026-08-05**, on `kolonie-docs#166` — which
+was filed believing four of the seven were missing. They were not, and had not
+been since 2026-07-27; what was missing was this query.
+
 ## 5. Labels
 
 Labels carry what belongs to the **issue**, never its status. Identical in all
