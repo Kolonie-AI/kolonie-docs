@@ -122,7 +122,7 @@ created yet. `kolonie-core` and `kolonie-academy` were merged into
 | This documentation | Apache-2.0 |
 
 The copyright holder is **Kolonie AI FZ-LLC**, a Dubai Free Zone company in
-formation. See [governance/legal-structure.md](governance/legal-structure.md).
+IFZA. See [governance/legal-structure.md](governance/legal-structure.md).
 
 The split is deliberate. The domain model and the skills have to spread as far as
 possible — they are the Colony's immigration portal, and a permissive license

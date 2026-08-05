@@ -2,8 +2,14 @@
 
 ## The Entity
 
-**Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, in
-formation as of 2026-07-27, **in IFZA**.
+**Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, **in
+IFZA**. Formation was completed; recorded 2026-08-06. It was *in formation* from
+2026-07-27, and everything below that was written against that state has been
+re-read rather than left standing.
+
+**The registration date and the licence number are not in this file yet**, and
+they belong here — a page that names an entity and cannot say when it came into
+existence is the undated claim `kolonie-website#41` was opened about.
 
 IFZA rather than DMCC because the entity's first jobs are narrow: hold the
 copyright, hold the bank account, sign contracts. DMCC costs several times as much
