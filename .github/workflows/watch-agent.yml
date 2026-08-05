@@ -1,7 +1,8 @@
 name: Watch Agent
 
-# Reads yesterday out of Loki, decides whether anything is wrong, and opens an
-# issue when it is. Silence when it is not. `kolonie-docs#133`.
+# Reads yesterday out of Loki, says what it saw in its own run summary, and opens
+# an issue when a service has stopped logging. Silence when nothing is wrong.
+# `kolonie-docs#133`, split by `kolonie-docs#165`.
 #
 # ## Why it runs here and not on the VPS
 #
@@ -38,8 +39,24 @@ name: Watch Agent
 # `watch-agent.sh` runs the queries and answers *which services said nothing*,
 # with no model call and no key. `watch-judge.py` asks whether the counts are
 # normal, and every way it can fail ends in exit 0 with no judgement written —
-# the numbers then stand on their own and the issue says the judgement was
+# the numbers then stand on their own and the summary says the judgement was
 # skipped. A provider outage costs an opinion, never the check.
+#
+# ## Two jobs, and only one of them files (`#165`)
+#
+# The daily narrative — how yesterday compared with the week — **is this run's
+# summary and opens nothing.** A report that never resolves is not work, and
+# filing it as an issue produced exactly one issue, forever, with every finding
+# as a comment on it.
+#
+# The alarm — a service that has stopped logging — **files one issue per
+# service**, closeable, with the service's name in the title.
+#
+# The model's verdict files nothing now. What took over the path from *an error
+# appeared* to *an issue exists* is the log detector in `kolonie-platform#407`,
+# which ticks every half hour rather than once a day. This split waited for that
+# to exist: removing the alarm half first would have left the Colony with less
+# than it had.
 
 on:
   schedule:
@@ -133,7 +150,14 @@ jobs:
           MODEL: deepseek/deepseek-v4-flash
         run: python3 .github/scripts/watch-judge.py "$RUNNER_TEMP/watch"
 
-      - name: Say so, if there is something to say
+      # The narrative, in the run's own output (`#165`). Written whether or not
+      # anything is wrong, and it is the whole of what a good day produces —
+      # there is no all-clear issue and no all-clear comment.
+      - name: Yesterday, in this run
+        if: steps.gather.outputs.skip != 'true'
+        run: bash .github/scripts/watch-agent.sh summary "$RUNNER_TEMP/watch" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: File, if a service has gone silent
         if: steps.gather.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

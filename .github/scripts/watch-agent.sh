@@ -1,11 +1,40 @@
 #!/bin/bash
-# The Watch Agent's deterministic half: read yesterday out of Loki, decide
-# whether anything is wrong, and say so on an issue. `kolonie-docs#133`.
+# The Watch Agent's deterministic half: read yesterday out of Loki, say what it
+# saw, and file when a service has gone silent. `kolonie-docs#133`, split by
+# `kolonie-docs#165`.
 #
 # Usage:
 #   watch-agent.sh gather <dir>   # run the queries, write the numbers, exit 2 if Loki is unreachable
-#   watch-agent.sh decide <dir>   # exit 1 if something is wrong and an issue is owed
-#   watch-agent.sh report <dir>   # open that issue, or comment on the one already open
+#   watch-agent.sh summary <dir>  # the day's narrative, for the run's own output
+#   watch-agent.sh decide <dir>   # exit 1 if a service has gone silent
+#   watch-agent.sh report <dir>   # one issue per silent service
+#
+# ## Two jobs, and they wanted opposite things (`#165`)
+#
+# | | Wants |
+# |---|---|
+# | *Here is yesterday's shape* | daily, narrative, no action implied, never urgent |
+# | *Something is broken now* | minutes not hours, one issue per defect, closeable |
+#
+# This served the first and filed it in the shape of the second: **one issue,
+# forever, every finding a comment on it** — unrelated defects weeks apart on a
+# thread that never closes. That is the chronicle failure `AGENTS.md` §2 names,
+# one level up: *"a file that is appended to and never rewritten is a
+# chronicle"*. Nobody could pick it up, because it was not a piece of work.
+#
+# So the narrative is now **the run's own output** and files nothing, and the
+# alarm — a service that has stopped logging — files **one issue per service**,
+# closeable, with the service's name in the title rather than a fixed string.
+#
+# **The model's judgement no longer files anything.** It is still asked, still
+# daily, still cheap, and it is read in the run summary. What replaced it as the
+# path from *an error appeared* to *an issue exists* is the log detector in
+# `kolonie-platform#407`, which ticks every half hour instead of once a day and
+# files per signature. This split was blocked on that existing, deliberately:
+# removing the alarm half first would have left the Colony with less than it had.
+#
+# **Silence is still the healthy state.** There is no daily all-clear, no issue
+# on a good day and no comment on one. A quiet run is a quiet run.
 #
 # ## What it sends the model, and what it does not
 #
@@ -37,7 +66,13 @@ set -uo pipefail
 
 LOKI_URL="${LOKI_URL:-https://logs.kolonie.ai}"
 LOKI_USER="${LOKI_USER:-watch}"
-TITLE="The Watch Agent found something in yesterday's logs"
+
+# One title per silent service, and the service name is the whole of the dedupe
+# key (`#165`). The old fixed string is why there was one issue forever; a title
+# naming the thing that is wrong is what makes each finding closeable.
+title_for() {
+  echo "\`$1\` has stopped logging"
+}
 
 # `date -u +%s` at the top, once. Every window below is relative to it, so the
 # 24-hour and 7-day queries cannot disagree about when "now" was — which they
@@ -218,43 +253,73 @@ cmd_gather() {
   cat "$dir/numbers.md"
 }
 
+# --- the day's narrative ------------------------------------------------------
+# **The output of this workflow, and not an issue** (`#165`). A daily report that
+# never resolves is not work: it is a description of yesterday, and the place for
+# a description of yesterday is the run that produced it.
+#
+# The model's opinion is here too, for the same reason it was kept at all — *is
+# today normal* is a question no threshold answers, and `#133` was right that no
+# number belongs in this file. What changed is where the answer goes.
+cmd_summary() {
+  local dir="$1"
+
+  cat "$dir/numbers.md"
+  echo
+  echo "### What the model makes of it"
+  echo
+  if [ -s "$dir/judgement.md" ]; then
+    cat "$dir/judgement.md"
+  else
+    echo "_No judgement was written — the model was not called or did not answer. The numbers"
+    echo "above were measured rather than judged and stand on their own._"
+  fi
+  echo
+  echo "---"
+  echo
+  echo "This is a description of yesterday and files nothing. A defect that needs acting on"
+  echo "becomes its own issue: a service that has stopped logging is filed by this workflow,"
+  echo "and an error in the logs is filed by the detector in \`kolonie-platform#407\`, which"
+  echo "ticks every half hour rather than once a day."
+}
+
 # --- the decision -------------------------------------------------------------
-# Two inputs, and either is enough:
+# **One input, and it is the one no model can answer** (`#165`): a service that
+# has stopped logging. A dead runner throws no errors, so a detector reading
+# errors cannot see it — which is exactly why `#133` made this half
+# deterministic and separate, and why it is the alarm this workflow keeps.
 #
-#   - a silent service, decided here and needing nothing else
-#   - the model saying today is not normal, in `judgement.json`
-#
-# A missing or unparseable `judgement.json` is **not** a reason to file. It means
-# the judgement half did not run — no key, no answer, a provider outage — and the
-# deterministic half still gets to speak. Filing on it would turn every provider
-# hiccup into a morning issue, which is how a monitor gets muted.
+# The model's verdict is **not** an input any more. It used to be, and it filed
+# onto the eternal issue; what replaced it is `kolonie-platform#407`, which sees
+# the same errors every half hour and files one issue per signature. A daily
+# model opinion filing a daily issue would now be a second, worse copy of that.
 cmd_decide() {
-  local dir="$1" abnormal
+  local dir="$1"
   [ -s "$dir/silent.txt" ] && { echo "a service has gone silent"; return 1; }
-  abnormal=$(jq -r '.abnormal // false' "$dir/judgement.json" 2>/dev/null)
-  [ "$abnormal" = "true" ] && { echo "the model reports today as abnormal"; return 1; }
   echo "nothing to report"
   return 0
 }
 
 # --- reporting ----------------------------------------------------------------
-# One issue, reused. Listed and filtered rather than searched, and then waited
-# for — both of those are `kolonie-docs#150`'s lesson from the check next door:
-# GitHub's issue index is eventually consistent, an issue filed a moment ago is
-# not findable yet, and a run that exits while its own issue is invisible is how
-# the next run files a duplicate. The guard is code, which `#133` asks for.
+# **One issue per silent service** (`#165`). Listed and filtered rather than
+# searched, and then waited for — both of those are `kolonie-docs#150`'s lesson
+# from the check next door: GitHub's issue index is eventually consistent, an
+# issue filed a moment ago is not findable yet, and a run that exits while its
+# own issue is invisible is how the next run files a duplicate. The guard is
+# code, which `#133` asks for.
 existing_issue() {
+  local title="$1"
   gh issue list --repo "$GITHUB_REPOSITORY" --state open --label area:docs --limit 100 \
-    --json number,title --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty"
+    --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty"
 }
 
 VISIBILITY_ATTEMPTS=${VISIBILITY_ATTEMPTS:-30}
 VISIBILITY_POLL=${VISIBILITY_POLL:-2}
 
 await_visible() {
-  local attempt=0 seen
+  local title="$1" attempt=0 seen
   while [ "$attempt" -lt "$VISIBILITY_ATTEMPTS" ]; do
-    seen=$(existing_issue)
+    seen=$(existing_issue "$title")
     if [ -n "$seen" ]; then
       echo "findable as #$seen after $((attempt * VISIBILITY_POLL))s"
       return 0
@@ -267,37 +332,47 @@ await_visible() {
 }
 
 # **Evidence first, judgement last, and that order is a requirement rather than a
-# preference** (`#133`). Whoever opens this at 08:00 should be able to disagree
-# with the model without re-running a single query.
+# preference** (`#133`). Whoever opens this should be able to disagree without
+# re-running a single query.
+#
+# **One issue per silent service, and the service is in the title** (`#165`). The
+# old fixed title is why there was one issue forever. A service that is still
+# silent tomorrow gets a comment on its own issue rather than a second one —
+# which is a comment about the thing the issue is about, not an unrelated finding
+# on a shared thread.
 cmd_report() {
-  local dir="$1" body judgement
-  if [ -s "$dir/judgement.md" ]; then
-    judgement=$(cat "$dir/judgement.md")
-  else
-    judgement="_No judgement was written — the model was not called or did not answer. The numbers above stand on their own, and the silent-service check that produced them needs no model._"
-  fi
+  local dir="$1" service title existing body
 
-  body=$(printf '%s\n\n---\n\n### What the model makes of it\n\n%s\n\n---\n\n%s\n\n%s\n' \
-    "$(cat "$dir/numbers.md")" \
-    "$judgement" \
-    "[Full run](${RUN_URL:-no run url})" \
-    "Filed by \`watch-agent.yml\`, which reads the previous day out of Loki once a day. It is silent when nothing is wrong, and it reuses this issue rather than opening a second. It never closes one: whether this is dealt with is a person's call, not a workflow's.")
+  [ -s "$dir/silent.txt" ] || { echo "nothing silent — filing nothing"; return 0; }
 
-  local existing
-  existing=$(existing_issue)
-  if [ -n "$existing" ]; then
-    gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
-    echo "commented on #$existing"
-  else
-    gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
-      --label p1 --label area:docs --body "$body"
-    await_visible
-  fi
+  while read -r service; do
+    [ -n "$service" ] || continue
+    title=$(title_for "$service")
+
+    body=$(printf '%s\n\n%s\n\n%s\n\n---\n\n%s\n\n%s\n' \
+      "\`$service\` logged nothing in the last 24 hours, having logged at some point in the previous 7 days." \
+      "**A dead runner throws no errors**, so nothing that reads errors can see this. That is why the check is deterministic and separate, and why it is the one alarm this workflow files." \
+      "$(cat "$dir/numbers.md")" \
+      "[Full run](${RUN_URL:-no run url})" \
+      "Filed by \`watch-agent.yml\`, which reads the previous day out of Loki once a day. It is silent when nothing is wrong. **It never closes an issue**: whether this is dealt with is a person's call, not a workflow's — including when the service starts logging again, because a service that came back is a thing somebody should know happened.")
+
+    existing=$(existing_issue "$title")
+    if [ -n "$existing" ]; then
+      gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" \
+        --body "Still silent: \`$service\` logged nothing in the last 24 hours either. [Full run](${RUN_URL:-no run url})"
+      echo "commented on #$existing for $service"
+    else
+      gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+        --label p1 --label area:docs --body "$body"
+      await_visible "$title"
+    fi
+  done < "$dir/silent.txt"
 }
 
 case "${1:-gather}" in
   gather) shift; cmd_gather "${1:?usage: watch-agent.sh gather <dir>}" ;;
+  summary) shift; cmd_summary "${1:?usage: watch-agent.sh summary <dir>}" ;;
   decide) shift; cmd_decide "${1:?usage: watch-agent.sh decide <dir>}" ;;
   report) shift; cmd_report "${1:?usage: watch-agent.sh report <dir>}" ;;
-  *) echo "usage: watch-agent.sh gather|decide|report <dir>" >&2; exit 2 ;;
+  *) echo "usage: watch-agent.sh gather|summary|decide|report <dir>" >&2; exit 2 ;;
 esac

@@ -136,46 +136,87 @@ out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "the silent service is still reported without a model" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
 
 echo
-echo "the model's opinion is not a veto and not a trigger"
+echo "the model's opinion files nothing at all (#165)"
 
-# A missing judgement must not file. Otherwise every provider outage becomes a
-# morning issue, which is how a monitor gets muted.
+# **The change `#165` makes.** The model's verdict used to file, onto one eternal
+# issue. It is still asked, still daily and still read — in the run summary. What
+# took over the path from *an error appeared* to *an issue exists* is
+# `kolonie-platform#407`, which sees the same errors every half hour.
 setup; bash "$SCRIPT" gather "$WORK/out" >/dev/null
 rm -f "$WORK/out/judgement.json"
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
-expect "no judgement on a quiet day files nothing" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+expect "a normal day files nothing" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
 printf '{"abnormal":true,"judgement":"Errors tripled against the week."}' > "$WORK/out/judgement.json"
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
-expect "an abnormal verdict files, with nothing silent" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+expect "an abnormal verdict no longer files" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# And it reaches nothing through `report` either, which is the assertion that
+# would catch a later hand re-wiring the verdict into the filing path.
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "an abnormal verdict opens no issue" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+expect "and comments on none" "$(logged "issue comment" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 printf '{"abnormal":false,"judgement":"Steady."}' > "$WORK/out/judgement.json"
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "a normal verdict files nothing" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
-# Garbage from a provider is a missing opinion, not a finding.
+# Garbage from a provider is a missing opinion, not a finding — and now not a
+# finding either way, which is the point.
 printf 'not json at all' > "$WORK/out/judgement.json"
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "an unparseable judgement files nothing" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
-echo
-echo "reporting — one issue, reused, never closed"
+# **A missing judgement must not turn a normal day into a reported one**, which
+# was true before `#165` and has to stay true after it: a provider outage that
+# filed a morning issue is how a monitor gets muted.
+setup; bash "$SCRIPT" gather "$WORK/out" >/dev/null
+rm -f "$WORK/out/judgement.json" "$WORK/out/judgement.md"
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "no judgement on a quiet day is still a quiet day" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "and nothing is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
+echo
+echo "reporting — one issue per silent service, never closed (#165)"
+
+# **The rejection case `#165` asks for**: the one alarm this workflow keeps must
+# still fire. A dead runner throws no errors, so nothing that reads errors — the
+# detector in `kolonie-platform#407` included — can see this.
 setup; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
-printf '{"abnormal":true,"judgement":"A runner has stopped speaking."}' > "$WORK/out/judgement.json"
-printf 'A runner has stopped speaking.\n' > "$WORK/out/judgement.md"
 bash "$SCRIPT" report "$WORK/out" >/dev/null
-expect "with none open, one is created" "$(logged "issue create" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "a silent service still produces an issue" "$(logged "issue create" && echo yes || echo no)" "$(cat "$GH_LOG")"
 expect "and nothing was commented on" "$(logged "issue comment" && echo no || echo yes)"
 
-# The guard `#133` asks to be code: a second run while the first issue is open
-# comments instead of filing again.
+# **The title names the service.** The fixed string is what produced one issue
+# forever, and a title carrying the thing that is wrong is what makes each
+# finding closeable.
+body=$(tr '\n' ' ' < "$GH_LOG")
+expect "the title names the silent service" \
+  "$([[ "$body" == *"verifier-runner\` has stopped logging"* ]] && echo yes || echo no)" "$body"
+
+# The guard `#133` asks to be code, now keyed on the service rather than on a
+# fixed string: a second run while that service's issue is open comments on it.
 setup; echo "417" > "$FIX/existing"; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 bash "$SCRIPT" report "$WORK/out" >/dev/null
 expect "with one open, no second issue is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
-expect "it comments on the open one" "$(logged "issue comment 417" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "it comments on that service's own issue" "$(logged "issue comment 417" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# Two services silent at once are two pieces of work, not one thread.
+setup; printf '{"data":["api"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "two silent services file two issues" \
+  "$([ "$(grep -c 'issue create' "$GH_LOG")" -eq 2 ] && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# And a good day files nothing at all — silence stays the healthy state.
+setup
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "a normal day produces no issue" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+expect "and no comment" "$(logged "issue comment" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 # `#133`: "It reads. It does not act." — including on its own issue. This is
 # where it deliberately differs from board-self-check.sh, so it is asserted
@@ -186,32 +227,39 @@ expect "it touches no board item" \
   "$( { logged "project item-add" || logged "project item-edit"; } && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
-echo "the body leads with the evidence"
+echo "the narrative is the run's own output (#165)"
 
+# Evidence first and judgement last, which was `#133`'s requirement about the
+# issue body and is now the summary's — the order is about the reader, not about
+# where it is printed.
 setup; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 printf 'The verifier runner has said nothing for a day.\n' > "$WORK/out/judgement.md"
-bash "$SCRIPT" report "$WORK/out" >/dev/null
-# The stub logs the whole invocation, and the body is many lines long — so the
-# log is flattened rather than grepped for its first line, which would stop at
-# the first newline and read as "the section is missing".
-body=$(tr '\n' ' ' < "$GH_LOG")
-numbers_at=$(awk '{print index($0, "Errors and warnings per service")}' <<<"$body")
-judge_at=$(awk '{print index($0, "What the model makes of it")}' <<<"$body")
+summary=$(bash "$SCRIPT" summary "$WORK/out" | tr '\n' ' ')
+numbers_at=$(awk '{print index($0, "Errors and warnings per service")}' <<<"$summary")
+judge_at=$(awk '{print index($0, "What the model makes of it")}' <<<"$summary")
 expect "the counts come before the judgement" \
   "$([ "$numbers_at" -gt 0 ] && [ "$judge_at" -gt "$numbers_at" ] && echo yes || echo no)" \
   "numbers@$numbers_at judgement@$judge_at"
-expect "the silent service is in the body" \
-  "$([[ "$body" == *"verifier-runner"* ]] && echo yes || echo no)"
+expect "the model's reading is in the summary" \
+  "$([[ "$summary" == *"said nothing for a day"* ]] && echo yes || echo no)"
 
-# With no judgement the issue still gets filed and says the judgement is missing,
-# rather than presenting an empty section as if the model had nothing to add.
-setup; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
-bash "$SCRIPT" gather "$WORK/out" >/dev/null
-bash "$SCRIPT" report "$WORK/out" >/dev/null
-body=$(tr '\n' ' ' < "$GH_LOG")
+# The summary is printed and files nothing, which is the whole of the change.
+bash "$SCRIPT" summary "$WORK/out" >/dev/null
+expect "writing the summary opens nothing" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+expect "and comments on nothing" "$(logged "issue comment" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# With no judgement the summary says so, rather than presenting an empty section
+# as if the model had nothing to add.
+setup; bash "$SCRIPT" gather "$WORK/out" >/dev/null
+summary=$(bash "$SCRIPT" summary "$WORK/out" | tr '\n' ' ')
 expect "a missing judgement is stated, not hidden" \
-  "$([[ "$body" == *"No judgement was written"* ]] && echo yes || echo no)"
+  "$([[ "$summary" == *"No judgement was written"* ]] && echo yes || echo no)"
+
+# It points at where an error now goes, so a reader of a quiet summary is not
+# left thinking the Colony watches nothing between one 06:00 and the next.
+expect "the summary names the detector that files errors" \
+  "$([[ "$summary" == *"kolonie-platform#407"* ]] && echo yes || echo no)"
 
 echo
 echo "the history says how much history there is"
