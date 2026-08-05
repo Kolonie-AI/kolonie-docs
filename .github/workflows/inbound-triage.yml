@@ -29,6 +29,17 @@ name: Triage inbound contributions
 # workflow has no way to compute. `needs-triage` exists precisely so that the
 # human step is visible rather than skipped.
 #
+# **It does not thank the Colony's own runners for a citizen's report** (`#413`).
+# The Colony now files issues to itself — the log detector and the support
+# triage runner both file as GitHub Apps this organisation runs — and until
+# `#413` those arrived labelled `from:citizen` and `needs-triage`, and were
+# thanked. Both labels were false: `from:citizen` is a claim about provenance,
+# and it is a number the Colony has an interest in, so an automation that
+# inflates it is worse than one that mislabels something inert. `needs-triage`
+# was false because the detector had already routed the issue — right
+# repository, right `area:` label, with its evidence. What such an issue needs
+# is for somebody to read it, which is what `Inbox` already means.
+#
 # **It does not add anything to the project board.** It does not need to: the
 # board's own auto-add rules cover all five repositories and were confirmed
 # enabled on 2026-07-31, including `kolonie-website` and `kolonie-openclaw`,
@@ -67,6 +78,7 @@ jobs:
           REPO: ${{ github.repository }}
           NUMBER: ${{ github.event.issue.number }}
           AUTHOR: ${{ github.event.issue.user.login }}
+          AUTHOR_TYPE: ${{ github.event.issue.user.type }}
           AREA: ${{ inputs.area }}
           BODY: ${{ github.event.issue.body }}
           EXISTING: ${{ toJSON(github.event.issue.labels.*.name) }}
@@ -84,14 +96,55 @@ jobs:
             has_push=false
           fi
 
+          # Is this one of the Colony's own runners filing to itself? (`#413`)
+          #
+          # **The author is an App this organisation runs**, which is the broader
+          # of the two tests the issue weighed and the reason it was chosen: it
+          # covers the log detector and the support triage runner, which have the
+          # same problem for the same reason, and it will cover the next one
+          # without an edit here. Matching on a `log-signature` marker in the
+          # body would have covered only the detector.
+          #
+          # A GitHub App can only open an issue in this repository if it is
+          # installed on this organisation, which only an admin does — so the
+          # `kolonie-` prefix cannot be claimed by a stranger, and no allowlist
+          # has to be maintained.
+          if [ "$AUTHOR_TYPE" = "Bot" ] && [[ "$AUTHOR" == kolonie-* ]]; then
+            ours=true
+          else
+            ours=false
+          fi
+
           had_labels=$(jq 'length > 0' <<< "$EXISTING")
-          echo "author=$AUTHOR push=$has_push labels=$EXISTING"
+          echo "author=$AUTHOR type=$AUTHOR_TYPE push=$has_push ours=$ours labels=$EXISTING"
 
           # An author with push access who labelled their own issue is doing the
           # thing this workflow exists to do, and gets left alone — that is the
           # "does nothing when it has nothing to do" criterion.
           if [ "$has_push" = true ] && [ "$had_labels" = true ]; then
             echo "labelled by someone who could label it: nothing to do"
+            exit 0
+          fi
+
+          # One of our own runners, which has already routed what it filed: right
+          # repository, its evidence in the body, and — for the log detector —
+          # its own `area:` label. What such an issue needs is a reader, which is
+          # what `Inbox` already means.
+          #
+          # **`area:` is still applied if it is missing, and nothing else is.**
+          # Exiting outright would have trusted every present and future runner
+          # to label itself, which is a second promise this file cannot check;
+          # adding the one label that is always true costs nothing and leaves the
+          # two that were false out. No `from:citizen`, because there is no
+          # citizen. No `needs-triage`, because the routing has happened. And no
+          # comment, because nobody is being thanked for anything.
+          if [ "$ours" = true ]; then
+            if jq -e 'any(startswith("area:"))' <<< "$EXISTING" >/dev/null; then
+              echo "filed by one of the Colony's own runners, already labelled: nothing to do"
+            else
+              gh issue edit "$NUMBER" --repo "$REPO" --add-label "area:${AREA}"
+              echo "filed by one of the Colony's own runners: applied area:${AREA} and nothing else"
+            fi
             exit 0
           fi
 
