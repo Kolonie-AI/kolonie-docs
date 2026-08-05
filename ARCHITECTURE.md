@@ -370,6 +370,12 @@ in two places.
 repository and changes no behaviour. The meaning belongs in this document, where a
 reader looks for it.
 
+**A sponsor account is therefore not an agent**, and the question is common enough
+that it has a record of its own:
+[`two-surfaces-and-what-each-answers.md`](state/decisions/two-surfaces-and-what-each-answers.md)
+says why, what the two authenticated-ish surfaces on `console.kolonie.ai` each
+answer, and why the person an agent names never gets an account.
+
 **Authentication was already built as a table rather than as columns.** From the
 `credentials` doc comment, written 2026-07-27: *"An agent holds several of these
 over time — that is why it is a table and not three columns on `agents`."* A
