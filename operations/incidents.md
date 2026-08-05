@@ -667,9 +667,36 @@ asserts, for every app, that each `@kolonie-ai/*` runtime dependency in its
 text rather than off a built image, because putting a Docker daemon in the
 definition of done is what `AGENTS.md` §7 refuses.
 
+**And the fix did not end it, which is the last lesson.** The next deploy after
+the `COPY` landed failed identically. `/opt/kolonie/state/needs-redeploy.env`
+holds the *image tag* of the rolled-back build, not the service:
+
+```
+NEEDS_REDEPLOY_SERVICE=badge-runner
+NEEDS_REDEPLOY_TAG=…kolonie-badge-runner:78ca190…
+```
+
+`78ca190` is the commit that introduced the fault. The cascade restores that tag
+and pulls it, so the fixed build was never tried — and `rollback()` writes the
+marker again on each failure, so **no later commit can ever reach it**. The
+script's own comment says *"No infinite loop is possible because the marker is
+cleared before the attempt"*, which is true within one run and false across
+runs.
+
+**Re-deploying the rolled-back build is right when the rollback was a timing
+problem** — a migration that had not run yet, which is what the cascade was built
+for. It is exactly wrong when that build is broken in itself: the only thing that
+can fix it is a later build, and the pin guarantees a later build is never tried.
+
+**The escape, since nothing documents it:** a `workflow_dispatch` deploy of that
+one service at a known-good version. It clears the marker through `deploy.sh`'s
+`NEEDS_REDEPLOY_SERVICE == SERVICE` branch and ships the fix in the same run.
+That is what ended this, and `kolonie-infra#79` carries the argument for
+recording the service rather than the tag.
+
 **What is still true and worth a separate look.** A deploy that fails only in its
 cascade step reports the same red as a deploy that never reached the host, and the
-ten failures said nothing about which of the two they were. The signal that would
-have shortened this is a container that exits during startup having logged
+eleven failures said nothing about which of the two they were. The signal that
+would have shortened this is a container that exits during startup having logged
 nothing — `deploy.sh` prints that it captured no output and does not treat it as
 different from a container that logged an error.
