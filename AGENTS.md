@@ -203,25 +203,26 @@ rejected for the coin ledger. One record, or none.
 
 The board mostly maintains itself. GitHub's built-in workflows move items on close,
 on PR link and on merge, and add new issues from **five of the organisation's
-eleven repositories**. **You move an item only when you change what is true** —
+twelve repositories**. **You move an item only when you change what is true** —
 finishing a spec (→ Ready), hitting a blocker (→ Blocked).
 
-### Five repositories are covered, and seven are not
+### Five repositories are covered, and eight are not
 
-Measured 2026-08-04. Auto-add workflows exist for `kolonie-docs`,
+Measured 2026-08-05. Auto-add workflows exist for `kolonie-docs`,
 `kolonie-infra`, `kolonie-openclaw`, `kolonie-platform` and `kolonie-website`.
 They do not exist for `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`,
-`kolonie-email`, `kolonie-hermes`, `kolonie-kilo` and `kolonie-skill` — and
-**cannot**: GitHub caps a project at five auto-add workflows, and all five are
-used.
+`kolonie-dns`, `kolonie-email`, `kolonie-hermes`, `kolonie-kilo` and
+`kolonie-skill` — and **cannot**: GitHub caps a project at five auto-add
+workflows, and all five are used.
 
-**The uncovered side is the side that grows.** It was five on 2026-08-02, six the
-next day when `kolonie-skill` (`kolonie-docs#135`) was created, and seven on
-2026-08-04 with `kolonie-email` — every time, because the cap was already spent.
-Every repository the Colony adds from here arrives uncovered by construction. That is not an argument against adding them; it is the
-reason the check below is a measurement rather than this list.
+**The uncovered side is the side that grows.** Five on 2026-08-02; six the next
+day when `kolonie-skill` (`kolonie-docs#135`) was created; seven on 2026-08-04
+with `kolonie-email`; eight on 2026-08-05 with `kolonie-dns` — every time,
+because the cap was already spent. Every repository the Colony adds from here
+arrives uncovered by construction. That is not an argument against adding them;
+it is the reason the check below is a measurement rather than this list.
 
-**An issue opened in one of those six never reaches the board, and nothing says
+**An issue opened in one of those eight never reaches the board, and nothing says
 so.** That is worse than a low priority. §3 makes the board the only record of
 status and §6 makes it the queue an arriving agent reads, so an issue that never
 arrives is not waiting — it is invisible, and the failure is silent by
