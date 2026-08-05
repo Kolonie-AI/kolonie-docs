@@ -727,7 +727,9 @@ The whole picture, short:
 **Licensing and process**
 
 - AGPL-3.0 for the platform, Apache-2.0 for core, skills and docs
-- Copyright holder: Kolonie AI FZ-LLC (IFZA, Dubai — formed; recorded 2026-08-06)
+- Copyright holder: Kolonie AI FZ-LLC (Dubai — formed 2026-08-04, licence 16026).
+  Which free zone is open: this repository says IFZA, the registered address is
+  Meydan's. See governance/legal-structure.md
 - Work tracked in GitHub issues across all repositories, with status held in the
   board column and priority/area/type in labels
 

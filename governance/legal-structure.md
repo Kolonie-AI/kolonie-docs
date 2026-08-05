@@ -2,14 +2,33 @@
 
 ## The Entity
 
-**Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, **in
-IFZA**. Formation was completed; recorded 2026-08-06. It was *in formation* from
-2026-07-27, and everything below that was written against that state has been
-re-read rather than left standing.
+**Kolonie AI FZ-LLC** — a Free Zone Limited Liability Company in Dubai, formed
+**2026-08-04**. It was *in formation* from 2026-07-27.
 
-**The registration date and the licence number are not in this file yet**, and
-they belong here — a page that names an entity and cannot say when it came into
-existence is the undated claim `kolonie-website#41` was opened about.
+| | |
+|---|---|
+| Licence number | **16026** |
+| Registered address | Meydan Grandstand, 6th Floor, Meydan Road, Nad Al Sheba, Dubai, United Arab Emirates |
+| Formed | 2026-08-04 |
+
+Supplied by the maintainer 2026-08-06 and recorded the same day.
+
+### Which free zone — open, and not to be guessed at
+
+**This file says IFZA and argues at length for it. The registered address is the
+Meydan Grandstand in Nad Al Sheba, which is the Meydan Free Zone's address, not
+IFZA's** — IFZA registers at IFZA Business Park in Dubai Silicon Oasis.
+
+One of the two is wrong and it is not a detail: the paragraph below explains why
+IFZA was chosen over DMCC and over RAK DAO, and if the entity was actually formed
+in Meydan then that reasoning describes a decision that did not happen. The
+licence number and the address are what the licence says; the free zone named
+here is what a document written before formation said.
+
+**Do not resolve this by editing one to match the other.** Read the licence.
+Whichever is wrong, the correction belongs here with a sentence saying which
+document was believed and why. `kolonie-website#44` publishes the free zone on
+the imprint, so this is answered before that ships.
 
 IFZA rather than DMCC because the entity's first jobs are narrow: hold the
 copyright, hold the bank account, sign contracts. DMCC costs several times as much
