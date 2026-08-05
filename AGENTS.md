@@ -354,7 +354,7 @@ while you read an issue.
 | 3 | **Legal form and contracts** — the entity, its jurisdiction, anything signed | `kolonie-platform#222` — the payout leg, which `#129` sequences legal advice under VARA to |
 | 4 | **A new external account or credential** — signing up somewhere, holding a key, choosing a provider | `kolonie-infra#69` — an uptime service off the VPS, which somebody has to open an account with |
 | 5 | **Anything irreversible** — deleting data, force-pushing, an erasure, taking a service down | `kolonie-platform#91` — `eraseAgent`, which burns a balance and deletes a citizen |
-| 6 | **Priority** — setting `p1` or `p2` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
+| 6 | **Priority on an issue that arrived from outside** — `p1` or `p2` on anything carrying `from:citizen` or `needs-triage` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
 
 **Class 5 is about *running* it, not about *building* it, and the example is
 chosen to show the difference.** `kolonie-platform#91` shipped `eraseAgent` and
@@ -363,9 +363,28 @@ ordinary work with tests. Pressing it against a real citizen's row is not. The
 same split holds for a migration, a force-push and a deploy that takes something
 down — the agent writes it, and a human is the one who cannot undo it.
 
-**Class 6 is already settled and is quoted in `inbound-triage.yml`:** *"`p1` and
-`p2` encode what the Colony is currently trying to achieve, which a contributor
-has no way to know and a workflow has no way to compute."*
+**Class 6 narrowed on 2026-08-05, and the reason is in its own quotation.**
+`inbound-triage.yml` says: *"`p1` and `p2` encode what the Colony is currently
+trying to achieve, which a **contributor** has no way to know and a **workflow**
+has no way to compute."* Both halves name who is disqualified, and neither of
+them is an agent orchestrating this project. An agent that has read the board,
+`ROADMAP.md` and the issue it just wrote is in exactly the position the sentence
+describes as *knowing* — so the class covered a case it was never arguing about.
+
+**So: an orchestrating agent sets `p1`/`p2` on issues it opens or triages itself,
+and on nothing that came from outside.** An issue carrying `from:citizen` or
+`needs-triage` still waits for a human, because that is the case the rule was
+written for and nothing about it has changed — the outside contributor cannot
+know the Colony's aims, and an agent reading their issue cannot infer them from
+the text either.
+
+**What this costs, said plainly:** an agent can now push its own work up the
+queue, and nothing checks it. That is a real transfer and it is accepted rather
+than mitigated — the alternative is that every issue an agent writes arrives
+unprioritised and the board stops meaning anything until a human sweeps it. A
+priority is visible, cheap to change, and argued with in a comment. If it turns
+out agents mark everything `p1`, the evidence will be on the board and this
+paragraph is what to reopen.
 
 **An issue that touches none of the six is not `blocked:human`, whatever it costs
 and however large it is.** Size is not on the list, and neither is difficulty,
