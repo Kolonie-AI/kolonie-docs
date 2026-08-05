@@ -607,3 +607,69 @@ technique `AGENTS.md` §7 asks for when files mirror each other.
 **What was fixed.** The comment describes the syntax instead of writing it. The
 2026-07-27 entry above ends on the same sentence and it is worth reading twice:
 the host was reasoned about rather than inspected.
+
+## 2026-08-05 — A runner imported a workspace its image does not ship, and crash-looped with an empty log
+
+**What happened.** `kolonie-platform#243` added
+`import { fetchPage } from '@kolonie-ai/verifiers'` to the badge runner and added
+the dependency to `apps/badge-runner/package.json`. `apps/badge-runner/Dockerfile`
+was not touched. Its runtime stage copies workspaces one at a time, and carried a
+comment saying, in so many words, that this one is not among them:
+
+> `packages/verifiers` is absent: this process gives out things that are worth
+> nothing and verifies nothing at all.
+
+True when written. False from the moment the import landed, and nothing anywhere
+said so.
+
+**How long, and what it cost.** From `#243` merging until 2026-08-05, every
+`Build and deploy` run in `kolonie-platform` reported **failure** — ten
+consecutive runs on the day it was found. The deploys themselves were succeeding:
+migrations applied, the api healthy, `deployed.env` recorded. What failed was the
+cascade re-deploy at the end, which retries a service a previous deploy rolled
+back — so the same broken badge-runner image was pulled, crash-looped and rolled
+back once per deploy, and rewrote the marker that would make the next deploy try
+again.
+
+**Nothing in the repository could have failed.** `npm run check` is green, the
+workspace resolves perfectly in a checkout, and the image builds and pushes. A
+Dockerfile is not typechecked against the manifest beside it. The artefact was
+wrong and every gate that looks at the source was right.
+
+**Three lessons.**
+
+**A workspace symlink is present and dangling, so the absence has no symptom.**
+`npm ci` runs in the build stage and writes `node_modules/@kolonie-ai/verifiers`
+as a link into `packages/verifiers`; the runtime stage copies `node_modules` and
+not the target. Node then dies on `ERR_MODULE_NOT_FOUND` **before** `createLog`
+has been called, so the container prints nothing at all — `deploy.sh`'s own log
+showed *"what the failing containers printed (last 40 lines each)"* followed
+immediately by the end marker. A crash-looping container with an empty log reads
+as an infrastructure fault, and it was taken for one.
+
+**A comment that says something is absent is a claim that ages.** Both Dockerfiles
+carried one, both were written truthfully, and both were falsified by a later
+import in a different file. The general form is `AGENTS.md` §7's rule about
+mirrored files: a sentence that enumerates its siblings is correct in whichever
+file was written last.
+
+**The second instance was found by the test, not by the search.**
+`scripts/check-image-workspaces.test.ts` was written for the badge runner and
+caught the moderation runner on its first run — it has imported
+`openRouterDirectionClassifier` from `verifiers` since `#140` and does not copy it
+either. That one had not failed only because the build serving production
+predates the import: **the next deploy of that service would have been the same
+outage**, and nobody was looking for it.
+
+**What was fixed.** Both runtime stages copy `packages/verifiers`. The check
+asserts, for every app, that each `@kolonie-ai/*` runtime dependency in its
+`package.json` is copied into its image's runtime stage — read off the two files'
+text rather than off a built image, because putting a Docker daemon in the
+definition of done is what `AGENTS.md` §7 refuses.
+
+**What is still true and worth a separate look.** A deploy that fails only in its
+cascade step reports the same red as a deploy that never reached the host, and the
+ten failures said nothing about which of the two they were. The signal that would
+have shortened this is a container that exits during startup having logged
+nothing — `deploy.sh` prints that it captured no output and does not treat it as
+different from a container that logged an error.
