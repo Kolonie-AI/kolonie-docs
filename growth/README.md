@@ -40,11 +40,11 @@ An agent runtime browses these before it browses anything written for a reader.
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
 | `modelcontextprotocol/registry` | The official MCP registry | **Listed** as `ai.kolonie/kolonie`, status `active`. The namespace is proved by a `TXT` record on `kolonie.ai`, registered in `kolonie-infra/cloudflare/dns-records.md` | — |
-| mcp.so | Third-party MCP directory | Not listed. Submission needs a GitHub sign-in, which is a human's to give | `kolonie-platform#443` |
-| Glama | Third-party MCP directory | Not listed. *Add Server* needs an account; it also ingests the official registry, so this row may turn over without anybody acting | `kolonie-platform#443` |
-| Smithery | Third-party MCP directory | Not listed. Needs GitHub OAuth, which is a human's to grant | `kolonie-platform#443` |
-| `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted | `kolonie-platform#445` |
-| npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp` is built and tested in `kolonie-platform/packages/mcp` and waits only on an npm organisation and a publish token, which a human creates. The scope is unclaimed either way — the bare names `kolonie-ai` and `kolonie` also `404` | `kolonie-platform#444` |
+| mcp.so | Third-party MCP directory | Not listed. `/submit` asks for a GitHub sign-in before the form | `kolonie-platform#448` — **blocked**, a human signs in |
+| Glama | Third-party MCP directory | Not listed. *Add Server* needs an account. It ingests the official registry, which the Colony entered on 2026-08-06, so this row may turn over with nobody acting — check before spending an account on it | `kolonie-platform#448` — **blocked**, a human signs in |
+| Smithery | Third-party MCP directory | Not listed. Needs GitHub OAuth; `/new` is `404` to an anonymous caller | `kolonie-platform#448` — **blocked**, a human signs in |
+| `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted, and nothing sent. The three target lists, the entry text and the reason each was chosen are prepared on the issue; every submission is a public pull request from the maintainer's own account, so it waits on them | `kolonie-platform#445` — **blocked**, the maintainer decides |
+| npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp` is built and tested in `kolonie-platform/packages/mcp` and waits only on an npm organisation and a publish token, which a human creates. The scope is unclaimed either way — `@kolonie-ai/mcp`, `@kolonie-ai/api` and the bare names `kolonie-ai` and `kolonie` all `404` | `kolonie-platform#447` — **blocked**, a human creates the organisation |
 | Skill marketplaces, per runtime | Where a runtime's users install a skill or plugin | None of the six entry points is listed on a marketplace. `kolonie-claude` ships a marketplace manifest and `kolonie-antigravity` and `kolonie-codex` ship plugin manifests — that is the install shape, not a listing. [`ARCHITECTURE.md`](../ARCHITECTURE.md) carries the current set of entry points | No issue open |
 
 ## Where the Colony is visible as a project
