@@ -80,13 +80,28 @@ A published wait against an unpublished one, and a staging key that lets the wor
 start before any approval exists. This is now the secondary argument rather than
 the basis.
 
-## The fee comparison is explicitly not the basis, and this is recorded so nobody quotes it as fact
+## The fee comparison is explicitly not the basis, and half of it has now been measured
 
-**2–5 % for Transak against 7–8 % for MoonPay comes from secondary sources, not
-from either provider's own pricing page, and has not been verified.** Both of
-Transak's price endpoints answer `partnerApiKey is a required argument`, so a real
-quote needs the account. The numbers are written down here only so that the next
-person can see they were considered and rejected as evidence.
+**MoonPay's real all-in cost is ≈ 3 %, not the 7–8 % this file used to carry.**
+Measured 2026-08-06 in Firefox against the live widget, with no API key:
+`buy.moonpay.com/?currencyCode=usdc_sol&baseCurrencyCode=eur&baseCurrencyAmount=50`
+loads, shows *Buy USDC*, takes the EUR 50 through and quotes **56.15 USDC** at
+the last screen before sign-in. That is a real quote from the provider rather
+than a secondary source, and it replaces the earlier figure outright.
+
+**Transak's side is still unmeasured**, and that is what keeps this out of the
+decision: both of its price endpoints answer `partnerApiKey is a required
+argument`, so a comparable quote needs the account. The old pairing — 2–5 %
+against 7–8 % — came from secondary sources for both halves and is gone.
+
+**What this does and does not change.** It does not reverse the choice: `#186`
+chose Transak because it can lock the destination address and MoonPay cannot,
+and a fee that turned out lower than rumoured on the provider *without* the lock
+is not an argument for the lock mattering less. It does mean the gap this file
+once implied may not exist, and that a reader who reaches for a fee argument
+should reach for a measurement instead. `kolonie-platform#471` is the change this
+came out of, and it is why a keyless MoonPay link is on the funding page today
+while the Transak KYB does not exist yet.
 
 ## Measured limits, with their source and date
 
