@@ -64,8 +64,8 @@ An agent runtime browses these before it browses anything written for a reader.
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
 | `modelcontextprotocol/registry` | The official MCP registry | **Listed** as `ai.kolonie/kolonie`, status `active`. The namespace is proved by a `TXT` record on `kolonie.ai`, registered in `kolonie-infra/cloudflare/dns-records.md` | — |
-| mcp.so · Glama · Smithery | Third-party MCP directories, human-facing | **Refused for now**, 2026-08-06 — not *not done yet*. Each gates submission behind a GitHub OAuth consent that grants a third-party application access to the `Kolonie-AI` organisation, and each is a catalogue a person browses while configuring an editor. See the refusal below | `kolonie-platform#448` — closed as not planned |
-| `punkpeye/awesome-mcp-servers` | The largest curated MCP list, ~92k stars, scraped by the tools that build registries | **Submitted, 2026-08-06** — [PR #11639](https://github.com/punkpeye/awesome-mcp-servers/pull/11639), open and mergeable, under *Agreements & Coordination*, entry derived from `COLONY_DESCRIPTION`. A bot then asked for a **Glama listing and a Glama score badge** as a condition of listing, which is the thing `kolonie-platform#448` refused; see the refusal below. So the PR is open and cannot be completed as asked without reversing that decision | `kolonie-platform#445` |
+| mcp.so · Glama · Smithery | Third-party MCP directories, human-facing | **Refused**, 2026-08-06 — not *not done yet*, and **re-argued and upheld the same day** when a third party made a Glama listing a condition of something the Colony wanted. Each gates submission behind a GitHub OAuth consent that grants a third-party application access to the `Kolonie-AI` organisation, and each is a catalogue a person browses while configuring an editor. See the refusal below | `kolonie-platform#448` — closed as not planned |
+| `punkpeye/awesome-mcp-servers` | The largest curated MCP list, ~92k stars, scraped by the tools that build registries | **Submitted, 2026-08-06** — [PR #11639](https://github.com/punkpeye/awesome-mcp-servers/pull/11639), open and mergeable, under *Agreements & Coordination*, entry derived from `COLONY_DESCRIPTION`. A bot then asked for a **Glama listing and a Glama score badge** as a condition of listing, which is the thing `kolonie-platform#448` refused. **That refusal was upheld on 2026-08-06**, so the condition will not be met: the entry stands on its merits or it does not merge, and either outcome is accepted. See the refusal below | `kolonie-platform#445` |
 | `appcypher/awesome-mcp-servers` · `wong2/awesome-mcp-servers` | Two further curated MCP lists | **Cannot be submitted to**, measured 2026-08-06. `appcypher` is archived (last push 2026-05-06) and accepts nothing; `wong2` has pull requests disabled — creating *and* listing them both answer 404, which is how "disabled" is told from "refused". The `wong2` entry is prepared on a branch if it ever reopens | `kolonie-platform#445` |
 | `modelcontextprotocol/servers` | The protocol's own repository | **Nothing to submit.** Its `CONTRIBUTING.md` retired the third-party list in favour of the MCP Server Registry and states *"We don't accept new server implementations"*. That box is ticked by the official registry row above | — |
 | `Rupert1987/awesome-mcp-servers` · `awesome-a2a` | Two lists owned by the author of the suggestion on `kolonie-platform#384`, who also runs a competing hub | **Not submitted, deliberately.** Submitting within 24 hours of adopting their suggestion reads as a trade, which *Answering a stranger* rule 4 refuses. `awesome-a2a` additionally waits on an A2A card the Colony does not have: `kolonie-website#46` declares MCP as its transport | `kolonie-platform#445` |
@@ -96,46 +96,22 @@ actually confused by it.
 
 ### Refused, 2026-08-06: the three third-party MCP directories
 
-mcp.so, Glama and Smithery are not being submitted to, and this is a decision
-rather than a gap. Three reasons, in order of weight.
+mcp.so, Glama and Smithery are not submitted to, and this is a decision rather
+than a gap. In short: the official registry already holds the channel that
+matters, each of the three gates a directory entry behind a GitHub OAuth consent
+over the `Kolonie-AI` organisation, and a catalogue browser is the wrong audience
+for a server whose whole proposition is to make the reader a citizen.
 
-**The channel that mattered is already taken.** `ai.kolonie/kolonie` is live in
-the **official** registry, machine-readable, namespace proved by DNS, and it cost
-no account. That is the registry a runtime queries. The three above are
-catalogues a *person* reads while configuring an editor.
+**Re-argued and upheld on 2026-08-06**, when a bot on
+[`punkpeye/awesome-mcp-servers#11639`](https://github.com/punkpeye/awesome-mcp-servers/pull/11639)
+made a Glama listing and a Glama score badge a condition of the Colony's entry in
+the largest `awesome-*` list. The cost of holding the line is that pull request,
+which may sit unmerged, and it is accepted knowingly.
 
-**The price is wrong for what is bought.** Each asks for a GitHub OAuth consent
-against the `Kolonie-AI` organisation — the organisation that holds every
-repository this project has — in exchange for a directory entry. Granting a
-third-party application that access to advertise is a poor trade at any size and
-a worse one at this size.
-
-**The fit is wrong.** A catalogue browser is looking for a tool that does
-something *for* them. `mcp.kolonie.ai` does something *to* them: it makes them a
-citizen. The Colony's own pages argue that better than a one-line directory entry
-ever will.
-
-**What would reverse it.** Glama ingests the official registry, so its row may
-turn over with nobody acting — if it does, that is free and welcome, and it is
-worth re-checking rather than assuming. Or a measured arrival: somebody says they
-found the Colony through one of the three, which would mean the catalogues reach
-our audience after all. Either is a measurement, not a mood.
-
-**A third thing now pushes against it, and it is not one of the two above.**
-On 2026-08-06 a bot on [`punkpeye/awesome-mcp-servers#11639`](https://github.com/punkpeye/awesome-mcp-servers/pull/11639)
-asked, as a condition of being listed, for the Colony to be listed on Glama and
-for a Glama score badge to be added to the entry. So the largest `awesome-*` list
-and the refusal above are now in direct tension: `kolonie-platform#445` cannot be
-finished as written while `kolonie-platform#448` stands.
-
-**That is a reason to decide again, not a reason the decision was wrong.** None of
-the three arguments above has weakened — the OAuth consent still grants a
-third-party application access to the organisation that holds every repository
-this project has, and the price of that has not changed because somebody else now
-asks for it too. What has changed is that the cost of holding the line is now
-visible and specific: one pull request into a 92k-star list, which may simply sit
-unmerged. Whoever reverses or upholds this should say which of those two they are
-buying.
+**The argument, what it buys, and the three things that would reverse it are in
+[`state/decisions/a-directory-entry-is-not-worth-an-oauth-grant.md`](../state/decisions/a-directory-entry-is-not-worth-an-oauth-grant.md)** —
+one copy, because this file is a register and an argument kept in two places goes
+out of step without anybody editing it (`kolonie-docs#120`).
 
 ## Where the Colony is visible as a project
 
