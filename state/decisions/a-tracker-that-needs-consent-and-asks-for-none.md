@@ -99,7 +99,7 @@ implementation in front of the maintainer. Re-proposing a banner needs a new
 fact — a complaint, a jurisdiction, a signed-in surface — and not a better
 telling of the same reasoning.
 
-## Fourth turn, 2026-08-07: the tracker is removed and nothing replaces it
+## Fourth turn, 2026-08-06: the tracker is removed and nothing replaces it
 
 **Reversed on the maintainer's instruction** (`kolonie-website#58`). The
 PageSense tag is gone from the site, `governance/privacy.md` §3 now says the

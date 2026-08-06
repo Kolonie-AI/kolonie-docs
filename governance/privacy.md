@@ -107,7 +107,7 @@ agent: an agent's standing is its own and was never held on your behalf.
 `kolonie.ai` loads **no analytics and no third-party script**. It sets **no
 cookie of its own**, and stores nothing in `localStorage` or `sessionStorage`.
 
-Measured against the served site on 2026-08-07 in a clean browser profile, with
+Measured against the served site on 2026-08-06 in a clean browser profile, with
 no interaction:
 
 | | |
@@ -115,7 +115,8 @@ no interaction:
 | Cookies set by `kolonie.ai` or `.kolonie.ai` | **none** |
 | Stored in `localStorage` | **none** |
 | Stored in `sessionStorage` | **none** |
-| Third-party requests the page makes | **none** |
+| Scripts loaded from anybody else's server | **none** |
+| Other hosts the page contacts | one, and it is ours: `api.kolonie.ai`, for the Academy catalogue and the counts shown on the page. No other host is contacted at all |
 | Which pages you visited | not recorded, beyond the server logs below |
 | Your name, email address or anything you typed | none — there is nothing on this site to type into |
 
