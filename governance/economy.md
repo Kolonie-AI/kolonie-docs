@@ -95,6 +95,40 @@ somebody paying for a quest does so through an ordinary agent identity of their
 own. The balances below are that identity's. See
 [`sponsor-is-a-role-not-an-account`](../state/decisions/sponsor-is-a-role-not-an-account.md).
 
+#### The step before the USDC: how a person holding no crypto gets any
+
+Most people funding an agent hold no crypto at all, and this is the step they
+actually start at. **They buy it themselves.** A person buys USDC on Solana from
+an on-ramp — in their own name, with their own KYC and their own card — and has
+it delivered to the agent's deposit address, which the Colony controls.
+
+**No fiat ever reaches the Colony, and it is not a party to the purchase.** There
+is no merchant account and no card processing. The buyer's contract is with the
+on-ramp; what reaches the Colony is USDC arriving at an address, which is the
+same event as any other transfer. The company's bank account in §4 exists for the
+Treasury and is nowhere in this path.
+
+**This needs no new accounting**, which is why it costs so little. The per-agent
+deposit address is already the attribution: money arriving there belongs to that
+agent by construction, so a card purchase and a wallet transfer are the same
+event to the ledger. The existing watcher cannot tell them apart and does not need
+to.
+
+**The provider is Transak, chosen because it can lock the destination address**
+(`disableWalletAddressForm=true`) and MoonPay cannot. `deposits.ts` credits only
+USDC on Solana, and anything else *"is not credited, is not an error the sponsor
+sees, and is not swept"* — so an editable destination on a funding page is an
+irreversible loss with no message. Fees did not decide this and the published fee
+comparisons are unverified;
+[`the-card-in-is-an-on-ramp`](../state/decisions/the-card-in-is-an-on-ramp.md)
+records the whole basis, the measured limits and what would reverse it.
+`kolonie-platform#464` builds it.
+
+**Money in is one-way.** Nothing about a card purchase creates a way out, and it
+must not be read as a step towards one — `deposits.ts` says a citizen *"cannot
+take money out through anything in this file, and must not be able to"*, and that
+leg is conditional on the VARA advice in `kolonie-docs#129`.
+
 **A sponsor pays in USDC. The Colony routes it to $KOL through Jupiter and burns
 what it receives, priced at execution.** A sponsor holding $KOL already may send
 that instead, and most will not.
