@@ -208,6 +208,20 @@ on PR link and on merge, and add new issues from **five of the organisation's
 twelve repositories**. **You move an item only when you change what is true** —
 finishing a spec (→ Ready), hitting a blocker (→ Blocked).
 
+**Removing the `blocked:human` label also moves the item, straight to Ready**, and
+that one is easy to trip over because it is a *label* edit producing a *column*
+change. Measured 2026-08-06 on `kolonie-platform#445`: the label came off at
+22:55:09Z and the item moved Blocked → Ready nine seconds later, with nobody
+touching the column.
+
+**The coupling runs one way and it is right only half the time.** Taking the
+label off reads as *unblocked*, which is correct when the human decision **was**
+the blocker, and wrong when a different blocker outlives it — `#445` still waits
+on a third party's merge decision, which no agent can pick up. So after removing
+`blocked:human`, look at the column and put it back if the issue is not actually
+startable. Ready means *any agent can take this without asking*; it is a promise
+to the next reader, not a synonym for *not blocked by us*.
+
 ### Five repositories are covered, and eight are not
 
 Measured 2026-08-05. Auto-add workflows exist for `kolonie-docs`,
