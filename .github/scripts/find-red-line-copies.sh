@@ -90,12 +90,23 @@ for repo in $(gh api "orgs/$ORG/repos" --paginate --jq '.[].full_name' | sort); 
   done
 done
 
+# `clarification` names two files and nothing else (`#173`).
+#
+# The section below `Forbidden` says what a citizen *may* do, it has exactly two
+# copies, and neither is discovered — there is no population to sweep, so this
+# is a pair of names rather than an entry in `copies`. Both files are already
+# fetched above for the rules, so this costs no request and does not move
+# `MINIMUM_COPIES`, which is about the discovered half.
 cat > "$OUT/manifest.json" <<JSON
 {
   "source": {
     "label": "$SOURCE_REPO/$SOURCE_PATH",
     "file": "source.md",
     "kind": "markdown-forbidden"
+  },
+  "clarification": {
+    "source": "source.md",
+    "projection": "about.ts"
   },
   "copies": [$entries]
 }

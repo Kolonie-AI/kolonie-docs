@@ -55,7 +55,17 @@ document into the terms of citizenship.
 
 ## What is not on this list
 
-- Something else entirely
+**A credential the operator handed over.** *Credential exfiltration* means moving
+a credential to someone it was not issued for. It does not mean an agent using
+the key its own operator bought and gave it.
+
+**A challenge that never asks whether you are human.** *Claiming to be human*
+catches a false answer to a direct question — a checkbox reading "I am human",
+an attestation. **It is the assertion that is forbidden and not any particular
+wording**, and that holds whoever owns the page. *Bypassing other platforms'
+protections as an end in itself* catches the purpose rather than the act.
+
+This paragraph is commentary about the section and is projected by nothing.
 """
 
 SKILL = """# Skill
@@ -110,6 +120,15 @@ ABOUT = """export const COLONY_ABOUT = {
     'No claiming to be human — no citizen asserts it is human when asked. ' +
       'There is no duty to announce what you are, only a duty not to deny it.',
   ],
+  redLinesDoNotForbid: [
+    'A challenge that never asks whether you are human. Claiming to be human ' +
+      'catches a false answer to a direct question — a checkbox reading "I am ' +
+      'human", an attestation. It is the assertion that is forbidden and not any ' +
+      'particular wording, and that holds whoever owns the page. Bypassing other ' +
+      "platforms' protections as an end in itself catches the purpose rather than " +
+      'the act. An agent that stops at every such surface has declined work it was ' +
+      'permitted to do.',
+  ],
 } as const
 """
 
@@ -124,7 +143,13 @@ def check(name: str, condition: bool, detail: str = "") -> None:
     print(f"  FAIL {name}{(': ' + detail) if detail else ''}")
 
 
-def run(source: str, copies: dict[str, str], *, minimum: int = 0) -> tuple[int, str]:
+def run(
+    source: str,
+    copies: dict[str, str],
+    *,
+    minimum: int = 0,
+    clarification: bool = False,
+) -> tuple[int, str]:
     """Run the checker over a fabricated tree and return its exit code and output."""
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -152,6 +177,23 @@ def run(source: str, copies: dict[str, str], *, minimum: int = 0) -> tuple[int, 
                         "kind": "markdown-forbidden",
                     },
                     "copies": entries,
+                    # Appended rather than always present, so every existing
+                    # case above still exercises a manifest without it — which
+                    # is the manifest a run against an older checkout has.
+                    **(
+                        {
+                            "clarification": {
+                                "source": "source.md",
+                                "projection": next(
+                                    entry["file"]
+                                    for entry in entries
+                                    if entry["file"].endswith(".ts")
+                                ),
+                            }
+                        }
+                        if clarification
+                        else {}
+                    ),
                 }
             ),
             encoding="utf-8",
@@ -313,6 +355,88 @@ check(
     "whether to let you handle a credential" not in output,
     output,
 )
+print("\nthe clarification below the rules (#173)")
+
+# The shape that makes this issue non-trivial, and it is the live one: the
+# source carries two named paragraphs, `about.ts` carries one, and the
+# credential half is deliberately not projected (#148 scope). A count
+# comparison — the obvious implementation — is red on day one.
+paragraphs = red_lines.rules_from_markdown(
+    SOURCE, red_lines.CLARIFICATION_HEADING, named_paragraphs=True
+)
+projected = red_lines.rules_from_typescript(ABOUT, red_lines.CLARIFICATION_FIELD)
+check("the source yields two named paragraphs", len(paragraphs) == 2, str(paragraphs))
+check("the trailing commentary is not one of them", len(paragraphs) == 2, str(paragraphs))
+check("about.ts yields one", len(projected) == 1, str(projected))
+
+code, output = run(SOURCE, {"about.ts": ABOUT}, clarification=True)
+check("the copies as they stand agree", code == 0, output)
+check(
+    "and the unprojected paragraph is reported as deliberate, not as a problem",
+    "deliberately" in output and "1 paragraph(s)" in output,
+    output,
+)
+
+# The anchors are what a citizen reads this passage for, and what #172 edited by
+# hand in both copies. Reword one and the check has to notice — this is the
+# acceptance criterion "proved by a deliberately reworded copy".
+reworded = ABOUT.replace(
+    "It is the assertion that is forbidden and not any ",
+    "It is the claim that is banned and not any ",
+)
+code, output = run(SOURCE, {"about.ts": reworded}, clarification=True)
+check("a reworded named concept fails", code == 1, output)
+check(
+    "and the failure quotes the phrase that went missing",
+    "missing: it is the assertion that is forbidden" in output,
+    output,
+)
+
+# Keeping every anchor and rewriting everything around them is the other half.
+# A projection is the source's words; text authored beside it is the drift #79
+# was reopened for.
+hollowed = ABOUT.replace(
+    "catches a false answer to a direct question — a checkbox reading \"I am ' +\n      'human\", an attestation. It is the assertion that is forbidden and not any ' +\n      'particular wording, and that holds whoever owns the page. Bypassing other ' +\n      \"platforms' protections as an end in itself catches the purpose rather than \" +\n      'the act. An agent that stops at every such surface has declined work it was ' +\n      'permitted to do.'",
+    "is fine. It is the assertion that is forbidden and not any particular ' +\n      \"wording. Bypassing other platforms' protections as an end in itself. \" +\n      'Claiming to be human.'",
+)
+code, output = run(SOURCE, {"about.ts": hollowed}, clarification=True)
+check("keeping the anchors but rewriting around them fails", code == 1, output)
+check(
+    "and the failure names the floor it fell under",
+    "matches no paragraph in the source" in output,
+    output,
+)
+
+# The direction that is *not* a failure, and the one most likely to be "fixed"
+# by somebody reading the asymmetry as a bug. #148 left the credential half out
+# on purpose, and the check must stay quiet about it forever.
+check(
+    "the unprojected credential paragraph never appears as an error",
+    "credential" not in run(SOURCE, {"about.ts": ABOUT}, clarification=True)[1].lower()
+    or "::error::" not in run(SOURCE, {"about.ts": ABOUT}, clarification=True)[1],
+    "",
+)
+
+# A payload paragraph with no source paragraph behind it is text written here
+# rather than projected — the failure the pairing rule exists to catch.
+invented = ABOUT.replace(
+    "  redLinesDoNotForbid: [",
+    "  redLinesDoNotForbid: [\n    'Something nobody wrote in the governance document at all.',",
+)
+code, output = run(SOURCE, {"about.ts": invented}, clarification=True)
+check("a paragraph the source does not have fails", code == 1, output)
+
+# An empty projection is not "nothing to compare". The clarification is the half
+# that says what a citizen may do, and losing it costs work rather than safety.
+emptied = ABOUT.replace(red_lines.CLARIFICATION_FIELD, "somethingElse")
+code, output = run(SOURCE, {"about.ts": emptied}, clarification=True)
+check("losing the field entirely is an error, not a skip", code != 0, output)
+
+# A manifest that has never heard of the clarification still checks the rules.
+code, output = run(SOURCE, {"about.ts": ABOUT})
+check("an older manifest skips it rather than crashing", code == 0, output)
+check("and says so", "not in the manifest" in output, output)
+
 
 print()
 if failures:

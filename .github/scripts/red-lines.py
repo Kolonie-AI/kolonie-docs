@@ -52,6 +52,7 @@ continues, that trade is worth revisiting.
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
 import sys
@@ -201,6 +202,176 @@ def rules_from_typescript(text: str, field: str) -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# The clarification below the rules (`#173`)
+# --------------------------------------------------------------------------
+#
+# `Forbidden` says what a citizen may not do and is compared word for word
+# across eight copies. **The section immediately below it says what a citizen
+# *may* do, has two copies, and until now nothing compared them** — while
+# `about.ts` already knew it was a projection and already named the failure
+# mode in its own comment. `#172` had to edit both by hand, and the only thing
+# that would have caught a missed second edit was remembering to look.
+#
+# ## Why this cannot be the comparison above, and what it is instead
+#
+# The obvious implementation is `compare()` with a different heading, and it
+# fails on its first run. Measured 2026-08-06 against `06375fc` / `9c323e2`:
+#
+# - The source carries **two** named paragraphs and `about.ts` carries **one**.
+#   The credential half is deliberately not projected — `#148` scope — so a
+#   count comparison is red on day one and always will be.
+# - The one paragraph that *is* projected is not word-identical either, and
+#   every difference is a legitimate rendering choice: the source says *the
+#   rules above* where a payload calling them red lines says *red lines*; the
+#   source addresses a reader in the third person (*work the agent was
+#   authorised to do*) and the payload addresses the agent (*work you were*);
+#   the payload drops *so they are worth separating*, which is commentary about
+#   the document's own structure and is exactly what `about.ts` says it trims.
+#
+# So this is deliberately a **weaker check than the one above, and the weakness
+# is stated rather than discovered later** — the rule this file already follows
+# about normalisation. It asserts two things:
+#
+# 1. **Every anchor survives.** The emphasised and quoted phrases in the source
+#    paragraph are its named concepts — *Claiming to be human*, `"I am human"`,
+#    **it is the assertion that is forbidden and not any particular wording**,
+#    *Bypassing other platforms' protections as an end in itself*. They are what
+#    a citizen is actually reading for, and they are what `#172` edited. A
+#    reworded anchor fails.
+# 2. **Most of the source's words survive.** A projection that keeps the anchors
+#    and rewrites everything around them is authored again rather than projected,
+#    which is the drift `#79` was reopened for.
+#
+# What it gives up: a rewording of unemphasised connecting prose, within the
+# floor, passes. That is the price of the two copies being rendered for
+# different readers, and closing it would mean a generator — the same trade the
+# module docstring above declines for the rules themselves.
+
+#: Where the clarification lives in each copy. Named, never discovered — these
+#: are two specific documents and there is no population to sweep.
+CLARIFICATION_HEADING = "What is not on this list"
+CLARIFICATION_FIELD = "redLinesDoNotForbid"
+
+#: How much of a source paragraph's wording a projection must retain.
+#:
+#: **Measured, not chosen.** The live copies retain **0.948** of the source
+#: paragraph's words (174 in the source, 195 in the projection, 165 common) on
+#: 2026-08-06. The floor is 0.90, which leaves about seventeen words of slack —
+#: roughly the one structural clause `about.ts` documents itself as trimming,
+#: and not a whole claim.
+#:
+#: Set from evidence so that raising or lowering it is a decision somebody has
+#: to defend against a number, rather than a knob turned until the run went
+#: green. If ordinary editing starts tripping it, the honest answer is to look
+#: at what was edited before it is to lower this.
+RETENTION_FLOOR = 0.90
+
+
+def anchors_of(paragraph: str) -> list[str]:
+    """The named concepts in a paragraph: its emphasised and quoted phrases.
+
+    Derived from the source rather than listed here, which is the property that
+    keeps this from becoming a third copy of the text. A phrase the source stops
+    emphasising stops being an anchor, and one it starts emphasising becomes one
+    — both without editing this file.
+
+    Single words are dropped: they are typographic emphasis rather than a named
+    concept, and requiring one to appear proves nothing about the sentence
+    around it.
+    """
+    found: list[str] = []
+    patterns = (
+        r"\*\*(.+?)\*\*",  # bold — a named rule or a load-bearing assertion
+        r"(?<!\*)\*([^*]+?)\*(?!\*)",  # italic — a rule quoted from the list above
+        r"[“\"]([^”\"]+)[”\"]",  # a wording quoted verbatim
+    )
+
+    for pattern in patterns:
+        for match in re.findall(pattern, paragraph, re.DOTALL):
+            phrase = normalise(match)
+            if len(phrase.split()) >= 2 and phrase not in found:
+                found.append(phrase)
+
+    return found
+
+
+def retained(source: str, projection: str) -> float:
+    """The fraction of the source paragraph's words the projection still carries.
+
+    Word-level rather than character-level, and in order: a projection that used
+    the same vocabulary to say something else should not pass. `autojunk` is off
+    because it discards words appearing in more than 1% of a long text, which on
+    a paragraph this size is most of the ordinary English in it.
+    """
+    wanted = normalise(source).split()
+    if not wanted:
+        return 0.0
+
+    matcher = difflib.SequenceMatcher(None, wanted, normalise(projection).split(), autojunk=False)
+    return sum(block.size for block in matcher.get_matching_blocks()) / len(wanted)
+
+
+def compare_clarification(source: list[str], projection: list[str]) -> list[str]:
+    """Does each projected paragraph still say what the source says?
+
+    **Each projected entry is paired with the source paragraph it retains most
+    of**, rather than by position. That is what makes the deliberate
+    non-projection of the credential paragraph a non-event: the source may carry
+    paragraphs nothing projects, and pairing by index would have made the first
+    such omission shift every later comparison onto the wrong text.
+
+    The reverse is a failure. A paragraph in the payload that pairs with nothing
+    is text authored beside the source instead of projected from it, and that is
+    the whole defect this exists to catch.
+    """
+    problems: list[str] = []
+
+    if not source:
+        return [f"no paragraphs found under {CLARIFICATION_HEADING!r} in the source"]
+
+    if not projection:
+        return [
+            f"{CLARIFICATION_FIELD} is empty. The clarification is the half that says "
+            "what a citizen may do, and a citizen that misreads it declines work it "
+            "was permitted to do."
+        ]
+
+    if len(projection) > len(source):
+        problems.append(
+            f"{CLARIFICATION_FIELD} has {len(projection)} paragraphs and the source has "
+            f"{len(source)}. A projection cannot carry more than it projects from — "
+            "the extra one was authored here rather than taken from the source."
+        )
+
+    for index, projected in enumerate(projection, start=1):
+        scored = sorted(((retained(paragraph, projected), paragraph) for paragraph in source),
+                        key=lambda pair: pair[0], reverse=True)
+        score, paragraph = scored[0]
+
+        if score < RETENTION_FLOOR:
+            problems.append(
+                f"{CLARIFICATION_FIELD}[{index}] matches no paragraph in the source — the "
+                f"closest keeps {score:.2f} of its words and the floor is {RETENTION_FLOOR}. "
+                "It has been reworded away from the source, or the source paragraph it "
+                "projects was rewritten without it.\n"
+                f"    closest source paragraph: {paragraph[:160]}…\n"
+                f"    {CLARIFICATION_FIELD}[{index}]: {projected[:160]}…"
+            )
+            continue
+
+        missing = [anchor for anchor in anchors_of(paragraph) if anchor not in normalise(projected)]
+        if missing:
+            problems.append(
+                f"{CLARIFICATION_FIELD}[{index}] has dropped or reworded "
+                f"{len(missing)} of the source's named concepts. These are the phrases a "
+                "citizen reads this passage for:\n"
+                + "\n".join(f"    missing: {anchor}" for anchor in missing)
+            )
+
+    return problems
+
+
+# --------------------------------------------------------------------------
 # Comparison
 # --------------------------------------------------------------------------
 
@@ -301,6 +472,70 @@ def main() -> int:
         print(f"  copy: {label} — {len(rules)} rules")
 
     problems = compare(source_rules, copies)
+
+    # The clarification below the rules (`#173`).
+    #
+    # **The same run, deliberately.** `#173` asks whether a divergence here
+    # earns the blast radius `#124` accepted for the rules — every pull request
+    # in this repository red — and it does. `red-lines.md` says a citizen that
+    # misreads this passage *"has not held a red line, it has declined work it
+    # was permitted to do — the same shape as the credentials above, and the
+    # same cost."* A stale clarification is not a milder failure than a stale
+    # rule; it fails in the other direction. A second workflow reporting
+    # separately would say the opposite in the only language CI has.
+    #
+    # **Both copies are already on disk**, fetched unconditionally by
+    # `find-red-line-copies.sh` for the comparison above, so this adds no fetch,
+    # no discovery and nothing to `MINIMUM_COPIES`. `clarification` is optional
+    # in the manifest so that a run against an older one still checks the rules
+    # rather than crashing on the section it has not heard of.
+    clarification = manifest.get("clarification")
+    if clarification is None:
+        print("\nclarification: not in the manifest, skipped")
+    else:
+        # **A missing section is a finding, not a crash**, and the same rule the
+        # copies above already follow. A renamed heading or a deleted field is
+        # exactly the change this check exists to catch, and answering it with a
+        # traceback would report the most important failure in the least
+        # readable way there is.
+        try:
+            paragraphs = rules_from_markdown(
+                (root / clarification["source"]).read_text(encoding="utf-8"),
+                CLARIFICATION_HEADING,
+                named_paragraphs=True,
+            )
+        except LookupError as error:
+            paragraphs = []
+            problems.append(f"the clarification's source section is gone: {error}")
+
+        try:
+            projected = rules_from_typescript(
+                (root / clarification["projection"]).read_text(encoding="utf-8"),
+                CLARIFICATION_FIELD,
+            )
+        except LookupError as error:
+            projected = []
+            problems.append(f"the clarification's projection is gone: {error}")
+
+        print(
+            f"\nclarification: {len(paragraphs)} paragraph(s) in the source, "
+            f"{len(projected)} projected"
+        )
+        if len(paragraphs) > len(projected):
+            # Not a problem, and said out loud so nobody reads the asymmetry as
+            # one. `#148` scoped the credential half out of the payload on
+            # purpose; a silent difference in counts is what would invite
+            # somebody to "fix" it.
+            print(
+                f"  {len(paragraphs) - len(projected)} paragraph(s) deliberately "
+                "not projected — see #148"
+            )
+
+        # Only when both sides were readable: `compare_clarification` would
+        # otherwise report *the field is empty* on top of *the field is gone*,
+        # which is one defect described twice.
+        if paragraphs and projected:
+            problems.extend(compare_clarification(paragraphs, projected))
 
     if len(copies) < MINIMUM_COPIES:
         problems.append(
