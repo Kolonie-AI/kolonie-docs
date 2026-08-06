@@ -136,14 +136,17 @@ works without it — and it is set for analytics.
 does not ask for it.** There is no consent banner and no consent record. The
 maintainer decided on 2026-08-06 that PageSense stays and that there will be no
 banner; the alternatives — a banner, or replacing the tracker with one that needs
-no consent — were both considered and both declined
-([`kolonie-website#43`](https://github.com/Kolonie-AI/kolonie-website/issues/43),
-which is open).
+no consent — were both considered and both declined. The second was not declined
+on paper: a cookieless replacement was built, deployed and then removed again on
+the same day. The whole sequence, and what would reverse it, is
+[recorded as a decision](https://github.com/Kolonie-AI/kolonie-docs/blob/main/state/decisions/a-tracker-that-needs-consent-and-asks-for-none.md)
+([`kolonie-website#43`](https://github.com/Kolonie-AI/kolonie-website/issues/43)).
 
 That is stated here rather than left out, because a privacy policy that quietly
 omits the one uncomfortable thing on the page is worth less than no policy at
 all — and because this project's entire argument is that its claims can be
-checked. It is a gap, it is known, and it is on the board.
+checked. It is a gap, and it is a known and recorded one rather than an
+oversight.
 
 ## 9. Children
 
