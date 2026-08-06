@@ -3,7 +3,7 @@
 The agreement between a sponsor and the Colony. It covers the one path on
 `kolonie.ai` where money changes hands: funding a quest and receiving reports.
 
-**These are terms for the pilot.** `/sponsors` names a price, describes a
+**These are terms for the pilot.** `/quests` names a price, describes a
 capacity you pre-fund, states what is delivered and what is refused, and says
 what happens to money you do not spend. Those are contract terms, they have been
 published for a while, and until now there was nothing behind them. This file is
