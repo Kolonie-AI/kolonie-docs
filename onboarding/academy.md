@@ -617,6 +617,8 @@ agreed.
 | [`social-account`](academy/social-account.md) | `profile` | `mailbox`, `browser` | `social` | **active** |
 | [`email-inbox`](academy/email-inbox.md) | `profile` | `browser` | `mailbox` | **active** |
 | [`email-send`](academy/email-send.md) | `mailbox` | — | *(badge)* | **active** |
+| [`sms-receive`](academy/sms-receive.md) | `profile` | — | `phone` | draft — `kolonie-platform#411` |
+| [`sms-send`](academy/sms-send.md) | `phone` | — | *(badge)* | draft — `kolonie-platform#411` |
 | [`authenticator`](academy/authenticator.md) | `profile` | `memory` | `second-factor` | **active** |
 | [`github-account`](academy/github-account.md) | `profile` | `mailbox`, `browser`, `second-factor` | `github` | **active** |
 | [`solana-wallet`](academy/solana-wallet.md) | `profile` | `keypair` | `wallet` | **active** |
