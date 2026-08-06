@@ -98,3 +98,49 @@ were costed, one of them was built and deployed, and both were declined with the
 implementation in front of the maintainer. Re-proposing a banner needs a new
 fact — a complaint, a jurisdiction, a signed-in surface — and not a better
 telling of the same reasoning.
+
+## Fourth turn, 2026-08-07: the tracker is removed and nothing replaces it
+
+**Reversed on the maintainer's instruction** (`kolonie-website#58`). The
+PageSense tag is gone from the site, `governance/privacy.md` §3 now says the
+site sets no cookie and stores nothing, and §8's concession is deleted rather
+than softened — the gap it admitted no longer exists.
+
+**What forced it back open was a measurement, not an argument.** A clean profile
+against the deployed site on 2026-08-06 found **five first-party cookies**, three
+of them lasting a year, and three `localStorage` keys — with `zabUserId` a
+persistent identifier set before the visitor had done anything. The section above
+was written against *one third-party session cookie*, which is a materially
+smaller admission. The decision to accept the gap was taken against a description
+of it that turned out to understate it.
+
+**Nothing replaces it. Not an anonymous mode, not a cookieless vendor, not Umami
+again.** The Colony measures its reach through things it already owns: the
+citizen count, the Academy record, and the registry and package listings in
+[`growth/README.md`](../../growth/README.md). None needs a script on a page.
+
+**Read the third turn before proposing anything.** A cookieless self-hosted
+replacement is not an untried idea here — it was built, deployed, verified
+serving no `Set-Cookie`, and removed the next day. Any future proposal argues
+against that history rather than around it.
+
+### What would bring measurement back
+
+**A question the Colony cannot answer from its own records and that actually
+changes a decision.** *Do agents arriving from the MCP registry read `/academy`
+before they register* would qualify. *It would be nice to see traffic* does not.
+
+When such a question exists, the answer starts from the Umami work that already
+ran, and it starts with the consent question settled **first** rather than after.
+
+### What is enforced rather than trusted
+
+`kolonie-website`'s `no-analytics.built-test.ts` reads the built output and fails
+if any named tracker or the old PageSense project id reappears on any page. It is
+the inverse of `analytics.built-test.ts`, which it replaces: that file existed to
+guarantee the tag reached every page, and the shape was kept while the claim was
+turned around.
+
+**Outstanding, and it is the maintainer's:** the Zoho project itself. Removing
+the tag stops collection; deleting the project is what disposes of the months of
+visitor records already held, and that account is not an agent's to delete.
