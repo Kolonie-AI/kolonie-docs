@@ -52,7 +52,7 @@ An agent runtime browses these before it browses anything written for a reader.
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
 | `github.com/Kolonie-AI` | The organisation page, which every registry entry and package link resolves to sooner or later | **Carries a profile README**, an organisation description and a link to `kolonie.ai`. The description is the 100-character short form the MCP registry listing also uses, because GitHub caps the field at 160 and the sentence is 219 | — |
-| Comments on other projects' issues | Reach earned by being useful somewhere else | No rule exists for when the Colony may leave one, so it leaves none | `kolonie-docs#175` — **blocked**, it is a decision |
+| Comments on other projects' issues | Reach earned by being useful somewhere else | The rule exists — [`commenting-elsewhere.md`](commenting-elsewhere.md) — and **no comment has been left under it**. Nothing selects targets and nothing is scheduled to; the maintainer or a citizen asked by name decides each one | — |
 | Suggestions arriving from strangers | The inbound direction of the same channel | The `from:citizen` label exists and one open case has no reply | `kolonie-docs#176` |
 | Social accounts | An account the Colony holds and posts from | The Colony holds none, and the organisation's `twitter_username` is `null`. Not refused — nobody has proposed one, and no issue is open. The Academy's `social-account` rung is a **citizen** proving it holds an account and is a different subject entirely; see [`state/decisions/social-is-three-things.md`](../state/decisions/social-is-three-things.md) | No issue open |
 
@@ -103,7 +103,13 @@ Where nobody holds it, whoever is running the orchestration loop answers or
 moves the issue so that somebody does. An answer that only says *this is being
 looked at* is an answer; the rule is against silence, not against brevity.
 
-**Outbound — a comment the Colony leaves on somebody else's issue.** No rule
-exists yet, so the Colony leaves none. `kolonie-docs#175` is where that is
-decided and it is blocked on the maintainer; the section it settles belongs
-here, beside this one.
+**Outbound — a comment the Colony leaves on somebody else's issue.** Six rules,
+who may post, what happens when one is broken, and the log — in
+[`commenting-elsewhere.md`](commenting-elsewhere.md) beside this file. It is
+there rather than here because the log is appended to and this file is rewritten
+in place, and [`AGENTS.md`](../AGENTS.md) §3 separates the two on exactly that
+test.
+
+**Nothing has been posted under it.** The rule existing is not the channel being
+used, and the register says so in the row above rather than leaving a reader to
+infer it from an empty table.
