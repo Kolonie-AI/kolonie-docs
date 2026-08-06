@@ -44,6 +44,13 @@ set -uo pipefail
 ORG=Kolonie-AI
 TITLE="The board has stopped maintaining itself"
 
+# Where the issue lives. Actions sets this; a person running `report` or
+# `resolve` by hand does not, and `set -u` then kills the script on an unbound
+# variable two hundred lines below the line they typed. The default is this
+# repository, which is the only place this issue is ever filed — so the hand
+# path works and the workflow path is unchanged.
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$ORG/kolonie-docs}"
+
 # --- 5a: the pruning ---------------------------------------------------------
 # Done items are archived automatically; this confirms the thing doing it is
 # switched on. `false`, or no output at all, means the board has started growing
