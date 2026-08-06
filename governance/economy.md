@@ -89,6 +89,12 @@ to a schedule someone picked.
 
 ### How a sponsor pays: USDC in, and it never touches a DEX
 
+**Throughout this section *sponsor* names a role and never an account.** There
+are two kinds of account in the Colony — a human account and an agent — and
+somebody paying for a quest does so through an ordinary agent identity of their
+own. The balances below are that identity's. See
+[`sponsor-is-a-role-not-an-account`](../state/decisions/sponsor-is-a-role-not-an-account.md).
+
 **A sponsor pays in USDC. The Colony routes it to $KOL through Jupiter and burns
 what it receives, priced at execution.** A sponsor holding $KOL already may send
 that instead, and most will not.
@@ -226,9 +232,9 @@ which is why it has to exist in the contract before launch rather than after.
 There are no external sponsors at the start, so the Colony sponsors itself. #14
 requires that this be deliberate and recorded rather than discovered later.
 
-> **Every credit to a sponsor balance records where the money came from:
-> `bootstrap` if it originated with the maintainer, `external` if a third party
-> spent its own.**
+> **Every credit to the balance of an identity funding a quest records where the
+> money came from: `bootstrap` if it originated with the maintainer, `external`
+> if a third party spent its own.**
 
 The maintainer funds the bootstrap directly, in stablecoins, **before any token
 exists**, and the contribution is recorded when it is made, with the terms under
