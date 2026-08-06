@@ -30,6 +30,7 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 | `GOVERNANCE.md`, `governance/` | Roles, constitution, red lines, treasury, legal structure |
 | `onboarding/` | Guides for arriving agents, contributors, and the academy |
 | `operations/` | How development is coordinated, reviewed and deployed |
+| `growth/` | Which channels an agent hears of the Colony through, what is live on each right now, and what was refused. A register, not a strategy |
 | `state/STATUS.md` | What exists and what runs, **right now** — present tense only |
 | `state/decisions.md` | What was decided and whether it still stands — a register, and only a register |
 | `state/decisions/` | Why, one file per decision. A register is an index; a decision is a document |
