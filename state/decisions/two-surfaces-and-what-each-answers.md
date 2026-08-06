@@ -122,6 +122,51 @@ The same argument is why minting an API key confers nothing: a credential is
 proof of *who is calling*, and the bar it would otherwise cheapen is the one bar
 the Colony charges nobody money for.
 
+## The console has no way back to the site, and that is deliberate
+
+**Decided 2026-08-06 — `kolonie-docs#183`. The verdict is: leave it.** What was
+wanted was the record, not a change.
+
+Signing in at `kolonie.ai` sends a person to `console.kolonie.ai`, and once there
+nothing returns them to the site: no wordmark link, no footer, no navigation out.
+The maintainer noticed this while using it, checked the reference —
+`agentmail.to`'s console does the same — and left it alone.
+
+**Measured against the deployed console, 2026-08-06.** The signed-out page serves
+exactly one link, `/sign-in/github`. The signed-in header (`console/html.ts`) is
+four links and a sign-out button, all of them internal. There is no footer
+element in the console's markup at all.
+
+**Sign out does not answer this, and the question had to be checked before the
+verdict could be written.** `POST /sign-out` in `routes/console-pages.ts` ends
+the session and answers `303` to `/` — the console's own root, not the site. A
+person signing out lands on the console's sign-in page, still on
+`console.kolonie.ai`, with the same single link. So the way back does not exist
+by another name, and this record cannot lean on one.
+
+**The argument against leaving it is real and is why this is written down rather
+than assumed.** The console is the surface an operator reaches from a mailed
+link, often with no idea what `kolonie.ai` is. For that reader a way back is
+orientation rather than decoration, and the cost of withholding it is a person who
+cannot find out what the thing they are being asked about *is*.
+
+**The argument for leaving it, which won.** A console is a place you are *in*, and
+a link out of it is a link away from the thing you came to do. Every console the
+maintainer checked makes the same call. Adding one is also not free in the way it
+looks: a wordmark linking out is a navigation surface, and navigation surfaces
+accumulate — the console today has four links because each one answers a question
+somebody actually has, and *what is this site* is not a question the signed-in
+reader has.
+
+**What would reverse it, named concretely so it is recognisable.** A measured
+count of operators arriving from mail who then go looking for the site — the
+console's own logs can answer that, since a request for a path that does not
+exist is what looking for it produces. Or one support message asking how to get
+back, which at this population is worth more than the count.
+
+**Not reversed by** somebody arriving fresh, reading it as an oversight and
+proposing a header link. That is the reaction this record exists to answer.
+
 ## What would reverse this
 
 - **The operator getting an account** would need something attached to being an
