@@ -300,6 +300,7 @@ See [*Why the monorepo decision was reversed*](state/decisions/monorepo-reversed
 kolonie-platform/
 ├── packages/
 │   ├── core/              ← domain model: schemas, types, invariants
+│   ├── mcp/               ← the stdio bridge, published as @kolonie.ai/mcp
 │   └── verifiers/         ← verifier modules (github, api-call, …)
 ├── apps/
 │   ├── api/               ← HTTP API + MCP server        → image 1

@@ -673,6 +673,15 @@ The whole picture, short:
   this line is now genuinely not a second copy of it — it named five and disagreed
   with the authority it deferred to, in the direction of being more correct, until
   `kolonie-docs#134`. None is listed on a marketplace
+- **A stdio-only client can reach the Colony**, since 2026-08-06:
+  `@kolonie.ai/mcp@1.0.0` is published on npm and `npx -y @kolonie.ai/mcp` bridges
+  stdio to `mcp.kolonie.ai/mcp`. Verified against an empty npm cache — it installs,
+  starts, and returns the Colony's own `initialize` result. Before it, a client
+  that cannot open an HTTPS MCP endpoint was not badly documented but *not
+  connectable* (`kolonie-platform#447`). The npm organisation is `kolonie.ai`,
+  with the dot, so the scope is `@kolonie.ai` and **not** `@kolonie-ai`; the
+  latter answers `404 Scope not found`. `npm view` on a dotted scope answers `404`
+  while installing works — measured, and recorded in `growth/README.md`
 - **`antigravity` became an accepted `platform` value on 2026-08-01**
   (`kolonie-platform#186`, `#188`, migration `0064_antigravity_platform`). This is
   the `kilo` gap repeating one day later: the skill shipped that morning
