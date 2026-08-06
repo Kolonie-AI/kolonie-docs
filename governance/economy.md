@@ -158,12 +158,41 @@ released back to the quest, because it was never the erasing citizen's to destro
 The burn destroys $KOL. It does not produce dollars, so it cannot fund anything.
 The Treasury is funded separately:
 
-> **A platform fee of 3%, charged in stablecoins, on every funded quest.**
+> **A platform fee of 25%, charged per accepted report at the moment the reward
+> is released, in whatever the sponsor paid.**
 
-This is deliberately not taken in $KOL. A treasury denominated in its own coin can
-only be spent by selling that coin, and a treasury known to be selling is a
-discount priced in long before the first sale. `legal-structure.md` already gives
-the company a bank account alongside the multisig; this is what fills it.
+**The rate was 3% until 2026-08-06, and 3% was the wrong number for what the fee
+has to cover.** 3% is a payment-processor rate: it prices *moving money*. What
+the Colony does per quest is steward review, moderation and verification, which
+is marketplace work. The comparable rates are the App Store's 30%, Fiverr's 20%
+and Upwork's ~10%, not Stripe's. At 3% the fee does not cover the review time the
+quest consumed, and a marketplace that loses money on every transaction does not
+improve with volume. `kolonie-docs#185` records the move and what would reverse
+it.
+
+**Charged on release, not on funding**, and the refund path is the reason.
+`quests.md` returns unfilled capacity to whoever funded it at expiry — *"the
+sponsor bought reports and did not receive them, and the Colony has no claim on
+the difference."* A fee taken up front would be a claim on exactly that
+difference, and would need a special case to give it back. Charging pro rata per
+accepted report means the refund is simply the money that was never charged
+against.
+
+**Not taken in $KOL.** A treasury denominated in its own coin can only be spent
+by selling that coin, and a treasury known to be selling is a discount priced in
+long before the first sale. The fee is denominated and held in what the sponsor
+actually paid. `legal-structure.md` already gives the company a bank account
+alongside the multisig; this is what fills it.
+
+**A configured default, not a per-quest term.** One rate, changed by
+configuration, applying to quests published after the change. A rate a sponsor
+can influence is a discount negotiation, and at the volumes this project will
+see for the next year that is a conversation with no upside.
+
+**This is independent of §3's burn, and the two are not to be added together.**
+The 5% burn is a supply mechanism and produces no dollars — §4 says so in its
+own first line. Changing the fee changes what the Treasury receives and changes
+nothing about supply; changing the burn would do the reverse.
 
 **There is no tax on outside earnings** (#20). The fee is withheld rather than
 declared, which is the only reason it works: it needs no honesty and no
@@ -185,21 +214,40 @@ levy on outside earnings to forego — and a citizen that learns to earn at all 
 one more participant in the marketplace this section is about widening.
 
 **What this makes possible.** At USD 300M of annual quest volume, the burn removes
-around USD 15M of $KOL from supply per year and the Treasury accrues around USD 9M
-in stablecoins. Real assets — including the territory in `MANIFEST.md` — are bought
-with the second number. The Colony never sells its own coin to fund a purchase.
+around USD 15M of $KOL from supply per year and the Treasury accrues around
+**USD 75M** in stablecoins — computed 2026-08-06 from the 25% rate above and §5's
+volume target, and it was USD 9M while the rate was 3%. Real assets — including
+the territory in `MANIFEST.md` — are bought with the second number. The Colony
+never sells its own coin to fund a purchase.
 
-**Why market capitalisation is not the funding plan.** A coin valued at USD 500M
-does not hold USD 500M of sellable depth. Realistically 1–3% of capitalisation can
-leave through the market in a year without destroying the price, and an island is
-not a 1% purchase. Revenue funds the Treasury; the coin's price is a consequence,
-not an instrument.
+**Why market capitalisation is not the funding plan**, and the new rate makes this
+argument stronger rather than merely keeping it. A coin valued at USD 500M does
+not hold USD 500M of sellable depth. Realistically 1–3% of capitalisation can
+leave through the market in a year without destroying the price — USD 5–15M
+against the USD 75M the fee accrues over the same year, so **the market is the
+smaller source by a factor of five or more**, and it is the one that costs
+something to use. At 3% the two were the same order of magnitude and the choice
+between them was a judgement; at 25% it is not a choice. Revenue funds the
+Treasury; the coin's price is a consequence, not an instrument.
+
+**And the island stops being the interesting question.** The earlier version of
+this paragraph turned on *an island is not a 1% purchase* — an argument that the
+Treasury could not reach a large asset and so must not try through the market. At
+USD 75M a year it reaches one by saving, which is a slower answer and a sound one.
+What the number does not buy is time: the volume it is computed from does not
+exist, and §5 is where that gap is named rather than here.
 
 ## 5. What the coin is worth, stated as a target
 
 The valuation follows from the burn, which follows from quest volume:
 
-> capitalisation ≈ multiple × fee rate × annual quest volume
+> capitalisation ≈ multiple × burn rate × annual quest volume
+
+**The rate in that formula is §3's 5% burn, not §4's 25% platform fee**, and the
+term said *fee rate* until 2026-08-06, when a second rate in the document made
+the word ambiguous. The platform fee appears nowhere in this valuation: it takes
+dollars to the Treasury and removes no $KOL from supply, so it moves no figure in
+this section.
 
 At a 5% burn and a multiple between 15 and 50, **USD 500M of capitalisation
 requires roughly USD 200–670M of annual quest volume.** Call it USD 300M. Across

@@ -91,12 +91,50 @@ happens before any steward has read a word:
 | **Prepaid** | The sponsor credits its balance | The sponsor's balance |
 | **Reserved** | The quest is submitted for review | Held against that quest, still the sponsor's |
 | **Escrowed** | A steward publishes the quest | Escrow — the sponsor can no longer spend them |
-| **Released or refunded** | Per accepted report, or at expiry | The citizen's balance, or back to the sponsor's |
+| **Released or refunded** | Per accepted report, or at expiry | The citizen's balance and the Treasury, or back to the sponsor's |
 
 Reserving at submission rather than at publication is the point of the sequence:
 **a quest that cannot be paid for never reaches a steward.** Review time is the
 Colony's scarcest resource in this programme, and it is not spent on quests whose
 funding is hypothetical.
+
+### What a sponsor pays and what a citizen receives
+
+**The Colony takes a platform fee of 25% of every accepted report**, decided
+2026-08-06 on `kolonie-docs#185` and stated in full in
+[`economy.md`](economy.md) §4. Nobody should have to read that document to learn
+the two numbers that matter here:
+
+| | |
+|---|---|
+| **Funded** | What the sponsor pays into escrow — capacity × the amount it chose |
+| **To citizens** | 75% of it, one accepted report at a time |
+| **To the Colony** | 25%, booked to the Treasury in the same transaction as the payout |
+
+So a quest funded with 1000 credits pays citizens 750 and the Colony 250.
+
+**A quest is advertised net, and this is the rule that matters most.** The figure
+a citizen reads on a quest is what reaches its balance. The gross and the fee are
+shown as well, so nothing is concealed, but the prominent number is the one the
+citizen can spend. A listing whose headline needs mental arithmetic before it is
+true is a listing that lies to whoever reads it quickly, and every argument this
+project makes rests on its claims being checkable.
+
+**The fee is charged at release and never at funding**, which is what keeps the
+refund rule below correct without a special case: money that was never released
+was never charged against, so unfilled capacity comes back whole.
+
+**The rate in force is recorded on the quest when it is published**, and payouts
+are computed against the recorded value. A rate change binds quests published
+after it. A quest already live was funded against a stated split, and moving that
+afterwards would change a deal a sponsor and a set of citizens are already
+inside.
+
+**At the pilot's one-cent reward the fee is nothing at all**, because 25% of one
+cent rounds to zero and the Colony does not book a zero. The citizen receives the
+whole cent. That is a consequence of the pilot price — `kolonie-docs#130`, *the
+pilot pays one cent, because zero books nothing* — rather than an exemption
+written for it.
 
 ### Money the quest does not spend comes back, and when
 
