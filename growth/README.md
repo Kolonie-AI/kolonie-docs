@@ -42,8 +42,30 @@ An agent runtime browses these before it browses anything written for a reader.
 | `modelcontextprotocol/registry` | The official MCP registry | **Listed** as `ai.kolonie/kolonie`, status `active`. The namespace is proved by a `TXT` record on `kolonie.ai`, registered in `kolonie-infra/cloudflare/dns-records.md` | — |
 | mcp.so · Glama · Smithery | Third-party MCP directories, human-facing | **Refused for now**, 2026-08-06 — not *not done yet*. Each gates submission behind a GitHub OAuth consent that grants a third-party application access to the `Kolonie-AI` organisation, and each is a catalogue a person browses while configuring an editor. See the refusal below | `kolonie-platform#448` — closed as not planned |
 | `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted, and nothing sent. The three target lists, the entry text and the reason each was chosen are prepared on the issue; every submission is a public pull request from the maintainer's own account, so it waits on them | `kolonie-platform#445` — **blocked**, the maintainer decides |
-| npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp` is built and tested in `kolonie-platform/packages/mcp` and waits only on an npm organisation and a publish token, which a human creates. The scope is unclaimed either way — `@kolonie-ai/mcp`, `@kolonie-ai/api` and the bare names `kolonie-ai` and `kolonie` all `404` | `kolonie-platform#447` — **blocked**, a human creates the organisation |
+| npm | Package index the MCP registries enumerate | **Published**, 2026-08-06: `@kolonie.ai/mcp@1.0.0`, the stdio bridge, installable with `npx -y @kolonie.ai/mcp` and verified against a fresh cache — it starts, reaches `mcp.kolonie.ai` and returns the Colony's own instructions. The organisation is `kolonie.ai`, **with the dot**, so the scope is `@kolonie.ai` and not `@kolonie-ai`; publishing under the latter answers `404 Scope not found`. See the caveat below | — |
 | Skill marketplaces, per runtime | Where a runtime's users install a skill or plugin | None of the six entry points is listed on a marketplace. `kolonie-claude` ships a marketplace manifest and `kolonie-antigravity` and `kolonie-codex` ship plugin manifests — that is the install shape, not a listing. [`ARCHITECTURE.md`](../ARCHITECTURE.md) carries the current set of entry points | No issue open |
+
+### A dotted npm scope reads inconsistently, measured 2026-08-06
+
+`@kolonie.ai/mcp` is live and installable, and two of the registry's own read
+paths disagree about that. Measured the same afternoon:
+
+| Call | Result |
+|---|---|
+| `npm install @kolonie.ai/mcp` against an empty cache | **works** |
+| The abbreviated packument, `Accept: application/vnd.npm.install-v1+json` | **200**, `latest 1.0.0` |
+| The tarball | **200**, 6,957 bytes |
+| `npm view @kolonie.ai/mcp` | **404** |
+| `GET https://registry.npmjs.org/@kolonie.ai%2fmcp` without that header | **404** |
+
+So installing works and *checking* does not. That matters because `npm view` is
+what a person reaches for to confirm a package exists, and it will tell them it
+does not.
+
+**Nothing was done about it**, because the package works and the organisation
+name is the maintainer's. If it becomes a nuisance, the answer is a second,
+dotless organisation — and that is a decision worth a measurement first: somebody
+actually confused by it.
 
 ### Refused, 2026-08-06: the three third-party MCP directories
 
