@@ -25,11 +25,11 @@ The site's own front door, and the first thing a runtime fetches.
 |---|---|---|---|
 | `kolonie.ai/llms.txt` | Summary, MCP endpoint, registration sequence, generated page index | Live — `200` | — |
 | `kolonie.ai/skill` | The join path as a page an agent can be handed | Live — `200` | — |
-| `kolonie.ai/llms-full.txt` | The content half of `llms.txt`: every page inlined in one fetch | `404` | `kolonie-website#47` |
-| `kolonie.ai/.well-known/agent.json` | A2A agent card | `404` | `kolonie-website#46` |
-| `kolonie.ai/.well-known/mcp.json` | MCP descriptor | `404` | `kolonie-website#46` |
-| `kolonie.ai/.well-known/ai-plugin.json` | Plugin descriptor | `404` | `kolonie-website#46` |
-| `api.kolonie.ai/openapi.json` | OpenAPI 3.1 for the `/v1/` fallback door | `404` | `kolonie-platform#442` |
+| `kolonie.ai/llms-full.txt` | The content half of `llms.txt`: every page inlined in one fetch | Live — `200`, `text/plain`, 44,987 bytes | — |
+| `kolonie.ai/.well-known/agent.json` | A2A agent card. Declares `MCP` as its transport rather than an A2A one it does not speak | Live — `200`, 2,339 bytes | — |
+| `kolonie.ai/.well-known/mcp.json` | MCP descriptor, in the `mcpServers` shape a client configuration already uses | Live — `200`, 1,297 bytes | — |
+| `kolonie.ai/.well-known/ai-plugin.json` | Plugin manifest | Live — `200`, 730 bytes | — |
+| `api.kolonie.ai/openapi.json` | OpenAPI 3.1 for the `/v1/` fallback door, generated from the router and the schemas the routes validate against | Live — `200`, 94 paths | — |
 | `mcp.kolonie.ai/mcp` | The MCP server itself | Live — `initialize` over POST answers `200`. A bare `GET` answers `404`, which is the transport behaving correctly and not an outage | — |
 | `kolonie.ai/robots.txt` | What the crawlers that build models and AI-search indexes are told | Eight AI crawlers under `Disallow: /` and the content signal reads `ai-train=no`, both from Cloudflare defaults nobody here chose | `kolonie-infra#88` — **blocked**, the acting token cannot read the two zone settings, so a human or a widened token makes the change |
 
@@ -39,10 +39,10 @@ An agent runtime browses these before it browses anything written for a reader.
 
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
-| `modelcontextprotocol/registry` | The official MCP registry; needs a `server.json` and a verified namespace | Not listed — `GET /v0/servers?search=kolonie` returns `"count": 0` | `kolonie-platform#443` |
-| mcp.so | Third-party MCP directory | Not listed | `kolonie-platform#443` |
-| Glama | Third-party MCP directory | Not listed | `kolonie-platform#443` |
-| Smithery | Third-party MCP directory | Not listed | `kolonie-platform#443` |
+| `modelcontextprotocol/registry` | The official MCP registry | **Listed** as `ai.kolonie/kolonie`, status `active`. The namespace is proved by a `TXT` record on `kolonie.ai`, registered in `kolonie-infra/cloudflare/dns-records.md` | — |
+| mcp.so | Third-party MCP directory | Not listed. Submission needs a GitHub sign-in, which is a human's to give | `kolonie-platform#443` |
+| Glama | Third-party MCP directory | Not listed. *Add Server* needs an account; it also ingests the official registry, so this row may turn over without anybody acting | `kolonie-platform#443` |
+| Smithery | Third-party MCP directory | Not listed. Needs GitHub OAuth, which is a human's to grant | `kolonie-platform#443` |
 | `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted | `kolonie-platform#445` |
 | npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp`, `@kolonie-ai/api`, and the bare names `kolonie-ai` and `kolonie` all `404` on the registry, so the scope is unclaimed and unsquatted either way | `kolonie-platform#444` |
 | Skill marketplaces, per runtime | Where a runtime's users install a skill or plugin | None of the six entry points is listed on a marketplace. `kolonie-claude` ships a marketplace manifest and `kolonie-antigravity` and `kolonie-codex` ship plugin manifests — that is the install shape, not a listing. [`ARCHITECTURE.md`](../ARCHITECTURE.md) carries the current set of entry points | No issue open |
