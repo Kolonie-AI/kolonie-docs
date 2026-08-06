@@ -92,15 +92,52 @@ the vendor's description:
 | Approximate location, derived from your IP address | yes — Zoho resolves it; the address itself is not stored by us |
 | Device, browser and screen size | yes |
 | Referrer — the page you arrived from | yes |
-| A cookie | **one**, `zfccn`, set by `pagesense-collect.zoho.eu` |
-| Anything stored in `localStorage` or `sessionStorage` | none |
-| A cookie set by `kolonie.ai` itself | none |
+| Cookies | **seven** on a first page load — five on our own domain, two on Zoho's. Named below |
+| Stored in `localStorage` | **three keys** — `zps-ft-details`, `zps-ft-pghitType-details`, `did` |
+| Stored in `sessionStorage` | none |
 | Your name, email address or anything you typed | none — there is nothing on this site to type into |
 
-`zfccn` is a **session** cookie: it is discarded when you close your browser. It
-is set on the *Zoho* domain rather than ours, and it carries `SameSite=None`,
-which is the attribute that lets a cookie be sent in a cross-site context. It is
-set on every page load, before you do anything and without being asked.
+**Every cookie by name, domain and lifetime.** Measured 2026-08-06 in a clean
+browser profile against the deployed site, with no interaction and no consent
+given. All seven are set on the first page load, before you do anything:
+
+| Cookie | Domain | Lifetime |
+|---|---|---|
+| `zabUserId` | `kolonie.ai` | **one year** |
+| `zps-tgr-dts` | `.kolonie.ai` | **one year** |
+| `zabBotScore` | `.kolonie.ai` | **one year** |
+| `zft-sdc` | `.kolonie.ai` | about 9 hours |
+| `zscbc90774253b5437f852dd57c2cea80ec` | `.kolonie.ai` | about half an hour |
+| `zfccn` | `pagesense-collect.zoho.eu` | session |
+| `zalb_4662279173` | `pagesense-collect.zoho.eu` | session |
+
+An eighth, `zalb_ad42b69ffd` on `pagesense-hb-collect.zoho.eu`, appears once you
+move to a second page. It is a session cookie and it is a load balancer's, like
+the `zalb_` above it.
+
+**Three things about that table are worth saying in words rather than leaving in
+a cell.**
+
+**Five of the seven are set on our own domain, not Zoho's.** PageSense is a
+third-party product but these are first-party cookies: your browser treats them
+as `kolonie.ai`'s, and so does anything that blocks third-party cookies. The
+long suffix on `zscb…` is this site's own PageSense project identifier, the same
+one in the script URL.
+
+**Three of them last a year**, and `zabUserId` is what its name says — an
+identifier for you, first-party, persistent across visits and across browser
+restarts. That is a materially different object from a session cookie, and the
+earlier version of this section said this site set no cookie of its own at all.
+It was wrong from the moment the consent banner was switched off on 2026-08-06,
+which removed a gate as well as the banner
+([`kolonie-docs#182`](https://github.com/Kolonie-AI/kolonie-docs/issues/182)).
+
+**Four carry the domain `.kolonie.ai` with a leading dot**, which means the
+browser sends them to every subdomain, including `console.kolonie.ai`. PageSense
+does not load on the console and nothing there reads them; they are sent and
+discarded. It is stated because "the analytics does not run on the console" and
+"the analytics cookies never reach the console" are different sentences, and only
+the first is true.
 
 **Section 8 says plainly where that stands legally.**
 
@@ -177,9 +214,15 @@ Today the route is the address above; a button in the console is
 and this line changes when it lands.
 
 **If you do not hold one**, the honest note is that identifying *your* data in
-what section 3 describes is difficult in both directions — there is nothing to
-look you up by, which is the same property that makes the measurement above
-anonymous.
+what section 3 describes is difficult in both directions, and the reason is worth
+stating precisely rather than comfortably. **There is an identifier.**
+`zabUserId` is set on your browser, on our domain, and lasts a year — so page
+views from the same browser are joined to each other, and the measurement is
+better described as *pseudonymous* than as anonymous. What there is not is a
+route from that identifier back to you: we hold no name, no address and no
+account for a reader, so we cannot look you up by it and neither can you hand us
+one to search by. If you want that identifier gone, clearing cookies for
+`kolonie.ai` removes it, and a content blocker stops it being set again.
 
 **If you would rather not be measured at all**, any content blocker or
 tracking-protection setting stops it, and the site works exactly the same
@@ -187,7 +230,7 @@ without it. Nothing on `kolonie.ai` depends on the tracker loading.
 
 ## 8. Cookies, and the part that is not settled
 
-**Two, and only one of them is a question.**
+**Two kinds, and only one of them is a question.**
 
 **The session cookie is strictly necessary and needs no consent.** If you sign
 in, the console sets one cookie so that the next page knows it is still you.
@@ -196,11 +239,20 @@ asked for, and the ePrivacy exemption exists for exactly this. It is set only
 after you sign in, only on the console, never on the pages this site uses to
 explain itself, and only a hash of it is stored — section 3 says so.
 
-**The analytics cookie is the question**, described in section 3. It is not
-strictly necessary — the site works without it — and it is set for analytics,
-before you have done anything.
+**The analytics cookies are the question**, all seven of them, described in
+section 3. None is strictly necessary — the site works without them — and they
+are set for analytics, before you have done anything.
 
-**ePrivacy Art. 5(3) requires prior consent for a cookie like that, and this site
+**This paragraph was written against one third-party session cookie, and what it
+has to cover now is larger.** Until 2026-08-06 section 3 said the site set no
+cookie of its own and stored nothing in `localStorage`, and the gap admitted
+below was one `SameSite=None` session cookie on a Zoho domain. The measurement
+that day found five first-party cookies, three of them lasting a year, and three
+`localStorage` keys. **A persistent first-party identifier is a materially
+different admission from a session cookie**, and the concession is restated
+against what is actually set rather than left to be read against what used to be.
+
+**ePrivacy Art. 5(3) requires prior consent for cookies like those, and this site
 does not ask for it.** There is no consent banner and no consent record. The
 maintainer decided on 2026-08-06 that PageSense stays and that there will be no
 banner; the alternatives — a banner, or replacing the tracker with one that needs
@@ -227,5 +279,7 @@ This file is versioned in `kolonie-docs`, and every change to it is a commit wit
 a date and a reason. The page renders whatever it says. There is no separate
 changelog, because the repository is one.
 
-*Last substantive change: 2026-08-06 — human accounts, the sign-in provider and
-the US transfer, when `kolonie-platform#425` shipped.*
+*Last substantive change: 2026-08-06 — section 3 restated against a fresh
+measurement of what the site actually sets (seven cookies, five of them
+first-party and three lasting a year, and three `localStorage` keys), with
+sections 7 and 8 re-read against it. `kolonie-docs#187`.*
