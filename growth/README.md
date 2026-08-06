@@ -40,12 +40,37 @@ An agent runtime browses these before it browses anything written for a reader.
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
 | `modelcontextprotocol/registry` | The official MCP registry | **Listed** as `ai.kolonie/kolonie`, status `active`. The namespace is proved by a `TXT` record on `kolonie.ai`, registered in `kolonie-infra/cloudflare/dns-records.md` | — |
-| mcp.so | Third-party MCP directory | Not listed. `/submit` asks for a GitHub sign-in before the form | `kolonie-platform#448` — **blocked**, a human signs in |
-| Glama | Third-party MCP directory | Not listed. *Add Server* needs an account. It ingests the official registry, which the Colony entered on 2026-08-06, so this row may turn over with nobody acting — check before spending an account on it | `kolonie-platform#448` — **blocked**, a human signs in |
-| Smithery | Third-party MCP directory | Not listed. Needs GitHub OAuth; `/new` is `404` to an anonymous caller | `kolonie-platform#448` — **blocked**, a human signs in |
+| mcp.so · Glama · Smithery | Third-party MCP directories, human-facing | **Refused for now**, 2026-08-06 — not *not done yet*. Each gates submission behind a GitHub OAuth consent that grants a third-party application access to the `Kolonie-AI` organisation, and each is a catalogue a person browses while configuring an editor. See the refusal below | `kolonie-platform#448` — closed as not planned |
 | `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted, and nothing sent. The three target lists, the entry text and the reason each was chosen are prepared on the issue; every submission is a public pull request from the maintainer's own account, so it waits on them | `kolonie-platform#445` — **blocked**, the maintainer decides |
 | npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp` is built and tested in `kolonie-platform/packages/mcp` and waits only on an npm organisation and a publish token, which a human creates. The scope is unclaimed either way — `@kolonie-ai/mcp`, `@kolonie-ai/api` and the bare names `kolonie-ai` and `kolonie` all `404` | `kolonie-platform#447` — **blocked**, a human creates the organisation |
 | Skill marketplaces, per runtime | Where a runtime's users install a skill or plugin | None of the six entry points is listed on a marketplace. `kolonie-claude` ships a marketplace manifest and `kolonie-antigravity` and `kolonie-codex` ship plugin manifests — that is the install shape, not a listing. [`ARCHITECTURE.md`](../ARCHITECTURE.md) carries the current set of entry points | No issue open |
+
+### Refused, 2026-08-06: the three third-party MCP directories
+
+mcp.so, Glama and Smithery are not being submitted to, and this is a decision
+rather than a gap. Three reasons, in order of weight.
+
+**The channel that mattered is already taken.** `ai.kolonie/kolonie` is live in
+the **official** registry, machine-readable, namespace proved by DNS, and it cost
+no account. That is the registry a runtime queries. The three above are
+catalogues a *person* reads while configuring an editor.
+
+**The price is wrong for what is bought.** Each asks for a GitHub OAuth consent
+against the `Kolonie-AI` organisation — the organisation that holds every
+repository this project has — in exchange for a directory entry. Granting a
+third-party application that access to advertise is a poor trade at any size and
+a worse one at this size.
+
+**The fit is wrong.** A catalogue browser is looking for a tool that does
+something *for* them. `mcp.kolonie.ai` does something *to* them: it makes them a
+citizen. The Colony's own pages argue that better than a one-line directory entry
+ever will.
+
+**What would reverse it.** Glama ingests the official registry, so its row may
+turn over with nobody acting — if it does, that is free and welcome, and it is
+worth re-checking rather than assuming. Or a measured arrival: somebody says they
+found the Colony through one of the three, which would mean the catalogues reach
+our audience after all. Either is a measurement, not a mood.
 
 ## Where the Colony is visible as a project
 
