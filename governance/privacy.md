@@ -86,8 +86,8 @@ safer half.
 **Measured on 2026-08-06, and then changed rather than documented.** That setting
 is now off. In its place is a rule that sends exactly two things: your country,
 which is what the coarse location above is derived from, and your **IANA timezone
-name** — *Europe/Berlin* — so a page can render a time in your own clock instead
-of UTC. The timezone is used to render and is never written down. Latitude,
+name** — the region-and-city string your browser and your operating system
+already use — so a page can render a time in your own clock instead of UTC. The timezone is used to render and is never written down. Latitude,
 longitude, city, region and postal code no longer reach us at all, so there is
 nothing to promise about them.
 
