@@ -55,6 +55,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `build-skill.test.py` is here rather than in the seven skill repositories
+      # because the generator is here. Whether each `SKILL.md` is *current* is a
+      # question only that repository can ask — its `skill.yml` does, on every
+      # pull request — but whether the generator still joins the two halves
+      # correctly is this repository's to answer, and it is the one failure that
+      # would reach all seven at once.
+      #
       # Both checks are tested before either runs, which is `check-red-lines.yml`'s
       # rule and `rehearse.yml`'s lesson before it: a check nobody verifies is a
       # suite nobody runs with a shorter fuse. The link check needs it more than
@@ -64,6 +71,7 @@ jobs:
         run: |
           python3 .github/tests/check-links.test.py
           python3 .github/tests/red-lines.test.py
+          python3 .github/tests/build-skill.test.py
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .

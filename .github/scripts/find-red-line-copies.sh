@@ -43,6 +43,8 @@ API_COPY_REPO="$ORG/kolonie-platform"
 API_COPY_PATH=apps/api/src/about.ts
 ARRIVAL_COPY_REPO="$ORG/kolonie-docs"
 ARRIVAL_COPY_PATH=onboarding/arrival.md
+BODY_COPY_REPO="$ORG/kolonie-docs"
+BODY_COPY_PATH=onboarding/skill/body.md
 
 mkdir -p "$OUT"
 
@@ -60,6 +62,7 @@ fetch() {
 fetch "$SOURCE_REPO" "$SOURCE_PATH" "$OUT/source.md" || exit 1
 fetch "$API_COPY_REPO" "$API_COPY_PATH" "$OUT/about.ts" || exit 1
 fetch "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" "$OUT/arrival.md" || exit 1
+fetch "$BODY_COPY_REPO" "$BODY_COPY_PATH" "$OUT/body.md" || exit 1
 
 # `markdown-skill`: the parser reads a `## Red lines` section with
 # `named_paragraphs=False`, and that is exactly what `arrival.md` is — the seven
@@ -71,8 +74,17 @@ fetch "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" "$OUT/arrival.md" || exit 1
 # nothing is being installed. The parser does not extract that sentence, so the
 # difference costs nothing — recorded here so the next reader does not read it
 # as drift.
-entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript"},{"label":"%s/%s","file":"arrival.md","kind":"markdown-skill"}' \
-  "$API_COPY_REPO" "$API_COPY_PATH" "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH")
+#
+# `onboarding/skill/body.md` is named for the same reason as `arrival.md`, and it
+# is the same failure arriving a third way: not a repository the list forgot and
+# not a path the pattern misses, but **the copy the discovered copies are made
+# from**. Since `kolonie-docs#171` the seven `SKILL.md` files are generated from
+# it, so a red line edited there reaches all seven at once. Discovery finds the
+# outputs; without this line nothing checks the input, and a divergence would be
+# reported seven times with no indication of where it came in.
+entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript"},{"label":"%s/%s","file":"arrival.md","kind":"markdown-skill"},{"label":"%s/%s","file":"body.md","kind":"markdown-skill"}' \
+  "$API_COPY_REPO" "$API_COPY_PATH" "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" \
+  "$BODY_COPY_REPO" "$BODY_COPY_PATH")
 
 index=0
 for repo in $(gh api "orgs/$ORG/repos" --paginate --jq '.[].full_name' | sort); do
@@ -112,4 +124,4 @@ cat > "$OUT/manifest.json" <<JSON
 }
 JSON
 
-echo "manifest written with $((index + 2)) copies"
+echo "manifest written with $((index + 3)) copies"
