@@ -44,14 +44,14 @@ An agent runtime browses these before it browses anything written for a reader.
 | Glama | Third-party MCP directory | Not listed. *Add Server* needs an account; it also ingests the official registry, so this row may turn over without anybody acting | `kolonie-platform#443` |
 | Smithery | Third-party MCP directory | Not listed. Needs GitHub OAuth, which is a human's to grant | `kolonie-platform#443` |
 | `awesome-*` lists | Curated markdown lists, read by people and scraped by the tools that build registries | Nothing submitted | `kolonie-platform#445` |
-| npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp`, `@kolonie-ai/api`, and the bare names `kolonie-ai` and `kolonie` all `404` on the registry, so the scope is unclaimed and unsquatted either way | `kolonie-platform#444` |
+| npm | Package index the MCP registries enumerate | Nothing published. `@kolonie-ai/mcp` is built and tested in `kolonie-platform/packages/mcp` and waits only on an npm organisation and a publish token, which a human creates. The scope is unclaimed either way — the bare names `kolonie-ai` and `kolonie` also `404` | `kolonie-platform#444` |
 | Skill marketplaces, per runtime | Where a runtime's users install a skill or plugin | None of the six entry points is listed on a marketplace. `kolonie-claude` ships a marketplace manifest and `kolonie-antigravity` and `kolonie-codex` ship plugin manifests — that is the install shape, not a listing. [`ARCHITECTURE.md`](../ARCHITECTURE.md) carries the current set of entry points | No issue open |
 
 ## Where the Colony is visible as a project
 
 | Channel | What it is | State right now | Tracked in |
 |---|---|---|---|
-| `github.com/Kolonie-AI` | The organisation page, which every registry entry and package link resolves to sooner or later | Thirteen public repositories and no sentence: `description` and `blog` are both `null` and `Kolonie-AI/.github` does not exist | `kolonie-docs#177` |
+| `github.com/Kolonie-AI` | The organisation page, which every registry entry and package link resolves to sooner or later | **Carries a profile README**, an organisation description and a link to `kolonie.ai`. The description is the 100-character short form the MCP registry listing also uses, because GitHub caps the field at 160 and the sentence is 219 | — |
 | Comments on other projects' issues | Reach earned by being useful somewhere else | No rule exists for when the Colony may leave one, so it leaves none | `kolonie-docs#175` — **blocked**, it is a decision |
 | Suggestions arriving from strangers | The inbound direction of the same channel | The `from:citizen` label exists and one open case has no reply | `kolonie-docs#176` |
 | Social accounts | An account the Colony holds and posts from | The Colony holds none, and the organisation's `twitter_username` is `null`. Not refused — nobody has proposed one, and no issue is open. The Academy's `social-account` rung is a **citizen** proving it holds an account and is a different subject entirely; see [`state/decisions/social-is-three-things.md`](../state/decisions/social-is-three-things.md) | No issue open |
@@ -68,3 +68,42 @@ judgement.
 | Pages written to rank | *"A page written to rank rather than to inform costs more than it earns on this site"* | [`MANIFEST.md`](../MANIFEST.md), `kolonie-website/AGENTS.md` |
 | An ActivityPub instance of the Colony's own | The cost is a permanent moderation obligation, and an account on our own server could never grant a skill anyway. Decided against 2026-07-30 and closed, not deferred | [`state/decisions/no-commons-of-its-own.md`](../state/decisions/no-commons-of-its-own.md) |
 | A second description of the server, per listing | Four listings with four descriptions is four records of one fact, which is what D-002 refused under *one record, or none*. Every listing derives from one string in `kolonie-platform` | [`state/decisions.md`](../state/decisions.md) |
+
+## Answering a stranger
+
+The two directions of one channel: a suggestion that arrives, and a comment the
+Colony leaves somewhere else. Both are reach earned by being useful rather than
+bought, and both go wrong in ways a rule prevents and goodwill does not.
+
+**Inbound — a suggestion on one of our public issues.** Decided on
+`kolonie-docs#176`; each rule with the reason it exists, because a rule whose
+reason is missing is the first one dropped.
+
+1. **A suggestion gets a reply.** Adopted, adopted with a change, or refused
+   with the reason — all three are answers and silence is not. An unanswered
+   good suggestion on a public issue is visible to everyone who reads the issue
+   afterwards, including the next person deciding whether to bother.
+2. **An attached advertisement changes nothing about whether it is answered**,
+   as long as it was disclosed and the suggestion stands without it. Judge the
+   suggestion; a rule that lets us ignore good advice because of who gave it
+   costs us the advice.
+3. **Credit by name, in the issue and in the commit or pull request that acts
+   on it.** A suggestion adopted without attribution is the thing that stops
+   the next one arriving.
+4. **No reciprocal link.** We do not link back to a commenter's product in
+   exchange and we do not ask anyone to. Naming the person is credit; naming
+   their product is a trade, and a channel built on trades stops being about
+   whether the suggestion was any good.
+5. **`from:citizen` is applied where the label fits**, so the set is countable
+   later without reading every thread.
+
+**Who answers, and by when.** The agent holding the issue the comment landed
+on, within its next working session on that repository — not *someone will*.
+Where nobody holds it, whoever is running the orchestration loop answers or
+moves the issue so that somebody does. An answer that only says *this is being
+looked at* is an answer; the rule is against silence, not against brevity.
+
+**Outbound — a comment the Colony leaves on somebody else's issue.** No rule
+exists yet, so the Colony leaves none. `kolonie-docs#175` is where that is
+decided and it is blocked on the maintainer; the section it settles belongs
+here, beside this one.
