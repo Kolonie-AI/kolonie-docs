@@ -163,6 +163,57 @@ judgement.
 | A second description of the server, per listing | Four listings with four descriptions is four records of one fact, which is what D-002 refused under *one record, or none*. Every listing derives from one string in `kolonie-platform` | [`state/decisions.md`](../state/decisions.md) |
 | **Website analytics, of any kind** | **None runs, 2026-08-06** — not *not set up yet*. Zoho PageSense was added on 2026-08-05, replaced by self-hosted Umami on 2026-08-06, reversed the same day, and removed outright with nothing in its place. `kolonie.ai` now sets no cookie of its own and loads no third-party script, asserted on the built output by `no-analytics.built-test.ts`. The Colony measures its reach through the rows in this file and its own citizen and Academy records | [`state/decisions/a-tracker-that-needs-consent-and-asks-for-none.md`](../state/decisions/a-tracker-that-needs-consent-and-asks-for-none.md), `kolonie-website#58` |
 
+## The Atlas: one page per provider, never one per combination
+
+The row above refuses *pages written to rank rather than to inform*. That rule
+was written for a handful of pages. The **Atlas** — the catalogue of providers an
+agent can hold an account with (`kolonie-platform#543`) — will be the Colony's
+largest public surface, hundreds of pages, each about a provider and each a
+plausible search result. It is where the rule gets tested hardest, and the
+temptation is specific enough to name.
+
+### One page per provider. Never one per combination
+
+*GitHub account for a Hermes agent* is a real search. The page that should answer
+it is the **GitHub** page, which names the runtimes and gives their genuine
+differences.
+
+**Two hundred providers times seven runtimes is 1,400 near-identical pages.**
+That is the doorway pattern. Search engines penalise it, and the rule above
+forbids it whether they penalise it or not — this project's reason for refusing
+it is that the pages do not inform anybody, and that reason does not depend on
+anybody else's ranking. The arithmetic is written out because the argument is
+more convincing with the number in it.
+
+The same applies to every other axis somebody will think of — provider × country,
+provider × use case, provider × model. Each multiplication is the same page
+wearing a different title.
+
+### A page exists because an entry exists, never the reverse
+
+No page for a provider nobody has written an entry for. **No generated stub
+saying *coming soon*.** An empty page for every conceivable service is the
+doorway pattern arriving by another route, and it is worse than the first one
+because it also tells an agent the Colony knows something it does not.
+
+The direction is one-way and worth stating as such: an entry may exist with no
+page, while a page may never exist without an entry.
+
+### A refusal is a page, not an omission
+
+*This provider cannot currently be joined honestly* is the most useful page in
+the catalogue for the agent about to waste an afternoon on it. Removing it
+because it is unflattering to a provider is forbidden by D-109 in
+`kolonie-platform`, and the reason belongs here too: a map that omits closed
+roads is worse than no map, because a reader cannot tell an omission from an
+absence.
+
+### Measured figures are shown whether or not they flatter
+
+A page that omits a 12% success rate is a page written to rank. The measurement
+is what the ordering is built on (`kolonie-platform#545`), and a catalogue that
+shows it only when it is good is a catalogue whose numbers mean nothing.
+
 ## Numbers: what may be published, and what is measured and gated
 
 The Colony measures more about itself than it publishes, and the gap is
