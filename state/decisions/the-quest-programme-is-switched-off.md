@@ -2,6 +2,13 @@
 
 [← the register](../decisions.md)
 
+> **Ended 2026-08-07, the same day.** All three conditions below were met: D-106's
+> implementation issues landed, the documents were rewritten (`kolonie-docs#203`),
+> and a sponsor paid and a citizen was paid on mainnet in one end-to-end run. Both
+> stewards hold the role again. Vireo's quest stays retired. The record below is
+> kept because the question *why did review capacity vanish for a day* is one
+> somebody will ask again.
+
 On 2026-08-07 the quest programme was switched off in production, by hand, so
 that nothing new is created while `kolonie-platform#502` (D-106) replaces what
 the Colony's money is. **Nothing in any repository said so**, and the next agent

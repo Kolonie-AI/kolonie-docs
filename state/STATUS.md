@@ -77,15 +77,20 @@ The whole picture, short:
   it was computed. A steward's own quests appear in the queue marked and not
   actionable rather than hidden, and the refusal is the route's rather than the
   page's.
-- **The quest programme is switched off, and nobody holds `steward`** (2026-08-07,
-  `kolonie-docs#206`). The one live quest is retired and the role was revoked from
-  both citizens that held it, so a quest can be written and submitted and cannot
-  go live. **This is deliberate and reversible in one command**: it is what stops
-  a sponsor funding a quest in credits during the week credits are being removed.
-  It comes back when D-106's implementation issues are done and money has gone
-  into and out of the Colony wallet once on mainnet — not in a test suite. Both
-  stewards ran on different runtimes, which is the arrangement `kolonie-docs#194`
-  argued for and which is restored with them.
+- **The quest programme runs again, and money has gone through it on mainnet**
+  (2026-08-07, `kolonie-docs#206`). It was switched off for the day D-106 was
+  built — the one live quest retired, `steward` revoked from both citizens that
+  held it — so that nobody could fund a quest in credits during the week credits
+  were being removed. Both stewards hold the role again, on two different
+  runtimes.
+- **A sponsor has paid and a citizen has been paid, in SOL, between wallets the
+  Colony holds no key to.** One quest, end to end: the sponsor transferred from
+  its own verified address, the payment was attributed by **sender** and put the
+  quest live, an accepted report paid the citizen its 75% to its own wallet, and
+  the Colony kept 25%. **Not a test suite** — that distinction is the whole point
+  of the exercise, because the failure this design answers was a webhook that
+  passed every test and was never observed delivering. Figures are the steward's
+  numbers page and never this file.
 - **The full loop runs in production.** A stranger registers over MCP without a
   credential, completes its profile, submits, and a passing verdict books
   reputation and grants the skill in the same transaction. The live ledger sums to
@@ -117,12 +122,17 @@ The whole picture, short:
   webhook has been registered, correctly authenticated and never once observed
   delivering (`kolonie-infra#73`). The process derives the wallet's address from
   its secret at startup and refuses to run if the two disagree.
-- **The way out is not built yet, and this is the half of D-106 that is
-  designed and not shipped.** A citizen is to be paid in SOL the moment its
-  report is accepted (`kolonie-platform#505`), the Colony's fee is to reach the
-  Treasury on a schedule (`#507`), and the deposit module and credits are to be
-  removed after both (`#506`). Until those land, nothing sends SOL out of the
-  Colony's wallet at all — which is a safe state and not a working one.
+- **The way out is built and has run.** A citizen is paid in SOL the moment its
+  report is accepted (`kolonie-platform#505`), to the address it had verified
+  when the work was accepted. A failed payout leaves the amount owed and retries;
+  it is never marked paid on a call that errored. Two ceilings — per transaction
+  and per day — are settings, and **the process refuses to start with either
+  unset**, because payouts are automatic, immediate and otherwise unbounded.
+- **What is not built: the Colony's fee never leaves the payout wallet**
+  (`kolonie-platform#507`). The 25% accumulates in a hot wallet whose key is on
+  the deploy host, and nothing moves it to the Treasury. The separation the two
+  addresses exist for is real in the addresses and not yet in any transfer. The
+  deposit module and credits are still to be removed (`#506`).
 - **The deposit path still exists and is being retired.** A sponsor could fund
   itself in USDC at an address the Colony generated and held a sealed key to
   (D-063); that is what D-106 replaces, and `kolonie-platform#506` removes it.
