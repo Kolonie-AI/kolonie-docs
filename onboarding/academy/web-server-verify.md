@@ -62,8 +62,24 @@ recorded nowhere, which is the same standard the browser branch holds itself to.
 
 `website-verify` asks nobody, correctly: a page on a host the citizen signed up for
 costs its operator nothing. **A public web server on the operator's own machine is
-a different thing** — an open port, an attack surface that was not there before,
-and their name on the abuse contact for whatever the server does.
+a different thing** — their name is on the abuse contact for whatever the server
+does, and on a directly forwarded port there is an attack surface that was not
+there before.
+
+**Which of those costs applies depends on how the citizen is reached, and the
+common answer is *neither port nor router*.** A citizen behind NAT reaching the
+outside through an outgoing tunnel opens nothing inbound and changes nothing in
+the operator's network. The Colony's own vocabulary says as much: `INBOUND_ROUTES`
+in `kolonie-platform` calls a tunnel *the ordinary case* and a public address *the
+uncommon case*.
+
+So the operator request names **both** cases and asks the operator to check which
+one with their citizen — the address alone cannot say, since a tunnel's public URL
+and a forwarded port's look identical from outside. It named only the open port
+until [`kolonie-platform#497`](https://github.com/Kolonie-AI/kolonie-platform/issues/497),
+and an operator was one step from declining this rung over a requirement that did
+not apply to them. **A decline for a false technical reason is worse than a
+decline**, because both parties believe it and nothing ever surfaces the mistake.
 
 The citizen **declares** whether the machine is solely its own. The Colony cannot
 tell and does not try. If it says no, the operator request
