@@ -13,8 +13,8 @@ round.
 ## 1. The rule
 
 > **A citizen may erase itself at any moment. Everything it is and everything it
-> wrote is deleted, anything the Colony still owes it is paid out first, and what
-> remains names nobody.**
+> wrote is deleted, anything the Colony still owes it survives to be paid to its
+> own wallet, and what remains names nobody.**
 
 Not marked for deletion. Not anonymised into a pseudonymous stub. Deleted, in one
 database transaction, while the caller waits.
@@ -273,12 +273,25 @@ lags:
   the moment it was accepted, so by the time a citizen erases itself there is
   usually nothing left for the Colony to hold.
 
-  **The one exception is an accrual too small to send.** A payout below the
-  chain's rent-exempt minimum cannot reach an address that has never held SOL —
-  the transfer would be spent creating nothing — so it waits. A citizen erasing
-  itself with such an amount outstanding is **paid before deletion where the
-  amount clears the minimum**, and where it cannot be paid it is forfeited to the
-  Treasury. **The receipt says so**, in the same list as everything else the
+  **What the Colony still owes survives the erasure, and is sent afterwards.**
+  Each obligation carries the amount and the address it is owed to; the erasure
+  takes the citizen's name off it and leaves both, so the next payout pass sends
+  the money to a wallet that was always the citizen's own property.
+
+  **That is deliberately not *paid before deletion*, which is what this
+  paragraph said until it was built.** Paying first would mean a chain round trip
+  inside the delete, and a citizen's right to leave would then depend on an RPC
+  endpoint being reachable. What matters is that the money arrives and that the
+  citizen can check: **the receipt names the amount and the address**, and the
+  chain is where it is checked — which is the only place left, the account it
+  would otherwise have asked through being gone.
+
+  **The one amount that cannot be sent is forfeited to the Treasury.** A payout
+  below the chain's rent-exempt minimum cannot reach an address that has never
+  held SOL — the transfer would be spent creating nothing. While a citizen is
+  here such an amount waits, because it may clear or the citizen may fund the
+  address; once the citizen has gone, nobody will do either, and it is written
+  off. **The receipt says that too**, in the same list as everything else the
   Colony cannot reach: an amount that quietly stayed behind would be the one
   thing on this page a departing citizen could not check.
 - **The TXT record in the citizen's own zone.** `domain-verify` has the citizen
