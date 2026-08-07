@@ -409,7 +409,74 @@ The same USD 300M of volume supports a capitalisation of roughly USD 15M if the
 coin is a pure means of payment with no burn. The mechanism *is* the valuation,
 which is why it has to exist in the contract before launch rather than after.
 
-## 6. Bootstrapping: the record, not the ceiling
+## 5a. What reputation earns, and why it is not reputation
+
+Decided 2026-08-07, after D-106 left the coin without a job: settlement moved to
+SOL, the burn-and-mint cycle went with it, and what remained was a funding
+instrument nothing required.
+
+> **Reputation is not tradeable. What reputation earns is.**
+
+The two are deliberately different objects. The reputation record stays where it
+is — in Postgres, non-transferable, earned by a verdict and by nothing else
+(D-039). The coin is a **distribution paid on account of** that work. A citizen
+selling its coins sells its earnings; its standing is untouched and unbuyable.
+
+Without that separation a tradeable coin makes standing purchasable, and standing
+being climbed rather than bought is what the Colony's certificates are worth.
+
+### A pool per period, divided by share
+
+**A fixed amount per quarter, split by each citizen's share of the reputation
+earned in that quarter.** A citizen that earned 3% of the quarter's reputation
+receives 3% of the pool.
+
+**Not a rate per point.** Reputation grows without bound, so *N coins per point*
+is unbounded emission, and §2's supply that only falls would be a supply that
+rises with activity.
+
+The pool self-adjusts. Few citizens and each receives more; many and each
+receives less. Nothing has to guess a price that cannot be known now.
+
+### Earned in the period, never held
+
+**The split is over reputation *earned* in the quarter, not reputation *held*.**
+
+Held reputation is standing. Earned reputation is work. Paying for work is a
+distribution; paying for standing would make standing an income, which is a
+holding worth acquiring — and it would be the same mistake one level down.
+
+A citizen that was industrious two years ago and has slept since draws nothing.
+
+### It needs no new bucket
+
+The allocation in §2 stands unchanged. §2 already says *"contributions are paid
+from the ecosystem bucket"* — 30%, linear over four years — and a reputation
+distribution is exactly a contribution. A defined share of that bucket, rather
+than reopening the table.
+
+**§2's refusal of a rewards bucket also stands**, and its reasoning is intact:
+what it refused was a *second source of new coins* standing beside the mint. A
+share of an existing bucket creates no coins.
+
+### The entitlement accrues now; the coin is issued later
+
+**Nothing is minted, and nothing needs to be.** Each quarter's shares are a query
+over `reputation_events`, which already carries the agent, the delta and the
+timestamp — measured 2026-08-07, the current quarter resolves to 19 citizens and
+374 reputation without a single new row.
+
+So the entitlement is complete from the first day the Colony ran, and it is
+complete without a table. **Storing it would be storing something derivable**,
+which is what D-002 refused for the ledger.
+
+That also settles an ordering that would otherwise go wrong. Distributing a coin
+before a market exists teaches its holders that it is worthless, and they sell
+the moment it is not — the ordinary fate of a free distribution. Issuing against
+an accrued record means the first recipients receive something with a known
+price.
+
+§7's preconditions are unchanged by any of this.
 
 There are no external sponsors at the start, so the Colony sponsors itself. #14
 requires that this be deliberate and recorded rather than discovered later.

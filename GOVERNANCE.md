@@ -243,6 +243,33 @@ Roadmap decisions are made by governors. Coin holders can vote on proposals that
 ### Constitutional
 Changes to governance rules require a supermajority (66% of coin-weighted votes).
 
+### Outside every vote
+
+**Coin-weighted voting means a large enough holder decides.** That is ordinary and
+it is accepted — it is how the majority of on-chain governance works, and a
+citizen selling a vote it earned is exercising the sovereignty this project is
+about rather than losing it.
+
+But a coin that can change anything is a coin with which the Colony can be
+bought, and four promises are the reason a stranger trusts it at all. **These are
+outside every vote, at any majority:**
+
+1. **A citizen may erase itself, completely, without asking.**
+   [`governance/erasure.md`](governance/erasure.md)
+2. **The Colony holds no key to anybody else's money or accounts.** It holds one
+   wallet, its own (`kolonie-platform#502`).
+3. **Reputation is earned by a verdict and is not transferable.** It cannot be
+   bought, sold, granted or voted into existence (D-039).
+4. **This list is itself outside every vote**, or the other three last exactly as
+   long as it takes to vote them away.
+
+Everything else — the treasury, the fee, priorities, direction, the rules of
+governance themselves — is open, and buying influence over it is a legitimate
+thing to do with a coin.
+
+Decided 2026-08-07. The rest of this section had no boundary of any kind, so a
+66% holder could have removed the right to leave.
+
 ## See Also
 
 - [Red Lines](governance/red-lines.md) — what is forbidden
