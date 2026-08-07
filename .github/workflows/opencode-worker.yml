@@ -241,6 +241,36 @@ jobs:
           : "${OPENCODE_LLM_BASE_URL:?OPENCODE_LLM_BASE_URL is not set}"
           : "${OPENCODE_LLM_API_KEY:?OPENCODE_LLM_API_KEY is not set}"
 
+          # ## Why the model is written into a derived config rather than left
+          # ## to `--model` alone
+          #
+          # opencode resolves `provider/model` against the provider's own
+          # `models` map, and a custom OpenAI-compatible provider has none until
+          # one is declared. Without it the run dies in about two seconds with
+          #
+          #     Error: { "name": "UnknownError",
+          #              "data": { "message": "Unexpected server error…" } }
+          #
+          # which reads as the gateway being down and is not — the gateway
+          # answered `gpt-5.6-sol` over `POST /v1/chat/completions` in about a
+          # second while this was failing. Reproduced against opencode v1.18.13
+          # locally on 2026-08-07 and fixed by declaring the model; the same run
+          # then answered in three seconds with `> build · gpt-5.6-sol`.
+          #
+          # `#207` requires that **no model is named in a committed file**, so
+          # the declaration is made here from the secret. `opencode.json` stays
+          # the source and stays model-free; this adds one key to a copy.
+          # Changing `OPENCODE_LLM_MODEL` still changes the model on the next run
+          # with no commit, which is the property the issue is about.
+          #
+          # In the checkout and `.gitignore`d, for the reason the issue file is:
+          # opencode's sandbox refuses paths outside the working directory, and
+          # a config it cannot read is a failure mode already paid for once.
+          jq --arg m "$OPENCODE_LLM_MODEL" \
+            '.provider.gateway.models[$m] = {}' opencode.json \
+            > ./opencode-runtime.json
+          export OPENCODE_CONFIG="$PWD/opencode-runtime.json"
+
           # `gateway` is the provider id in `opencode.json`; the half after the
           # slash is the secret.
           #

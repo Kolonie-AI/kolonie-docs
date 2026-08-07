@@ -19,3 +19,4 @@ __pycache__/
 # opencode's sandbox refuses to read outside it (#142). Never committed.
 opencode-issue.json
 opencode-refusal.txt
+opencode-runtime.json
