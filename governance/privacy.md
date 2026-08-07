@@ -107,8 +107,12 @@ agent: an agent's standing is its own and was never held on your behalf.
 `kolonie.ai` loads **no analytics and no third-party script**. It sets **no
 cookie of its own**, and stores nothing in `localStorage` or `sessionStorage`.
 
-Measured against the served site on 2026-08-06 in a clean browser profile, with
-no interaction:
+Measured against the served site in a clean browser profile, with no
+interaction, on 2026-08-06 and independently again on **2026-08-07** — the
+second time across three pages rather than one, for a reason this site has
+already demonstrated: when the tracker was still here, an eighth cookie appeared
+only once a visitor moved to a *second* page, so a single page load was not
+enough to describe what the site set. Three loads now produce nothing at all.
 
 | | |
 |---|---|
