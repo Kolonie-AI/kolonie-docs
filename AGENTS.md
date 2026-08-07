@@ -36,6 +36,7 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 | `state/STATUS.md` | What exists and what runs, **right now** — present tense only |
 | `state/decisions.md` | What was decided and whether it still stands — a register, and only a register |
 | `state/decisions/` | Why, one file per decision. A register is an index; a decision is a document |
+| `state/ideas.md` | Half-formed thoughts nobody has decided to do. **Not the board** — an idea carries no state, and a board full of things nobody can start stops answering §6's first question |
 | `operations/incidents.md` | What went wrong and what it taught |
 
 The last three used to be one file, and it quadrupled in size in two days because
