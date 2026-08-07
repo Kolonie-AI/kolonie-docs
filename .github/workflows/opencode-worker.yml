@@ -239,18 +239,35 @@ jobs:
           - Do not edit .github/workflows/ or opencode.json. This workflow may not
             rewrite itself.
           - If you conclude the issue cannot be done as specified, do not guess.
-            Commit nothing, and write why to /tmp/refusal.txt.
+            Commit nothing, and write why to ./opencode-refusal.txt.
           PROMPT
           )"
 
-          if [ -s /tmp/refusal.txt ]; then
+          # Both paths below were written against a `/tmp` the agent cannot
+          # reach, and against a working tree it is told to leave clean. Both
+          # were wrong in the same direction: they read *the agent did nothing*
+          # off evidence that says nothing of the kind.
+          if [ -s ./opencode-refusal.txt ]; then
             echo "the agent declined the issue:"
-            cat /tmp/refusal.txt
+            cat ./opencode-refusal.txt
             exit 1
           fi
 
-          if git diff --quiet HEAD; then
-            echo "no changes were made — nothing to open a pull request for"
+          # **Commits, not the working tree** (2026-08-07). This was
+          # `git diff --quiet HEAD`, which asks whether anything is *uncommitted*
+          # — and the prompt three lines up tells the agent to commit. So a run
+          # that did the work correctly, committed it, and said so, was reported
+          # as "no changes were made" and failed. It happened on the first run
+          # that got as far as the model reading the issue: the diff was on the
+          # branch, the guard looked past it, and the issue went back to Ready
+          # with the work discarded.
+          #
+          # `origin/main...HEAD` counts what the branch has that main does not,
+          # which is the question the next line actually asks — it is about to
+          # open a pull request from exactly that range.
+          if [ "$(git rev-list --count origin/main..HEAD)" -eq 0 ]; then
+            echo "no commits on $branch — nothing to open a pull request for"
+            git status --porcelain
             exit 1
           fi
 
