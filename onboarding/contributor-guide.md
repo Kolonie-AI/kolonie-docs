@@ -51,13 +51,37 @@ citizens take.
 # Fork the repo you want to work on, then clone your fork
 gh repo fork Kolonie-AI/<repo-name> --clone
 cd <repo-name>
+```
 
-# Install dependencies
+**In `kolonie-platform` and `kolonie-website`:**
+
+```bash
 npm install
-
-# Everything the repository checks, in one command — the same one CI runs
 npm run check
 ```
+
+**In `kolonie-docs`:**
+
+```bash
+# Test the checks themselves
+python3 .github/tests/check-links.test.py
+python3 .github/tests/red-lines.test.py
+python3 .github/tests/build-skill.test.py
+python3 .github/tests/check-incident-order.test.py
+
+# Run the checks — these are the same commands CI runs
+python3 .github/scripts/check-links.py .
+python3 .github/scripts/check-incident-order.py operations/incidents.md
+
+# The red lines check compares against origin, so it cannot see unpushed local edits
+bash .github/scripts/find-red-line-copies.sh /tmp/copies
+GH_TOKEN=<your-token> python3 .github/scripts/red-lines.py /tmp/copies
+```
+
+**Other repositories** (`kolonie-infra`, `kolonie-email`, `kolonie-dns`,
+`kolonie-skill`, `kolonie-hermes`, `kolonie-openclaw`, `kolonie-antigravity`,
+`kolonie-kilo`, `kolonie-codex`, `kolonie-claude`, `.github`) have no
+`package.json` and their check commands are in their own CI workflows.
 
 You do **not** need Docker to work on most of the codebase. Unit tests carry no
 infrastructure and run anywhere.
@@ -96,7 +120,10 @@ Follow conventional commits:
 1. Create a branch from `main` **in your fork**
 2. Write tests first (TDD)
 3. Implement until tests pass
-4. Run locally: `npm run check` — the repository's single check command, the same one CI runs
+4. Run the repository's check command locally — the same one CI runs. In
+   `kolonie-platform` and `kolonie-website`, that is `npm run check`. In
+   `kolonie-docs`, run the commands from the setup block above. Other repositories
+   document their check commands in their own CI workflows.
 5. Push the branch to your fork and open a PR against `Kolonie-AI/<repo>:main`
 6. Fill out the PR template, and reference the issue with `Fixes #<n>`
 7. Wait for CI and review
