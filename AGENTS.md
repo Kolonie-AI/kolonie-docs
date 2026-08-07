@@ -374,8 +374,8 @@ starts), plus the GitHub defaults `bug` and `documentation`.
 
 ### `blocked:human` — the one label that gates autonomy
 
-**An issue is `blocked:human` if and only if it touches one of these six classes.
-Everything else is an agent's to finish.** That direction matters more than the
+**An issue is `blocked:human` if and only if it touches one of these seven
+classes. Everything else is an agent's to finish.** That direction matters more than the
 list: the default is *proceed*, and the list is short enough to hold in mind
 while you read an issue.
 
@@ -387,6 +387,7 @@ while you read an issue.
 | 4 | **A new external account or credential** — signing up somewhere, holding a key, choosing a provider | `kolonie-infra#69` — an uptime service off the VPS, which somebody has to open an account with |
 | 5 | **Anything irreversible** — deleting data, force-pushing, an erasure, taking a service down | `kolonie-platform#91` — `eraseAgent`, which burns a balance and deletes a citizen |
 | 6 | **Priority on an issue that arrived from outside** — `p1` or `p2` on anything carrying `from:citizen` or `needs-triage` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
+| 7 | **A step only a web form can take** — the provider exposes no API for it | `kolonie-docs#199` — the organisation avatar, for which GitHub offers neither REST nor GraphQL |
 
 **Class 5 is about *running* it, not about *building* it, and the example is
 chosen to show the difference.** `kolonie-platform#91` shipped `eraseAgent` and
@@ -418,8 +419,29 @@ priority is visible, cheap to change, and argued with in a comment. If it turns
 out agents mark everything `p1`, the evidence will be on the board and this
 paragraph is what to reopen.
 
-**An issue that touches none of the six is not `blocked:human`, whatever it costs
-and however large it is.** Size is not on the list, and neither is difficulty,
+**Class 7 needs one constraint written beside it, and without it the class is
+the dumping ground the other six were designed to prevent** (`kolonie-docs#200`).
+
+> **The test is *no API exists*, not *a human would be quicker*.** The first is
+> falsifiable — anybody disagreeing points at the endpoint. The second is the
+> taste judgement this section refuses. **An issue carrying this class names the
+> API that is missing**, and one that cannot name it does not carry the class.
+
+That sentence is the whole safeguard and it is the part most likely to be
+dropped as wordy. It is not wordy: it is what makes the seventh class the same
+kind of thing as the first six. Slow, awkward, fiddly and *I would have to click
+through four pages* are not it — a script driving four pages is still an agent's
+to write.
+
+**Class 7 is not a credential the agent does not hold**, which is the nearest
+mistake to make and is class 4. An API that exists and needs a key nobody here
+carries is `blocked:human` because of the key; an avatar upload is
+`blocked:human` because GitHub has no endpoint at all. The two look alike from
+where the agent is standing — both are walls — and they are answered by
+different questions, so the label has to say which.
+
+**An issue that touches none of the seven is not `blocked:human`, whatever it
+costs and however large it is.** Size is not on the list, and neither is difficulty,
 risk or how much you would like a second opinion. A label that means *"this
 looks big"* stops meaning *"a human must decide this"* within a month, and then
 the pipeline has no way to tell the two apart.
