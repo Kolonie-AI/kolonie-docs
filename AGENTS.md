@@ -346,8 +346,10 @@ been since 2026-07-27; what was missing was this query.
 
 ## 5. Labels
 
-Labels carry what belongs to the **issue**, never its status. Identical in all
-three repositories, so one query spans the project.
+Labels carry what belongs to the **issue**, never its status. Five repositories
+carry issues — `kolonie-docs`, `kolonie-platform`, `kolonie-infra`,
+`kolonie-website` and `kolonie-openclaw` — and their label vocabularies are not
+identical (measured with `gh label list` on 2026-08-07).
 
 **Priority**
 
@@ -366,8 +368,11 @@ priority label states vaguely. A third priority tempts exactly that substitution
 **If a third is ever argued for, it is argued against this paragraph.**
 
 **Area** — `area:platform`, `area:infra`, `area:docs`, `area:website`,
-`area:skills`, `area:governance`. Area is not the same as repository: work for
-`kolonie-website` is filed in `kolonie-docs` until that repository exists.
+`area:skills`, `area:governance`. `area:dns` also exists in `kolonie-docs`,
+`kolonie-platform` and `kolonie-infra`, but not in `kolonie-website` or
+`kolonie-openclaw` (measured 2026-08-07). Area is not the same as repository:
+work for `kolonie-website` is filed in `kolonie-docs` until that repository
+exists.
 
 **Type** — `idea` (needs thinking before it can be specified), `question` (an
 open decision), `decision` (needs an architectural decision recorded before work
