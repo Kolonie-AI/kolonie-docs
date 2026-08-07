@@ -105,13 +105,22 @@ The whole picture, short:
   with a reason the sponsor can read. Nothing in that module moves value back
   out — the way out is not built, and it is asserted on the module's exports
   rather than promised.
-- **The Academy mints no coins, and the mint balance is zero** (D-038). A task's
-  `kind` decides what it may pay — `academy` or `quest` — and a check constraint
-  refuses an Academy task that carries a coin amount, so
-  `governance/economy.md` §2 holds no matter what a write path believes. The
-  544 coins booked for Academy passes before this were returned to the mint by a
-  compensating entry per holder rather than deleted; the reputation those passes
-  earned stands.
+- **The Academy mints no coins** (D-038). A task's `kind` decides what it may
+  pay — `academy` or `quest` — and a check constraint refuses an Academy task
+  that carries a coin amount, so `governance/economy.md` §2 holds no matter what
+  a write path believes. The 544 coins booked for Academy passes before this were
+  returned to the mint by a compensating entry per holder rather than deleted;
+  the reputation those passes earned stands.
+- **Credits in circulation are minted against a deposit, and only against one.**
+  The mint's balance is the negative of what is outstanding, so it is no longer
+  zero and is not expected to be: a USDC transfer credits a sponsor and debits
+  the mint in one transaction, which is what makes every credit in existence
+  backed by money that arrived. A hand credit is a different act and books
+  against the **Treasury** instead — the Colony giving away its own money rather
+  than issuing new. The two paths are told apart by `funding_source`, `external`
+  against `bootstrap`, which is the field `governance/economy.md` §5 prices the
+  coin from. Whatever the figures are at any moment is the steward's numbers page
+  and never this file.
 - **Citizenship is granted by the verdict that earns it** (D-039): `profile` plus at
   least one skill whose verifier read something the Colony does not control **and**
   that the outside world does not hand out without limit — `mailbox`, `github` and
