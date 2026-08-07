@@ -200,6 +200,73 @@ contains "and says the issue is stuck and needs a person" "needs a person" "$err
 contains "and names the run" "$RUN_URL" "$err"
 
 echo
+echo "a board that is large, or from another repository (#142, 2026-08-07)"
+
+# The defect the first non-empty run found, and the reason it took three days to
+# find: the board was passed to `jq` with `--argjson`, which puts the whole
+# document on the command line. Linux caps a single argument at 128 KiB whatever
+# `ARG_MAX` says, the real board was about 190 KB, and `jq` died with `Argument
+# list too long` — after which `pick` printed nothing and the workflow reported
+# an empty queue. Every run between 2026-08-04 and 2026-08-07 was green and
+# quiet because the queue really was empty; the first hour it was not, the run
+# was still green and still quiet.
+#
+# The board here is padded past the ceiling with items nothing else matches, so
+# a `pick` that puts it on a command line cannot survive this case.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+{
+  printf '{"items":['
+  printf '{"id":"ITEM_10","status":"Ready","content":{"number":10,"repository":"Kolonie-AI/kolonie-docs"}}'
+  for i in $(seq 1 1500); do
+    printf ',{"id":"PAD_%s","status":"Done","content":{"number":%s,"repository":"Kolonie-AI/kolonie-platform","title":"padding so the document passes the per-argument ceiling"}}' "$i" "$((90000 + i))"
+  done
+  printf ']}'
+} > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err"); rc=$?
+check "a board too large for a command line still picks" "10" "$out"
+check "and exits 0" "0" "$rc"
+absent "nothing complains about the argument list" "Argument list too long" "$(cat "$WORK/err")"
+
+# The second defect in the same query, latent rather than firing: it matched the
+# board item by issue *number* only. The board spans five repositories and the
+# numbers repeat across them, so another repository's item decided what this
+# repository's status was. `board_item_for` always matched the repository too —
+# the two disagreeing is how a worker takes an issue the board says is Blocked.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+cat > "$GH_FIXTURES/board" <<'BOARD'
+{"items":[
+  {"id":"ITEM_OTHER","status":"Ready","content":{"number":10,"repository":"Kolonie-AI/kolonie-platform"}},
+  {"id":"ITEM_10","status":"Blocked","content":{"number":10,"repository":"Kolonie-AI/kolonie-docs"}}
+]}
+BOARD
+check "another repository's item does not put an issue in the queue" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# And the same in the direction that matters for throughput: a Ready issue here
+# is not hidden by a Blocked item of the same number elsewhere.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+cat > "$GH_FIXTURES/board" <<'BOARD'
+{"items":[
+  {"id":"ITEM_OTHER","status":"Blocked","content":{"number":10,"repository":"Kolonie-AI/kolonie-platform"}},
+  {"id":"ITEM_10","status":"Ready","content":{"number":10,"repository":"Kolonie-AI/kolonie-docs"}}
+]}
+BOARD
+check "nor does it hide one" "10" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# A board that cannot be read is not an empty queue. The workflow reads `pick`'s
+# exit code separately from its output for exactly this distinction, and it can
+# only do that if the script draws it.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+: > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err"); rc=$?
+check "an unreadable board fails rather than reading as an empty queue" "1" "$rc"
+check "and picks nothing" "" "$out"
+contains "and says the queue is unknown" "unknown" "$(cat "$WORK/err")"
+
+echo
 echo "what it never does"
 
 case_setup

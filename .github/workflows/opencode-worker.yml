@@ -114,7 +114,31 @@ jobs:
           # below uses a different one on purpose.
           GH_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
         run: |
+          # The exit code is read separately from the output, because the two
+          # answer different questions and this step used to conflate them.
+          #
+          # `pick` printing nothing means *the queue is empty*, which is the
+          # ordinary hour and exits 0. `pick` **failing** means the queue is
+          # unknown — the board did not answer, or the filter died. Both used to
+          # arrive here as an empty `$number` and both were reported as "nothing
+          # queued this hour", so a broken worker was indistinguishable from a
+          # quiet one. On 2026-08-07 that is exactly what happened: `jq` died
+          # with `Argument list too long`, the step said the queue was empty, and
+          # the run went green with two issues waiting in it.
+          #
+          # A quiet hour must be visibly quiet — and a broken one must be
+          # visibly broken, which is the same requirement seen from the other
+          # side.
+          set +e
           number=$(bash .github/scripts/opencode-worker.sh pick)
+          picked=$?
+          set -e
+
+          if [ "$picked" -ne 0 ]; then
+            echo "::error::the queue could not be read (pick exited $picked). Taking nothing."
+            exit 1
+          fi
+
           if [ -z "$number" ]; then
             echo "nothing queued this hour. Exiting 0."
             exit 0

@@ -87,7 +87,27 @@ case "${1:-}" in
       exit 0
     fi
 
-    board=$(gh project item-list 1 --owner Kolonie-AI --limit "$BOARD_LIMIT" --format json)
+    # ## Why the board goes through a file and not through `--argjson`
+    #
+    # It used to be `--argjson board "$board"`, and that put the whole board on
+    # `jq`'s **command line**. The board is one JSON document of every item in
+    # the project — 118 items and about 190 KB on 2026-08-07 — and `execve` has a
+    # per-argument ceiling of 128 KiB on Linux whatever `ARG_MAX` says. So the
+    # call died with `/usr/bin/jq: Argument list too long`.
+    #
+    # **It had never been reached.** The queue was empty on every one of the
+    # forty-odd runs between this shipping on 2026-08-04 and the first labelled
+    # issue on 2026-08-07, and the step before this one exits early on an empty
+    # queue — so the line that could not run was the line nothing ran.
+    #
+    # `--slurpfile` reads the file itself, so nothing about the board's size
+    # reaches the command line and the ceiling stops being a ceiling this script
+    # can hit. It wraps the document in an array, hence `$board[0]`.
+    board_file=$(mktemp)
+    trap 'rm -f "$board_file"' EXIT
+    gh project item-list 1 --owner Kolonie-AI --limit "$BOARD_LIMIT" --format json \
+      >"$board_file" || die "could not read the board, so the queue is unknown"
+    [ -s "$board_file" ] || die "the board came back empty, so the queue is unknown"
 
     # The ordering, and it is deterministic on purpose: two people reading the
     # queue must predict the same next issue. `p1` before `p2`, then oldest
@@ -95,11 +115,19 @@ case "${1:-}" in
     # makes the claim a lock. `blocked:human` is excluded belt-and-braces — such
     # an issue should never carry the label, and if one does, the queue is the
     # wrong place to discover it.
-    jq -r --argjson board "$board" '
+    #
+    # **The repository is matched as well as the number**, which it was not
+    # before. The board spans five repositories and issue numbers repeat across
+    # them, so matching on the number alone lets `kolonie-platform#204` decide
+    # whether `kolonie-docs#204` is in Ready. `board_item_for` above always did
+    # this; this query did not, and the two disagreeing is how a worker takes an
+    # issue the board says is Blocked.
+    jq -r --slurpfile board "$board_file" --arg repo "$REPO" '
       [ .[]
         | select([.labels[].name] | index("blocked:human") | not)
         | . as $issue
-        | ($board.items[] | select(.content.number == $issue.number)) as $item
+        | ($board[0].items[]
+            | select(.content.number == $issue.number and .content.repository == $repo)) as $item
         | select($item.status == "Ready")
         | { number: $issue.number,
             createdAt: $issue.createdAt,
@@ -107,7 +135,7 @@ case "${1:-}" in
       ]
       | sort_by(.rank, .createdAt)
       | .[0].number // empty
-    ' <<<"$issues"
+    ' <<<"$issues" || die "the queue could not be read"
 
     exit 0
     ;;
