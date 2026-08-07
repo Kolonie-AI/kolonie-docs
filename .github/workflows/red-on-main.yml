@@ -1,0 +1,145 @@
+name: Red on main
+
+# Asks once a day whether any workflow's most recent completed run on `main` was
+# a failure, and says so where somebody looks. `kolonie-docs#193`.
+#
+# ## The sentence this workflow exists to falsify
+#
+# `Rehearse` was red on `main` for **two days** — 2026-08-05 17:54Z to 2026-08-07
+# 07:38Z, four consecutive failing runs — and was found on the fourth by accident.
+#
+# `kolonie-infra#38` had already reached a conclusion about this class of defect:
+# *a suite nothing runs goes red again without anyone noticing*, and the answer
+# taken from it was **make something run it**. `rehearse.yml` in this repository
+# is that answer, and it worked: the trigger fired on every one of the four
+# commits, because all four touched `.github/**`. Nothing was skipped and no event
+# was missed.
+#
+# **So running is necessary and it is not sufficient.** What was missing is a
+# reader. `Rehearse` gates nothing — it is not a required check and no branch
+# protection consults it — so a red run is a red mark on a page nobody has a
+# reason to open. This workflow is the correction to `#38`'s conclusion rather
+# than a second copy of it.
+#
+# ## Why a sibling and not a third question inside board-self-check
+#
+# `board-self-check.yml` has exactly the mechanism worth copying: daily, silent
+# when everything is right, one reused issue when something is wrong. `#193`
+# considered extending it and recommended against, because that file's header
+# argues about board queries for four paragraphs and a reader arriving at a CI
+# question inside it would rightly be confused. **The mechanism is copied and the
+# remit is not widened.**
+#
+# ## What it may never do
+#
+# **It does not gate.** `Rehearse` failing should not block a merge; that is a
+# different decision with a real cost and it is not this workflow's to take.
+#
+# **It re-runs nothing and restarts nothing** — `watch-agent.yml`'s rule, right
+# here for the same reason.
+#
+# **It closes no issue.** `#193` asks for one issue closeable by a person and for
+# a quiet day to write nothing at all. This is where it differs from
+# `board-self-check.yml`, deliberately: that check re-measures a condition that
+# becomes untrue, while a workflow that has gone green again is something somebody
+# should read rather than have tidied away.
+#
+# ## The failure this workflow itself has
+#
+# **GitHub disables scheduled workflows in a repository with no activity for 60
+# days.** A watcher of workflows has the same hole as the thing it watches and
+# cannot cover it from the inside. `kolonie-infra#69` is the liveness check that
+# would; this does not depend on it, and the gap is named here so it is inherited
+# knowingly rather than found a third time.
+
+on:
+  schedule:
+    # 07:00 UTC — an hour after watch-agent and two after board-self-check, so
+    # three daily jobs that all talk to the GitHub API do not contend in the same
+    # minute. Late enough that a night's pushes have finished running.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      break_it:
+        description: >-
+          Force a finding, to exercise the reporting path end to end. `#193`'s
+          definition of done requires the filing to have been observed rather than
+          read. It adds one fabricated line to the report; **no workflow is run,
+          re-run or touched.**
+        type: boolean
+        required: false
+        default: false
+
+# `red-on-main.sh` waits for its own issue to become findable before it exits
+# (`kolonie-docs#150`), and this stops a `break_it` dispatch from starting while
+# the scheduled run is inside that wait. Queued, never cancelled: a cancelled run
+# is one that filed and then did not wait.
+concurrency:
+  group: red-on-main-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  # To read the workflow list and the run history. This is the whole reason the
+  # built-in token is enough here and a stored credential is not needed: unlike
+  # the board, a repository's own runs are readable by its own `GITHUB_TOKEN`.
+  actions: read
+  contents: read
+  # The only write it holds, and it is used to open one issue and comment on it.
+  # No `pull-requests`, no `packages`, and no ability to re-run anything.
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because this check is silent when it passes, and a silent check
+      # nobody has exercised is one nobody should trust. The same argument
+      # board-self-check.yml and watch-agent.yml make, and it is the argument this
+      # whole workflow is about: a check can run for two days and mean nothing.
+      - name: Test the check
+        run: bash .github/tests/red-on-main.test.sh
+
+      - name: Ask every workflow what it last said on main
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RED_ON_MAIN_FORCE: ${{ inputs.break_it && 'a-workflow-that-does-not-exist' || '' }}
+        run: |
+          # No pipeline, and the status is captured rather than allowed to
+          # propagate: Actions runs `run:` under `bash -e`, so `script | tee`
+          # would abort the step on the script's own exit code before any line
+          # below could read it. board-self-check.yml learned this on 2026-08-03.
+          rc=0
+          bash .github/scripts/red-on-main.sh check "$RUNNER_TEMP/report.md" \
+            > "$RUNNER_TEMP/out.txt" || rc=$?
+          cat "$RUNNER_TEMP/out.txt"
+
+          if [ "$rc" -eq 2 ]; then
+            # The runs could not be read. Reported in the log and nowhere else: a
+            # check that cannot reach its subject must not be the reason the
+            # subject looks broken — and here it would report nothing at all,
+            # which is indistinguishable from a good day and therefore worse than
+            # a false alarm.
+            echo "::warning::the workflow list could not be read — configuration gap, not a finding; see the job log"
+            echo "red=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "${RED_ON_MAIN_FORCE:-}" ]; then
+            echo "::warning::running with a fabricated red workflow — this is the rehearsal, not a real finding"
+          fi
+
+          [ "$rc" -eq 0 ] && echo "red=false" >> "$GITHUB_OUTPUT" || echo "red=true" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # A quiet day is silent. There is no all-clear issue, no all-clear comment
+      # and nothing to close — `#193`'s third acceptance criterion in one `if`.
+      - name: Say so where somebody will see it
+        if: steps.check.outputs.red == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/red-on-main.sh report "$RUNNER_TEMP/report.md"

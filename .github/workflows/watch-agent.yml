@@ -23,9 +23,27 @@ name: Watch Agent
 # *and* off Actions. If that issue is ever closed as not-worth-doing, this
 # paragraph is the argument against, and it should be re-read first.
 #
-# The lesser failure is covered: a run that fails notifies through GitHub in the
-# ordinary way, and `kolonie-docs#132` is the day nobody ran a check for long
-# enough that it mattered.
+# **The lesser failure used to be described here as covered, and it is not.**
+# This file claimed that a run which fails notifies through GitHub in the ordinary
+# way. That belief was load-bearing — it is why no workflow here watched another
+# one — and `kolonie-docs#193` falsified it: `Rehearse` was red on `main` for two
+# days, four consecutive failing runs, found on the fourth by accident.
+#
+# The claim held once and the difference is worth naming rather than assuming.
+# `incidents.md`'s 2026-08-01 entry begins with the maintainer reporting *"a
+# stream of GitHub emails"* about `review.yml`, and that is how that defect was
+# found — but that was **nineteen consecutive failures of a workflow that had
+# never once succeeded**, so the notification was both loud and anomalous. The
+# `Rehearse` case was four failures of a workflow that had been green the day
+# before, arriving beside successful `CI` and `Reviewer Agent` runs on the same
+# commits. **The ordinary notification is a good alarm for a workflow that is
+# broken and a poor one for a workflow that has just broken.**
+#
+# What covers it now is `red-on-main.yml`, a sibling of `board-self-check.yml`
+# that asks daily whether any workflow's most recent completed run on `main`
+# concluded `failure`. `kolonie-docs#132` remains the day nobody ran a check for
+# long enough that it mattered; `#193` is the day something ran one and nobody
+# read it.
 #
 # ## What it may never do
 #
