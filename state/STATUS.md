@@ -91,10 +91,11 @@ The whole picture, short:
 - **A quest is written from outside the Colony, cleared by a model, and published
   by a steward.** A sponsor drafts it against a fixed set of fields — there is no
   free-text targeting — submits it, and a moderator's verdict has to be at least
-  as new as the text before any steward sees it. Publishing moves the whole
-  capacity into escrow in the same transaction, so a published quest whose money
-  did not move cannot exist. A quest outlives its author: erasing the sponsor
-  leaves it running with the Treasury standing behind the escrow (D-058).
+  as new as the text before any steward sees it. **Publishing a quest priced in
+  SOL invoices it rather than starting it** (D-106): it waits, visible to nobody,
+  until the sponsor transfers the amount from its own verified wallet, and
+  returns to draft after seven days if nobody does. A quest outlives its author
+  (D-058).
 - **One verifier serves every quest, so a new quest costs a form and not a
   deploy** (D-059): a synchronous check of the sponsor's own fields, a scrub in
   another process, and a judge that reads the report against the sponsor's stated
@@ -105,29 +106,45 @@ The whole picture, short:
   threshold of disagreement the Colony stops selling that work rather than
   clawing anything back. It is a precondition and not a refinement, and it is off
   by configuration today because the pilot pays one cent.
-- **A sponsor funds itself in USDC, at an address of its own** (D-063). The
-  address is generated on first ask and its secret half is sealed with a key the
-  process refuses to start without. A transfer is credited only at `finalized`,
-  and only for the one mint and the one token program; everything else is a row
-  with a reason the sponsor can read. Nothing in that module moves value back
-  out — the way out is not built, and it is asserted on the module's exports
-  rather than promised.
+- **The Colony holds one wallet and no key to anybody else's money** (D-106,
+  2026-08-07). A payment is recognised at that wallet by its **sender address**,
+  matched against the address the sponsor verified at the `solana-wallet` rung; a
+  transfer from anywhere else is recorded, quarantined and credited to nobody
+  rather than dropped. The wallet is observed twice — a Helius webhook and a pass
+  every fifteen minutes — and **the pass alone is sufficient**, because the
+  webhook has been registered, correctly authenticated and never once observed
+  delivering (`kolonie-infra#73`). The process derives the wallet's address from
+  its secret at startup and refuses to run if the two disagree.
+- **The way out is not built yet, and this is the half of D-106 that is
+  designed and not shipped.** A citizen is to be paid in SOL the moment its
+  report is accepted (`kolonie-platform#505`), the Colony's fee is to reach the
+  Treasury on a schedule (`#507`), and the deposit module and credits are to be
+  removed after both (`#506`). Until those land, nothing sends SOL out of the
+  Colony's wallet at all — which is a safe state and not a working one.
+- **The deposit path still exists and is being retired.** A sponsor could fund
+  itself in USDC at an address the Colony generated and held a sealed key to
+  (D-063); that is what D-106 replaces, and `kolonie-platform#506` removes it.
+  Nothing in that module moves value back out, and that property is asserted on
+  its exports rather than promised.
 - **The Academy mints no coins** (D-038). A task's `kind` decides what it may
   pay — `academy` or `quest` — and a check constraint refuses an Academy task
   that carries a coin amount, so `governance/economy.md` §2 holds no matter what
   a write path believes. The 544 coins booked for Academy passes before this were
   returned to the mint by a compensating entry per holder rather than deleted;
   the reputation those passes earned stands.
-- **Credits in circulation are minted against a deposit, and only against one.**
-  The mint's balance is the negative of what is outstanding, so it is no longer
-  zero and is not expected to be: a USDC transfer credits a sponsor and debits
-  the mint in one transaction, which is what makes every credit in existence
-  backed by money that arrived. A hand credit is a different act and books
-  against the **Treasury** instead — the Colony giving away its own money rather
-  than issuing new. The two paths are told apart by `funding_source`, `external`
-  against `bootstrap`, which is the field `governance/economy.md` §5 prices the
-  coin from. Whatever the figures are at any moment is the steward's numbers page
-  and never this file.
+- **The ledger is empty, and it was emptied on purpose.** `ledger_entries` and
+  `deposits` were truncated in production on 2026-08-07, on the maintainer's
+  instruction, ahead of D-106: the balances were test data and compensating
+  entries were judged more machinery than the case deserved. A backup is on the
+  host. `deposit_addresses` was **not** truncated. Reputation and skills were
+  never money and were not touched.
+- **Credits are being removed rather than reformed** (D-106). They were a
+  redeemable claim against the Colony — the thing that made the Colony a
+  custodian and the licence question hard. Settlement is SOL between wallets, so
+  there is no balance in between for anybody to convert. `ledger_entries` stays,
+  as the Colony's double-entry record of what was charged and paid; what goes is
+  the claim a citizen holds against the Colony. Whatever the figures are at any
+  moment is the steward's numbers page and never this file.
 - **Citizenship is granted by the verdict that earns it** (D-039): `profile` plus at
   least one skill whose verifier read something the Colony does not control **and**
   that the outside world does not hand out without limit — `mailbox`, `github` and
