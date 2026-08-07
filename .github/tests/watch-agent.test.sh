@@ -227,6 +227,65 @@ expect "it touches no board item" \
   "$( { logged "project item-add" || logged "project item-edit"; } && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
+echo "a service removed on purpose is quiet, not dead (#191)"
+
+# `umami` was reverted on 2026-08-06 and filed as a `p1` the next morning. The
+# rule was right and the fact was wrong, and no query could have told them apart:
+# the difference is an intention. These cases prove the exemption is narrow —
+# it removes exactly the named service and nothing standing beside it.
+export WATCH_RETIRED_FILE="$WORK/retired.txt"
+printf '# a comment, and a reason containing a #\nwebsite\t2026-08-06\tkolonie-website#43 — removed on purpose\n' \
+  > "$WATCH_RETIRED_FILE"
+
+setup; printf '{"data":["api"]}\n' > "$FIX/services_24h"   # website and verifier-runner both quiet
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the retired service is not reported" \
+  "$(grep -qx 'website' "$WORK/out/silent.txt" && echo no || echo yes)" "$(cat "$WORK/out/silent.txt")"
+expect "and it is recorded as retired rather than dropped" \
+  "$(grep -qx 'website' "$WORK/out/retired.txt" && echo yes || echo no)" "$(cat "$WORK/out/retired.txt")"
+
+# **The rejection case.** A retired entry must not quieten the service next to
+# it: the run that excuses `website` still has to file for `verifier-runner`.
+expect "a genuinely silent service beside it is still reported" \
+  "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "decide still exits 1" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "one issue is filed, for the dead one" \
+  "$([ "$(grep -c 'issue create' "$GH_LOG")" -eq 1 ] && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and it does not name the retired service" \
+  "$(grep -q 'website` has stopped logging' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# Suppressed is not hidden. The list must not become a place services disappear
+# into, so the report says the quiet one was excused and where the reason lives.
+expect "the report still says the retired service was quiet" \
+  "$(grep -q 'not reported' "$WORK/out/numbers.md" && grep -q '`website`' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/logged nothing in 24 hours/,+10p' "$WORK/out/numbers.md")"
+
+# Retiring something that is still logging changes nothing, so a stale line
+# cannot make a live service invisible.
+setup; bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "a retired name that is still logging is not touched" \
+  "$([ ! -s "$WORK/out/silent.txt" ] && [ ! -s "$WORK/out/retired.txt" ] && echo yes || echo no)" \
+  "$(cat "$WORK/out/silent.txt" "$WORK/out/retired.txt")"
+
+# An entry older than the window suppresses nothing and says so, in the log
+# rather than on an issue — otherwise the file silts up with dead facts.
+setup; printf 'website\t2020-01-01\tlong gone\n' > "$WATCH_RETIRED_FILE"
+printf '{"data":["api"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" 2>"$WORK/gather.err" >/dev/null
+expect "a line older than the window is called out" \
+  "$(grep -q 'can be deleted' "$WORK/gather.err" && echo yes || echo no)" "$(cat "$WORK/gather.err")"
+
+# And with no list at all the check behaves exactly as it did before `#191`.
+setup; export WATCH_RETIRED_FILE="$WORK/there-is-no-such-file"
+printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "with no retired list the alarm is unchanged" \
+  "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
+unset WATCH_RETIRED_FILE
+
+echo
 echo "the narrative is the run's own output (#165)"
 
 # Evidence first and judgement last, which was `#133`'s requirement about the

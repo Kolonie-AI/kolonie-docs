@@ -1,0 +1,25 @@
+# Services that were removed on purpose.
+#
+# `watch-agent.sh` reports a service that logged in the last seven days and
+# nothing in the last twenty-four hours. A service somebody deliberately removed
+# looks exactly like a dead runner from inside Loki, because the difference
+# between the two is an intention and an intention is not in the logs. This file
+# is where the intention is written down.
+#
+# One service per line: name, the date it was removed, and why. Everything after
+# the first field is for a reader; only the first is matched. A line starting
+# with `#` is a comment.
+#
+# **Append to this only when a service is taken away on purpose, and never to
+# quieten a service that ought to be running.** The check refuses a hardcoded
+# list of expected services for a good reason — it would be wrong the first time
+# one was added, and it would be a file somebody had to edit on the happy path.
+# This is the opposite of that list and its normal state is empty: forgetting an
+# entry here costs one issue closed with a sentence, while quietening a real
+# service costs an outage nobody is told about.
+#
+# A line stops doing anything seven days after its date, because by then the
+# service has not logged inside the window either and the check has stopped
+# looking at it. `gather` says so in the run log, and the line can be deleted.
+
+umami	2026-08-06	kolonie-website#43 — the maintainer decided PageSense stays and Umami is not wanted; removed from the host in kolonie-infra 83541e7

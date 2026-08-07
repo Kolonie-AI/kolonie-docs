@@ -36,6 +36,12 @@
 # **Silence is still the healthy state.** There is no daily all-clear, no issue
 # on a good day and no comment on one. A quiet run is a quiet run.
 #
+# **One thing excuses a service from the alarm, and only one**: a line in
+# `watch-agent-retired.txt` beside this file, saying it was removed on purpose.
+# A service somebody deleted is silent for a reason the logs cannot hold, and
+# `kolonie-docs#191` is the morning that cost a `p1`. Nothing else quietens this
+# check, and a retired service is still named in the report.
+#
 # ## What it sends the model, and what it does not
 #
 # **Numbers, never lines.** Every query here aggregates inside Loki, so what
@@ -150,6 +156,46 @@ q_service_values() {
     | jq -r '.data // [] | .[]' 2>/dev/null | grep -v '^$' | sort -u
 }
 
+# --- services that were removed on purpose ------------------------------------
+# **A retired service and a dead one are the same measurement.** Both logged last
+# week and nothing yesterday, and no query distinguishes them, because the
+# difference between the two is an intention. So the intention is written down,
+# once, by whoever removed the service.
+#
+# **This is not the configured list of services refused above**, and the
+# distinction is the whole of why it is allowed to exist. That one would be a list
+# of what ought to be running: wrong the first time a service is added, and a file
+# somebody has to remember to edit on the day nothing is wrong. This is a list of
+# removals. Its normal state is empty, an entry is only ever appended by the
+# change that takes a service away, and the two failures are not comparable —
+# a missing entry here costs one issue closed with a sentence, while a wrongly
+# quietened service costs an outage nobody is told about.
+#
+# `kolonie-docs#191` is the day this was needed: `umami` was reverted on
+# 2026-08-06 and filed as a `p1` the next morning, correctly by the rule and
+# wrongly in fact.
+RETIRED_FILE="${WATCH_RETIRED_FILE:-$(dirname "${BASH_SOURCE[0]}")/watch-agent-retired.txt}"
+
+# Field one only. The rest of the line is a date and a reason for whoever reads
+# the file, and a reason routinely contains a `#` — so comments are recognised by
+# a line beginning with one, never by stripping from the middle.
+retired_services() {
+  [ -r "$RETIRED_FILE" ] || return 0
+  awk '!/^[[:space:]]*#/ && NF { print $1 }' "$RETIRED_FILE" | sort -u
+}
+
+# An entry older than the window it suppresses inside is doing nothing: the
+# service has by then logged nothing for seven days either, so the check has
+# stopped considering it at all. Said in the run log rather than left for the file
+# to silt up — dates compare as strings because both are ISO.
+retired_stale() {
+  [ -r "$RETIRED_FILE" ] || return 0
+  awk -v cutoff="$(date -u -d "@$WEEK_AGO" +%Y-%m-%d 2>/dev/null)" \
+    'cutoff != "" && !/^[[:space:]]*#/ && NF >= 2 && $2 < cutoff {
+       printf "%s was retired on %s, before the seven-day window this check reads. Its line in %s no longer suppresses anything and can be deleted.\n", $1, $2, FILENAME }' \
+    "$RETIRED_FILE"
+}
+
 cmd_gather() {
   local dir="$1"
   mkdir -p "$dir"
@@ -164,7 +210,14 @@ cmd_gather() {
   # Silence first: it is the one answer that owes nothing to the model, and
   # writing it before anything else means a later failure cannot lose it.
   comm -23 <(q_service_values "$WEEK_AGO" "$NOW") <(q_service_values "$DAY_AGO" "$NOW") \
-    > "$dir/silent.txt"
+    > "$dir/quiet.txt"
+
+  # The split is written to the directory rather than inferred later from what is
+  # missing, so a run's own working files answer *which quiet services were not
+  # reported, and why* without re-reading the retired list.
+  comm -12 "$dir/quiet.txt" <(retired_services) > "$dir/retired.txt"
+  comm -23 "$dir/quiet.txt" <(retired_services) > "$dir/silent.txt"
+  retired_stale >&2
 
   # The rehearsal's fabricated silent service, and it belongs **here** rather
   # than in the workflow step after `gather` has run. Appended afterwards it
@@ -216,6 +269,16 @@ cmd_gather() {
       sed 's/^/- `/; s/$/`/' "$dir/silent.txt"
     else
       echo "None."
+    fi
+    # **Suppressed is not hidden.** A retired service is still quiet and still
+    # measured; what the retired list buys is that nobody is paged for it. Naming
+    # it here is what stops the list from becoming a place things disappear into.
+    if [ -s "$dir/retired.txt" ]; then
+      echo
+      echo "Quiet and **not reported**, because they were removed on purpose"
+      echo "(\`.github/scripts/watch-agent-retired.txt\` says by whom and when):"
+      echo
+      sed 's/^/- `/; s/$/`/' "$dir/retired.txt"
     fi
     echo
     echo "### The same counts per day, over as much history as the store holds"
