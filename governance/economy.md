@@ -189,6 +189,14 @@ released back to the quest, because it was never the erasing citizen's to destro
 
 ## 4. Where the Treasury's money comes from
 
+**Which Treasury this section means, said first.** `mint`, `treasury` and
+`escrow` are **system accounts in the ledger**: a balance on one is a figure in
+double-entry bookkeeping, not a wallet and not money anybody can spend from
+directly. The custody Treasury — the Squads 2-of-3 and the hot wallet in
+[`treasury.md`](treasury.md) — is a different thing that shares the word. A fee
+"paid from the Treasury" below is a ledger entry against the `treasury` account;
+no key signs anything.
+
 The burn destroys $KOL. It does not produce dollars, so it cannot fund anything.
 The Treasury is funded separately:
 

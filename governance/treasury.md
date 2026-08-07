@@ -8,6 +8,29 @@ This file says what money is **for**. [`economy.md`](economy.md) says how the co
 **works** — the three layers, the burn, and what must be true before a token
 exists.
 
+## Two different things are called the Treasury
+
+**Everything in this file is about custody** — keys, a multisig, a hot wallet, an
+envelope. It is the Colony's own assets and who can move them.
+
+**`treasury` is also a system account in the ledger, and it is not that.** It is
+an accounting account in `ledger_entries`, alongside `mint` and `escrow`: a
+balance on it is a number in a double-entry book, never a wallet balance and
+never dollars anybody holds. See [`economy.md`](economy.md) §4.
+
+**Neither of them is where a sponsor's deposit goes.** A sponsor funds itself by
+sending USDC to a deposit address generated for its own identity, and the money
+stays there — there is no sweep, no consolidation, and the multisig and hot
+wallet below have never held a deposited dollar. The way back out is not built
+(`kolonie-platform#500`), and the manual recovery is `kolonie-infra`'s
+`docs/deposit-recovery.md`.
+
+**The two names are not being reconciled, and that is deliberate.** `treasury` as
+a `system_account` value is in the database, in the migrations and in every
+historical row; renaming it to fix a documentation gap would be a schema change
+paying for a paragraph. The words stay and the distinction is written down —
+which is the half that was missing.
+
 ## What Money is Used For
 
 - Compute and API costs
