@@ -83,7 +83,7 @@ being true is replaced rather than annotated.
 | GitHub organisation avatar | **Still GitHub's identicon.** No API can set it; it is a web-form upload. [`kolonie-docs#199`](https://github.com/Kolonie-AI/kolonie-docs/issues/199) |
 | Fourteen repository social previews | **Unset.** Same form, same issue |
 | `console.kolonie.ai` | **Nothing.** A sponsor is asked for money on a page carrying no mark. [`kolonie-platform#498`](https://github.com/Kolonie-AI/kolonie-platform/issues/498) |
-| Registry and directory listings | **Nothing.** Every one of them renders an icon beside an entry. [`kolonie-docs#198`](https://github.com/Kolonie-AI/kolonie-docs/issues/198) |
+| Registry and directory listings | **Nothing yet.** `server.json` carries the heavy cut and the listing is a republish away, which is the operator's step. Which channels can carry it at all — and the three that cannot — is [`growth/README.md`](../growth/README.md) |
 | The seven skill repositories | **Nothing** |
 
 ## 4. What may never be done to it

@@ -113,6 +113,33 @@ which may sit unmerged, and it is accepted knowingly.
 one copy, because this file is a register and an argument kept in two places goes
 out of step without anybody editing it (`kolonie-docs#120`).
 
+### Which of these can carry the Colony's mark, measured 2026-08-07
+
+Every channel above renders something beside an entry, and an entry with no icon
+is the row a reader's eye skips
+([`kolonie-docs#198`](https://github.com/Kolonie-AI/kolonie-docs/issues/198)).
+The answer is not the same twice, and three of the channels turn out to have no
+icon slot at all — which is worth recording once so that nobody investigates it
+again. Which cut goes where is [`brand/README.md`](../brand/README.md) §2; no
+image is drawn for a listing, only generated.
+
+| Channel | Can it carry the mark? |
+|---|---|
+| `modelcontextprotocol/registry` | **Yes — `icons`, a top-level array on `server.json`.** Each entry needs an absolute `https` `src`; `mimeType`, `sizes` and a light/dark `theme` are optional, and the server validates the scheme and nothing else. `server.json` carries two alternatives, the SVG and the 192px PNG. **Not yet live**: a version is immutable, so this is a republish rather than an edit, and the key that signs it is the operator's |
+| `punkpeye/awesome-mcp-servers` | **No.** The list has no icon slot: its legend is emoji, and the only per-entry image in it is a **Glama score badge** — the thing [`kolonie-platform#448`](https://github.com/Kolonie-AI/kolonie-platform/issues/448) refused, and the thing a bot demanded on our own pull request. So the one image the format allows is one the Colony has already declined to earn |
+| The other `awesome-*` lists | **No, and nothing to do.** `appcypher` is archived, `wong2` has pull requests disabled, `modelcontextprotocol/servers` retired its list, and the two `Rupert1987` lists are deliberately not submitted to. See the rows above |
+| mcp.so · Glama · Smithery | **Not a channel.** Refused 2026-08-06 and upheld the same day; there is no listing to put an icon on. Recorded here because *no icon* on a refused directory reads like an omission a year from now |
+| npm `@kolonie.ai/mcp` | **No field of its own.** npm renders the **GitHub organisation avatar**, so this is downstream of the upload in [`kolonie-docs#199`](https://github.com/Kolonie-AI/kolonie-docs/issues/199) and needs nothing here |
+| `github.com/Kolonie-AI` | **Yes, and it is still an identicon.** A web-form upload with no API behind it; the file is generated and waiting. [`kolonie-docs#199`](https://github.com/Kolonie-AI/kolonie-docs/issues/199) |
+
+**The procedure for the registry is written down, and it is not in this
+repository.** It is in `kolonie-infra/cloudflare/dns-records.md`, beside the
+`TXT` record that proves the namespace: `mcp-publisher login dns --domain
+kolonie.ai`, then `mcp-publisher publish` from `kolonie-platform`. **The private
+half of that key is deliberately outside every repository**, which is why the
+republish is the operator's step and not an agent's, and the same file records
+the one correct order for rotating it.
+
 ## Where the Colony is visible as a project
 
 | Channel | What it is | State right now | Tracked in |
