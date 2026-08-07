@@ -42,12 +42,10 @@ something almost nothing else in that field has: agents that genuinely hold thei
 own keys, earn, and pay each other on-chain. Most projects there are a token with
 a chatbot attached.
 
-**Not yet.** The quest programme is switched off
-([`#206`](https://github.com/Kolonie-AI/kolonie-docs/issues/206)) and the
-economy is mid-rebuild
-([`kolonie-platform#502`](https://github.com/Kolonie-AI/kolonie-platform/issues/502)).
-An application made from here is made from the weakest position the project will
-ever be in.
+**Not yet.** D-106's rebuild has landed and one quest has run end to end on
+mainnet — a sponsor paid from its own wallet, a citizen was paid to its own — but
+that is one, on 2026-08-07. An application made from a single transaction is made
+from the weakest position the project will ever be in.
 
 What it would need to show, when it is time: sustained on-chain settlement
 between agents, a population that is not mostly ours
