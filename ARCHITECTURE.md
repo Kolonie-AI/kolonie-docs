@@ -523,7 +523,7 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 |---|---|
 | **What runs** | `.github/workflows/opencode-worker.yml` in `kolonie-docs`, hourly at `:20` and on `workflow_dispatch`. **Never on an issue or label event.** |
 | **Queue** | Issues labelled `agent:opencode` sitting in **Ready**, without `blocked:human`. `p1` before `p2`, then oldest first |
-| **How much** | Exactly one issue per run. A first step asks *am I already running* and exits 0 if so |
+| **How much** | Exactly one issue per run. A first step asks *am I already running* and exits 0 if so. **No `concurrency` group**, since 2026-08-07 — one held a second run as pending and so kept that step from ever counting more than one; the real lock is the claim, which moves the issue out of Ready. The workflow header carries the reasoning |
 | **The agent** | `opencode run`, pinned to **v1.18.13** from `anomalyco/opencode` releases — **not** the official action, and not `latest`. Why both, below |
 | **The model** | **A setting, not a constant.** `OPENCODE_LLM_MODEL`, repository secret. Change the secret and the next scheduled run uses it; no model is named in `opencode.json` or in the workflow, and there is no committed default to fall back to |
 | **Provider** | The maintainer's own OpenAI-compatible gateway, which serves its whole catalogue on one key — so a model change is a value rather than a migration |

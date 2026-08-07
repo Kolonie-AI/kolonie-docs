@@ -56,14 +56,32 @@ on:
     - cron: '20 * * * *'
   workflow_dispatch:
 
-# A backstop and **not** the mechanism. The job asks *am I already running* in its
-# first step, explicitly, so a person reading the log sees the decision rather
-# than inferring it from a cancelled run. This is here for the case that step
-# cannot answer — an API failure — and it queues rather than cancels, because a
-# cancelled run is one that claimed an issue and then did not release it.
-concurrency:
-  group: opencode-worker
-  cancel-in-progress: false
+# ## There is deliberately no `concurrency` group here (2026-08-07)
+#
+# There was one — `group: opencode-worker`, `cancel-in-progress: false` — and its
+# comment called it *"a backstop and not the mechanism"*, the mechanism being the
+# explicit *am I already running* step below.
+#
+# **The backstop prevented the mechanism from ever running.** A `concurrency`
+# group with `cancel-in-progress: false` holds a second run as **pending** until
+# the first finishes, so two runs of this workflow were never `in_progress` at the
+# same time and step 1's query could never count more than one. Measured on
+# 2026-08-07 with two dispatches two seconds apart: both logged
+# `in_progress runs, counting this one: 1`. `kolonie-docs#142`'s definition of
+# done asked for that path to have been seen fire at least once, and it could not
+# be, because it never did.
+#
+# So the group goes and the step stays — the maintainer's decision, 2026-08-07.
+# The reasoning behind it is unchanged and is the one the old comment already
+# made: **the claim is the real lock.** `pick` only ever returns an issue in
+# **Ready** and `claim` moves it to **In Progress**, so an issue being worked no
+# longer matches the query and two runners that did overlap still could not take
+# the same one. Step 1 is the courtesy that says so in the log rather than leaving
+# a person to infer it from a run that is not there.
+#
+# What is given up is the case step 1 cannot answer — a `gh run list` that fails.
+# That now lets a second run through to the claim, which refuses it. A queue
+# defect degrades into the structural lock rather than into two workers.
 
 permissions:
   contents: write
