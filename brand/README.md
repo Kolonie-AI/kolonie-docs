@@ -84,7 +84,7 @@ being true is replaced rather than annotated.
 | Fourteen repository social previews | **Unset.** Same form, same issue |
 | `console.kolonie.ai` | **Nothing.** A sponsor is asked for money on a page carrying no mark. [`kolonie-platform#498`](https://github.com/Kolonie-AI/kolonie-platform/issues/498) |
 | Registry and directory listings | **Nothing yet.** `server.json` carries the heavy cut and the listing is a republish away, which is the operator's step. Which channels can carry it at all — and the three that cannot — is [`growth/README.md`](../growth/README.md) |
-| The seven skill repositories | **Nothing** |
+| Thirteen repository READMEs | The heavy cut at 72px, right-aligned, in the generated header region every `README.md` opens with. Referenced from `kolonie.ai` and committed in none of them — [`onboarding/readme/`](../onboarding/readme/README.md) and [`kolonie-docs#219`](https://github.com/Kolonie-AI/kolonie-docs/issues/219). Seven of them carried a hand-placed copy of the same `<img>` before that, which is what generating it replaced |
 
 ## 4. What may never be done to it
 

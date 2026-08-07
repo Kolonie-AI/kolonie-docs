@@ -72,6 +72,7 @@ jobs:
           python3 .github/tests/check-links.test.py
           python3 .github/tests/red-lines.test.py
           python3 .github/tests/build-skill.test.py
+          python3 .github/tests/build-readme.test.py
           python3 .github/tests/check-incident-order.test.py
           bash .github/tests/no-gateway-leak.test.sh
 
@@ -112,6 +113,19 @@ jobs:
       # heading as an error rather than a skip.
       - name: The incidents are still newest first
         run: python3 .github/scripts/check-incident-order.py operations/incidents.md
+
+      # `kolonie-docs#219`. This repository is both the source of the shared
+      # README header and one of the thirteen that carries it, so its check is
+      # here rather than in a `readme.yml` of its own — there is no second
+      # repository to check out and no pull request to open when the header
+      # moves, because the header moving *is* the commit being checked.
+      #
+      # The other twelve run the same comparison from `.github/workflows/readme.yml`,
+      # against `kolonie-docs@main`.
+      - name: README.md carries the current Colony header
+        run: |
+          python3 .github/scripts/build-readme.py \
+            onboarding/readme/header.md README.md --check
 
       - name: The copies of the red lines still agree
         env:
