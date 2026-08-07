@@ -44,6 +44,17 @@ name: Red on main
 # becomes untrue, while a workflow that has gone green again is something somebody
 # should read rather than have tidied away.
 #
+# ## One thing it learned on its own first run
+#
+# **A failure older than the workflow file that produced it is history.** The
+# rehearsal on 2026-08-07 reported `Review a pull request` red at `7e9e5ed` — a
+# run from 2026-08-01, after which `1fca033` turned that workflow into a
+# `workflow_call` reusable one. A called workflow appears as a job of its caller
+# and never gets a run record of its own, so its last standalone run is a failure
+# that can never be superseded, and this would have filed it every morning
+# forever. `red-on-main.sh` compares the failing run against the file's last
+# commit and says so in the log when it drops one.
+#
 # ## The failure this workflow itself has
 #
 # **GitHub disables scheduled workflows in a repository with no activity for 60

@@ -85,7 +85,35 @@ BRANCH="${RED_ON_MAIN_BRANCH:-main}"
 # `kolonie-infra#69`'s.
 active_workflows() {
   gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --paginate \
-    --jq '.workflows[] | select(.state == "active") | [.id, .name] | @tsv' 2>/dev/null
+    --jq '.workflows[] | select(.state == "active") | [.id, .name, .path] | @tsv' 2>/dev/null
+}
+
+# --- and has the workflow been changed since it failed? -----------------------
+# **A failure older than the file that produced it is history, not a finding**,
+# and without this the check files it every morning for the rest of the
+# repository's life.
+#
+# Found on the first real run, 2026-08-07: `Review a pull request` was reported
+# red at `7e9e5ed` on 2026-08-01, and it had not run since — because `1fca033`
+# turned it into a `workflow_call` reusable workflow the next day. Called
+# workflows appear as jobs of their caller and never get a run record of their
+# own, so its last standalone run is a failure that can never be superseded. The
+# rule was satisfied and the sentence *this workflow is red on main* was false:
+# it does not run on `main` at all any more.
+#
+# The same test covers the ordinary case it was not written for — somebody fixes
+# a workflow and nothing has triggered it yet. Both are *the verdict is about a
+# version that no longer exists*, and neither wants an issue.
+#
+# It costs one REST call, on the failure path only, so a green repository still
+# asks nothing beyond the run listings.
+#
+# **It does not weaken the `Rehearse` case this check exists for.** Those four
+# failures were on the current file each time; a run and an edit in the same
+# commit share a timestamp, and the comparison is strict.
+workflow_changed_at() {
+  gh api "repos/$GITHUB_REPOSITORY/commits" -X GET -f "path=$1" -f per_page=1 \
+    --jq '.[0].commit.committer.date // ""' 2>/dev/null
 }
 
 # --- and what each of them last said ------------------------------------------
@@ -97,7 +125,7 @@ latest_verdict() {
   gh run list --repo "$GITHUB_REPOSITORY" --workflow "$1" --branch "$BRANCH" --limit 10 \
     --json status,conclusion,headSha,url,createdAt \
     --jq 'map(select(.status == "completed")) | sort_by(.createdAt) | reverse | .[0]
-          | select(. != null) | [.conclusion, (.headSha // "")[0:7], .url] | @tsv' 2>/dev/null
+          | select(. != null) | [.conclusion, (.headSha // "")[0:7], .url, .createdAt] | @tsv' 2>/dev/null
 }
 
 # --- can the runs be read at all? ---------------------------------------------
@@ -122,7 +150,7 @@ workflows_readable() {
 }
 
 cmd_check() {
-  local report="${1:-/dev/null}" id name conclusion sha url line status=0
+  local report="${1:-/dev/null}" id name path conclusion sha url ran_at changed_at line status=0
 
   : > "$report"
   if ! workflows_readable >> "$report"; then
@@ -132,11 +160,18 @@ cmd_check() {
   : > "$report"
 
   {
-    while IFS=$'\t' read -r id name; do
+    while IFS=$'\t' read -r id name path; do
       [ -n "$id" ] || continue
       line=$(latest_verdict "$id")
-      IFS=$'\t' read -r conclusion sha url <<< "$line"
+      IFS=$'\t' read -r conclusion sha url ran_at <<< "$line"
       [ "${conclusion:-}" = "failure" ] || continue
+
+      changed_at=$(workflow_changed_at "$path")
+      if [ -n "$changed_at" ] && [ -n "${ran_at:-}" ] && [[ "$changed_at" > "$ran_at" ]]; then
+        echo "$name failed at ${sha:-unknown} on $ran_at, but $path was changed at $changed_at — that verdict is about a version of the file that no longer exists, so it is not reported." >&2
+        continue
+      fi
+
       status=1
       printf -- '- **%s** — last completed run on `%s` failed, at `%s`. [Run](%s)\n' \
         "$name" "$BRANCH" "${sha:-unknown commit}" "${url:-no run url}"

@@ -53,6 +53,11 @@ case "$1 $2" in
         [ "${!i}" = "--workflow" ] && { j=$((i+1)); wf="${!j}"; }
       done
       cat "$FIX/runs.$wf" 2>/dev/null || true ;;
+  "api repos/Kolonie-AI/kolonie-docs/commits")
+      # When was the workflow file itself last changed? Answers per file, so one
+      # case can hold a failure that predates its workflow and one that does not.
+      pth=""; for ((i=1; i<=$#; i++)); do [[ "${!i}" == path=* ]] && pth="${!i#path=}"; done
+      cat "$FIX/changed.$(basename "$pth")" 2>/dev/null || true ;;
   "issue list")
       n=$(cat "$FIX/.calls" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$FIX/.calls"
       d=$(cat "$FIX/existing_delay" 2>/dev/null || echo 0)
@@ -76,9 +81,13 @@ setup() {
   export FIX="$WORK/fixtures" GH_LOG="$WORK/gh.log"
   rm -rf "$FIX"; mkdir -p "$FIX"; : > "$GH_LOG"
   rm -f "$WORK/report.md"
-  printf '11\tCI\n12\tRehearse\n' > "$FIX/workflows"
-  printf 'success\tabc1234\thttps://example.invalid/ci/9\n'       > "$FIX/runs.11"
-  printf 'success\tdef5678\thttps://example.invalid/rehearse/9\n' > "$FIX/runs.12"
+  printf '11\tCI\t.github/workflows/ci.yml\n12\tRehearse\t.github/workflows/rehearse.yml\n' > "$FIX/workflows"
+  printf 'success\tabc1234\thttps://example.invalid/ci/9\t2026-08-06T10:00:00Z\n'       > "$FIX/runs.11"
+  printf 'success\tdef5678\thttps://example.invalid/rehearse/9\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
+  # By default every workflow file is older than its last run, so the staleness
+  # test never fires unless a case asks it to.
+  printf '2026-08-01T00:00:00Z\n' > "$FIX/changed.ci.yml"
+  printf '2026-08-01T00:00:00Z\n' > "$FIX/changed.rehearse.yml"
   : > "$FIX/existing"
 }
 
@@ -100,7 +109,7 @@ echo
 echo "a workflow whose last completed run on main failed (#193)"
 
 # The two days `Rehearse` was red, in a fixture.
-setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\n' > "$FIX/runs.12"
+setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 out=$(bash "$SCRIPT" check "$WORK/report.md"); rc=$?
 expect "check exits 1" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
 expect "the workflow is named" \
@@ -126,7 +135,7 @@ echo "the four ways a run is not a success and not a failure"
 # path-filtered workflow reports `skipped`. None of those is a red run and none
 # of them may file.
 for verdict in cancelled skipped; do
-  setup; printf '%s\tdef5678\thttps://example.invalid/rehearse/12\n' "$verdict" > "$FIX/runs.12"
+  setup; printf '%s\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' "$verdict" > "$FIX/runs.12"
   out=$(bash "$SCRIPT" check "$WORK/report.md"); rc=$?
   expect "a $verdict run files nothing" "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc $(cat "$WORK/report.md")"
 done
@@ -140,16 +149,51 @@ expect "a workflow that has never run files nothing" "$([ $rc -eq 0 ] && echo ye
 # what arrives. This is the case that would let a red workflow read as fine for
 # as long as a fifth run is queued, which is why the script asks for ten and
 # takes the newest completed rather than position one.
-setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\n' > "$FIX/runs.12"
+setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 out=$(bash "$SCRIPT" check "$WORK/report.md"); rc=$?
 expect "a queued run does not hide the failure beneath it" \
   "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
 
 echo
+echo "a failure older than the workflow that produced it"
+
+# **Found on the first real run, 2026-08-07.** `Review a pull request` was
+# reported red at `7e9e5ed` on 2026-08-01 and had not run since, because
+# `1fca033` turned it into a `workflow_call` reusable workflow the next day —
+# and a called workflow appears as a job of its caller and never gets a run
+# record of its own. So its last standalone run is a failure that can never be
+# superseded, and without this case the check files it every morning forever.
+# The rule was satisfied; the sentence *this workflow is red on main* was false.
+setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-01T13:41:44Z\n' > "$FIX/runs.12"
+printf '2026-08-02T11:11:01Z\n' > "$FIX/changed.rehearse.yml"
+out=$(bash "$SCRIPT" check "$WORK/report.md" 2>"$WORK/check.err"); rc=$?
+expect "a verdict about a version that no longer exists files nothing" \
+  "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc $(cat "$WORK/report.md")"
+expect "and the run log says why, rather than swallowing it" \
+  "$(grep -q 'no longer exists' "$WORK/check.err" && echo yes || echo no)" "$(cat "$WORK/check.err")"
+
+# **And it does not cost the case this check exists for.** A run and an edit in
+# the same commit share a timestamp, and the comparison is strict — so the four
+# `Rehearse` failures, each on the file as it then stood, are still reported.
+setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
+printf '2026-08-06T10:00:00Z\n' > "$FIX/changed.rehearse.yml"
+out=$(bash "$SCRIPT" check "$WORK/report.md"); rc=$?
+expect "a failure on the current file is still reported" \
+  "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $(cat "$WORK/report.md")"
+
+# A repository whose commit history cannot be read must not lose the finding:
+# with no date to compare against, the failure stands.
+setup; printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
+rm -f "$FIX/changed.rehearse.yml"
+out=$(bash "$SCRIPT" check "$WORK/report.md"); rc=$?
+expect "an unreadable file history keeps the finding rather than dropping it" \
+  "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $(cat "$WORK/report.md")"
+
+echo
 echo "one issue, reused rather than duplicated"
 
 setup; echo "418" > "$FIX/existing"
-printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\n' > "$FIX/runs.12"
+printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 bash "$SCRIPT" check "$WORK/report.md" >/dev/null
 bash "$SCRIPT" report "$WORK/report.md" >/dev/null
 expect "with one open, no second issue is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
@@ -158,8 +202,8 @@ expect "it comments on the open one" "$(logged "issue comment 418" && echo yes |
 # Two red workflows are one condition with a list, not two issues: the thing that
 # needs reading is "this repository has red runs nobody is looking at".
 setup; echo "418" > "$FIX/existing"
-printf 'failure\tabc1234\thttps://example.invalid/ci/12\n'       > "$FIX/runs.11"
-printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\n' > "$FIX/runs.12"
+printf 'failure\tabc1234\thttps://example.invalid/ci/12\t2026-08-06T10:00:00Z\n'       > "$FIX/runs.11"
+printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 bash "$SCRIPT" check "$WORK/report.md" >/dev/null
 expect "two red workflows are both listed" \
   "$([ "$(grep -c '^- ' "$WORK/report.md")" -eq 2 ] && echo yes || echo no)" "$(cat "$WORK/report.md")"
