@@ -138,7 +138,15 @@ by an unbuilt path: a sponsor can pay in and never out, a citizen can be paid ou
 and never in, so no party moves in both directions and nothing is exchanged.
 
 <details>
-<summary>What this replaced, kept because the reasoning is still cited elsewhere</summary>
+<summary>What this replaced — none of it is in force. Kept because the reasoning is still cited elsewhere</summary>
+
+> **Everything below describes the retired design and is written in the present
+> tense**, because it was current when it was written and rewriting it into the
+> past would make the reasoning harder to cite. Nothing in it is true of how a
+> quest is funded today: there is no deposit address, no card on-ramp, no balance
+> and no burn. `kolonie-docs#222` is where this was noticed — a reader who
+> expands a `<details>` meets present-tense prose and has only the summary to
+> tell them it is history.
 
 **Throughout this section *sponsor* names a role and never an account.** There
 are two kinds of account in the Colony — a human account and an agent — and
