@@ -500,42 +500,103 @@ The cause is that **Done items dominate the board and come first** — 92 of tho
 **The number is 1000 because it is sized to be unreachable, not sized to the
 board.** Sizing it to the board is what has to be redone every time the board
 grows, and being one growth spurt behind is the failure above. A limit above any
-plausible board size cannot truncate, and it is free: `--limit` caps the
-pagination, it does not force it, so `gh` still stops on the last page. Measured
-on 2026-07-30 against a 148-item board, `--limit 1000` and `--limit 300` both
-fetch the same two pages and finish within a second of each other.
+plausible board size cannot truncate, and **raising it past the board is free**:
+`--limit` caps the pagination, it does not force it, so `gh` still stops on the
+last page. Measured on 2026-07-30 against a 148-item board, `--limit 1000` and
+`--limit 300` both fetch the same two pages and finish within a second of each
+other — and measured again in points on 2026-08-07 against a 120-item board,
+`--limit 200`, `--limit 500` and `--limit 1000` all cost **203**.
 
-Free is not the same as unbounded, so keep the board small as well, with query 5.
+**Free above the board is not the same as free**, which is what the sentence
+above used to be read as saying. The read itself is expensive, and the next
+section is what it costs.
+
+### What a board read costs
+
+Measured 2026-08-07 against a 120-item board, by reading `gh api rate_limit`
+either side of each call:
+
+| Call | GraphQL points |
+|---|---|
+| `gh project item-list --limit 1000` | **203** |
+| the same at `--limit 500`, `--limit 200` | **203** |
+| the same at `--limit 150` | 153 |
+| one issue's status by repository and number (§4) | **1** |
+| queries 1–4 above, run as four separate listings | **812** |
+| queries 1–4 above, one fetch and four `jq` filters | **203** |
+
+**The charge is for the items *requested*, not the items received**, in pages of
+a hundred. That is the whole model, and three things fall out of it that nothing
+in this file previously said:
+
+- **A limit above the board is genuinely free**, because `gh` stops when the API
+  says there are no more pages. `--limit 1000` stays.
+- **Retention only matters in units of a hundred.** A 120-item board costs two
+  pages; the same board at 99 items costs one, and at 101 it costs two again.
+  Archiving 20 items usually buys nothing and occasionally halves the bill. The
+  fortnight window is the maintainer's either way — no API can change it — so
+  this is what to weigh if it is ever revisited, rather than a general feeling
+  that a shorter window is tidier.
+- **The cheap call already exists and §4 already tells you to use it.** Resolving
+  one item by repository and number costs 1 point against 203, and it is the
+  *correct* call as well as the cheap one — it answers from the board rather than
+  from a snapshot that may be minutes old.
+
+At 203 points a read, a 5,000-point day is about **24 full board reads shared
+between every agent working as this user**. Four separate listings per waking
+loop is 812, so four wakings exhausted it. That is how 2026-08-06 reached
+4,962/5,000 with REST at 261.
+
+**What this does not license: a second copy of the status.** §4 refused status
+labels on `kolonie-docs#118` and the reasoning stands — two records of one fact
+needed a script to reconcile them. Every saving above comes from asking once
+instead of five times, which costs nothing and duplicates nothing.
 Two independent defences: the limit means a stale number cannot silently truncate
 an answer, and the archive means the board does not grow into the limit anyway.
+
+**Fetch the board once, then ask it four things.** Each of these used to be its
+own `gh project item-list`, and each one pays for the whole board — 812 points
+for the four, measured 2026-08-07, against 203 for the shape below.
+[What a board read costs](#what-a-board-read-costs) is the arithmetic; this is
+the only change it asks of you, and it loses nothing, because all four filter
+locally with `jq` and always did.
+
+```bash
+board=$(mktemp)
+gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json > "$board"
+```
 
 **1. What can be started right now, by anyone:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
-  --jq '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"'
+jq -r '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
-  --jq '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"'
+jq -r '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
-  --jq '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"'
+jq -r '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
 **4. The whole board at a glance:**
 
 ```bash
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json \
-  --jq '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]'
+jq -r '[.items[].status] | group_by(.) | map("\(.[0]): \(length)") | .[]' "$board"
 ```
+
+**One caveat, and it is the reason this is a file rather than a shell variable
+you keep all day: the snapshot goes stale.** Another agent may claim something
+between your fetch and your reading of it, which is why
+[§4](#4-status-lives-on-the-board) requires the item you are about to claim to be
+re-read by repository and number — a call that costs **1 point** and answers from
+the board rather than from your copy. Re-fetch at the top of each waking loop and
+not more often.
 
 **5. Check that the board is still maintaining itself.** Two properties, and both
 are checked by measurement rather than believed: that finished work is being
@@ -682,10 +743,22 @@ the arrangement above gives up. It would also need a token with `project` scope
 stored as a secret — a long-lived credential created for board hygiene, in a
 project whose `ARCHITECTURE.md` is deliberately strict about those. That trade
 was judged the wrong way round: the benefit is tidiness, the cost is structural,
-and the failure mode of the chosen option is graceful. If the auto-archive is
-switched off, the board grows and the queries keep answering correctly, because
-`--limit` is sized for that (see above). Nothing goes silently wrong; the board
-merely stops being tidy, and query 5 says so in one line.
+and the failure mode of the chosen option is graceful.
+
+**That last clause said *"nothing goes silently wrong"*, and something did**
+(`kolonie-docs#189`). It weighed correctness and tidiness and never weighed
+**cost**: on 2026-08-06 an ordinary working day with two agents on the board
+ended at **4,962 of 5,000 GraphQL points**, with REST barely touched at 261. The
+board is the whole of that, because Projects v2 has no REST API — every read and
+every column change is GraphQL, and the budget is **per user**, so two agents
+share one and neither can see what the other spent. When it runs out both stop,
+and the error names a user id rather than a cause.
+
+So the archive is not merely about tidiness, and `--limit` is not free. What is
+true instead is measured under
+[What a board read costs](#what-a-board-read-costs), and it changes what the
+queries above should look like rather than whether the arrangement here is
+right.
 
 **The one thing that reverses this** is the window having to be authoritative in
 Git rather than observed in a UI. `kolonie-docs#55` is closed on the reasoning
