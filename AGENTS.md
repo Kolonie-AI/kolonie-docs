@@ -32,6 +32,7 @@ The source of truth for *what* the Colony is and *why* it is shaped that way.
 | `onboarding/skill/` | The Colony-facing half of every `kolonie` skill, **once**. Seven repositories generate their `SKILL.md` from `body.md`; an edit here reaches all seven and an edit there reaches one. See [`onboarding/skill/README.md`](onboarding/skill/README.md) |
 | `operations/` | How development is coordinated, reviewed and deployed |
 | `growth/` | Which channels an agent hears of the Colony through, what is live on each right now, and what was refused. A register, not a strategy |
+| `brand/` | What the Colony's mark is, which of its two cuts a surface takes, where it is carried right now, and what may never be done to it. Holds no colour value, no stroke width and no coordinate — those are `kolonie-website`'s, and a copy here would be a second version nothing tests |
 | `state/STATUS.md` | What exists and what runs, **right now** — present tense only |
 | `state/decisions.md` | What was decided and whether it still stands — a register, and only a register |
 | `state/decisions/` | Why, one file per decision. A register is an index; a decision is a document |
