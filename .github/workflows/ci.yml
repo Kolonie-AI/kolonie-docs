@@ -73,9 +73,31 @@ jobs:
           python3 .github/tests/red-lines.test.py
           python3 .github/tests/build-skill.test.py
           python3 .github/tests/check-incident-order.test.py
+          bash .github/tests/no-gateway-leak.test.sh
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .
+
+      # `#207`, asked for in as many words: the gateway's URL and key must not be
+      # committed, *"and that is worth a check in CI rather than a habit."*
+      #
+      # What is guarded is mostly the **URL**. A key is rotated in a minute; a
+      # private hostname in a public repository's history cannot be taken back,
+      # and it is a target for as long as it resolves.
+      #
+      # The secrets are here so the check can grep for their **values** rather
+      # than for a pattern — writing down what the hostname looks like is most of
+      # the way to writing down the hostname. Nothing is ever printed, including
+      # on failure; the script names the variable and the file and stops there.
+      #
+      # On a fork these are empty, the script says it skipped, and the step
+      # passes. A check that failed there would block every outside contribution
+      # for a reason nobody outside could act on.
+      - name: Nothing about the private gateway is committed
+        env:
+          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
+        run: bash .github/scripts/no-gateway-leak.sh .
 
       # `kolonie-docs#190`. `operations/incidents.md` said *newest first* for six
       # days without being newest first, in four commits that each appended to the

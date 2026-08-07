@@ -193,9 +193,21 @@ jobs:
         id: work
         if: steps.queue.outputs.issue
         env:
-          # Reaches opencode by `{env:…}` substitution in the committed
-          # `opencode.json`, so no key is ever written into this file.
-          OPENROUTER_API_KEY_OPENCODE: ${{ secrets.OPENROUTER_API_KEY_OPENCODE }}
+          # All three reach opencode by `{env:…}` substitution in the committed
+          # `opencode.json`, so none is ever written into this file (`#207`).
+          #
+          # **The base URL is a secret and not merely the key.** It names a
+          # private gateway, and a committed hostname is a target that stays in
+          # git history after it is removed. No default is committed as a
+          # fallback either, because a fallback is the value that ships on the
+          # day the secret is missing — the run should fail loudly instead.
+          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
+          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          # **The model is a setting, not a constant.** Change the secret and
+          # the next scheduled run uses it; nothing here or in `opencode.json`
+          # names one. The gateway serves its whole catalogue on the same key,
+          # so switching is a value rather than a migration.
+          OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ steps.queue.outputs.issue }}
         run: |
@@ -222,7 +234,25 @@ jobs:
           gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" \
             --json number,title,body,comments > ./opencode-issue.json
 
-          opencode run --model openrouter/anthropic/claude-sonnet-4.5 "$(cat <<PROMPT
+          # Refuse rather than guess. An unset secret would otherwise reach
+          # opencode as `--model gateway/`, which fails somewhere further in
+          # with a message about the provider rather than about the secret.
+          : "${OPENCODE_LLM_MODEL:?OPENCODE_LLM_MODEL is not set — the model is a secret, and there is deliberately no default}"
+          : "${OPENCODE_LLM_BASE_URL:?OPENCODE_LLM_BASE_URL is not set}"
+          : "${OPENCODE_LLM_API_KEY:?OPENCODE_LLM_API_KEY is not set}"
+
+          # `gateway` is the provider id in `opencode.json`; the half after the
+          # slash is the secret.
+          #
+          # This line says a model resolved, not which one — GitHub masks a
+          # secret's value wherever it appears in a log, including in opencode's
+          # own banner. So *which* model ran is read from the gateway's side or
+          # from the secret, and what the log can prove is that the run reached
+          # the provider rather than falling back to a committed default. There
+          # is no committed default to fall back to.
+          echo "model: gateway/${OPENCODE_LLM_MODEL}"
+
+          opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$(cat <<PROMPT
           You are working issue #${ISSUE} in this repository, unattended. Nobody is
           watching and nobody will answer a question, so if the issue is ambiguous,
           make the smallest defensible change and say in the pull request body

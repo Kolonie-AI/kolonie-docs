@@ -525,8 +525,9 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 | **Queue** | Issues labelled `agent:opencode` sitting in **Ready**, without `blocked:human`. `p1` before `p2`, then oldest first |
 | **How much** | Exactly one issue per run. A first step asks *am I already running* and exits 0 if so |
 | **The agent** | `opencode run`, pinned to **v1.18.13** from `anomalyco/opencode` releases — **not** the official action, and not `latest`. Why both, below |
-| **The model** | `openrouter/anthropic/claude-sonnet-4.5`, through OpenRouter, which the Colony already pays. No second billing relationship |
-| **Provider key** | `OPENROUTER_API_KEY_OPENCODE`, repository secret, reaching opencode by `{env:…}` substitution in the committed `opencode.json`. No key is written into any file |
+| **The model** | **A setting, not a constant.** `OPENCODE_LLM_MODEL`, repository secret. Change the secret and the next scheduled run uses it; no model is named in `opencode.json` or in the workflow, and there is no committed default to fall back to |
+| **Provider** | The maintainer's own OpenAI-compatible gateway, which serves its whole catalogue on one key — so a model change is a value rather than a migration |
+| **Provider key and endpoint** | `OPENCODE_LLM_API_KEY` and `OPENCODE_LLM_BASE_URL`, repository secrets, both reaching opencode by `{env:…}` substitution in the committed `opencode.json`. **The URL is a secret and not merely the key**: it names a private endpoint, and a committed hostname is a target that stays reachable in git history after the line is deleted. `.github/scripts/no-gateway-leak.sh` greps the tree for both values on every run of `CI` and prints neither |
 | **Board read** | `BOARD_READ_TOKEN` — read-only, and it stays that way |
 | **Board write** | `BOARD_WRITE_TOKEN` — `kolonie-docs` only, Organization → Projects: Read and write, nothing else. **Expires 2027-08-04** |
 | **Issue comments** | The built-in `GITHUB_TOKEN`, deliberately, so the stored credential's only power stays moving a board column |
