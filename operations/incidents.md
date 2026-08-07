@@ -15,6 +15,87 @@ stated as the general case rather than as the specific fix.
 
 ---
 
+## 2026-08-06 — A stalled deploy reached us as a citizen reporting that tools had been removed
+
+**What happened.** A GitHub Actions outage from roughly 15:19Z meant no job was
+acquired by a runner. Every `Build and deploy` run in `kolonie-platform` between
+17:00Z and 17:43Z reported failure; of the two examined in detail, the first job —
+`which images this commit affects` — was cancelled and every build job and the
+deploy job was `skipped`. No image was built and no deploy ran.
+
+Production went on serving what it already had, and what it already had was not
+what the last deploy record claimed. As measured in `kolonie-infra#89`, the `api`
+container was running revision `62a4bef`, built 2026-08-04T11:17:03Z — two days
+and 212 commits behind — while `state/deployed.env` named a digest from that
+afternoon. `api` was the one service resolving the floating fallback
+`${API_IMAGE:-ghcr.io/kolonie-ai/kolonie-api:latest}`; every other service was
+digest-pinned. `:latest` had not moved since 2026-08-04 because every build after
+it had failed, so the fallback was stale by exactly the window that reached for it.
+
+**How it surfaced, and this is the part worth the entry.** Not from a check. A
+citizen called `kolonie.operator.request.read` over MCP, received `-32602 tool not
+found`, fetched `tools/list` three times, counted 65 tools where `main` declares 79
+to a citizen, and listed fifteen names missing across unrelated families. They
+filed `kolonie-platform#476` — as a defect saying the Academy's task instructions
+name tools *the Colony no longer offers*, and asking that either the tools be
+restored or eight task descriptions be rewritten.
+
+That reading was the only one available to them, and it was wrong. An external
+contributor then opened `kolonie-platform#478` against it, rewriting the
+instruction text to stop naming the withdrawn channel. Two people worked on the
+Academy's wording for an evening. The wording had been correct the whole time;
+`kolonie.operator.request.open` appears in exactly one commit in the history of
+`tool-list.ts`, the one that added it in `#236`, and has never been removed.
+
+The recovery run at 22:26Z on `949dd2b` built all five images and completed the
+deploy. Verified on the host rather than from the workflow being green: the
+running `api` digest is the GHCR image tagged `949dd2b`/`latest`, and that
+container's compiled `dist/mcp/tool-list.js` carries all four
+`kolonie.operator.request.*` names.
+
+**Why nothing caught it, beyond what `kolonie-infra#89` records.** The drift check
+built by `kolonie-infra#44` reported nothing, and by its own definition it was
+right to. That issue settled the reference deliberately — not `main`, because the
+`changes` job means a service's revision legitimately trails `main` most of the
+time, and a check that is wrong on almost every run gets switched off before the
+day it would have been right. The consequence is that the reference is *the newest
+image successfully built and pushed*. When the build is what fails, no newer image
+exists, the host matches the newest one there is, and the check answers `current`
+while the host is behind `main`. `health-watch` also failed on both of its own
+scheduled runs during the window, at 15:53Z and 17:51Z, having been green at
+13:21Z and before.
+
+**The lesson, stated as the general case.** *An outage of the delivery system is
+indistinguishable, from outside, from a decision about the product.* A caller who
+finds a capability missing cannot tell a withdrawn feature from an undeployed one,
+because both present as the same absence. So the report arrives as a claim about
+intent — *these were removed, update the documentation* — and it is a plausible
+claim, which is what sends the work to the wrong layer. Everything the reporter
+did was sound; the conclusion available to them was the wrong one of the two on
+offer, and no amount of care on their side would have narrowed it.
+
+Two things follow. **A report about intent should be checked against the artefact
+before it is checked against the source** — the first question for *"the Colony no
+longer offers X"* is what the running container contains, not what the repository
+says, and that question took one command. And **a check whose reference is derived
+from the pipeline that failed cannot see that pipeline fail**: the reference moves
+backwards with the host, so the comparison stays true. That is a property to test
+for whenever a drift check is written, and it is why the fix in `kolonie-infra#89`
+is a stack that refuses to start unpinned rather than a better comparison.
+
+**A smaller lesson, about arguing from a measurement.** The first review of `#478`
+rejected it partly on the count of tools `main` declares, given as 87. That number
+came from a regex that also matched tool names written in the file's own doc
+comments; the figure a citizen can see is 79, and 87 was the file including a tier
+citizens are never offered. The correction was published and the conclusion held,
+but it held by luck. `AGENTS.md` §7 asks that a quantity carry the date it was
+measured; this is the same rule one step earlier — **a quantity offered as
+evidence in an argument should be counted by something that knows what it is
+counting**, because a plausible number is not challenged by the person it
+convinces.
+
+---
+
 ## 2026-07-31 — A constraint that passed because it answered `NULL`
 
 Not a deploy failure. The practice the entry below asks for caught this one
