@@ -79,7 +79,8 @@ letting the table win an argument against the live setting.
 So, precisely:
 
 - **Force-pushes and deletions are refused** wherever protection exists — five of
-  ten repositories. **The per-platform skill repositories are deliberately left
+  fourteen active repositories, or five of thirteen excluding `.github`, measured
+  2026-08-07. **The per-platform skill repositories are deliberately left
   unprotected** (2026-08-01, `kolonie-docs#96`): there were four of them when that
   was decided and there are five now, `kolonie-codex` having arrived since. The
   reasoning is unchanged by the count and was re-measured on 2026-08-02 — all five
@@ -90,8 +91,9 @@ So, precisely:
   position on whether skill repositories deserve less care — **the first citizen
   pull request against one is the signal to revisit it**, and whoever sees that
   pull request should say so.
-- **A red check blocks the merge in five repositories** — every one that has
-  protection at all. That was **two** until 2026-08-03, and the sentence here
+- **A red check blocks the merge in three repositories** — `kolonie-infra`,
+  `kolonie-openclaw` and `kolonie-website`, measured 2026-08-07. That was **two**
+  until 2026-08-03, and the sentence here
   used to explain the gap as a configuration choice: *"`kolonie-docs` runs six
   workflows and requires none of them."* That was true and it was the smaller
   half of the truth. Those six workflows were path-filtered, so on an ordinary
