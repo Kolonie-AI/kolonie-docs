@@ -27,6 +27,19 @@ mkdir -p "$BIN"
 
 command -v python3 >/dev/null || { echo "python3 is required"; exit 1; }
 
+# The step's script **and the names of the variables it is given** (`#192`).
+#
+# Both come from the same parse for the same reason the script does: a harness
+# that restates what the workflow reads is a harness that drifts from it, and
+# this one did. `0687f61` added `AUTHOR_TYPE` to the step's `env:` block, no case
+# here set it, the extracted script runs under `set -u` — so every issue case
+# died on line 27 before reaching a branch, and reported seven failed assertions
+# about labelling and thanking that had never been attempted. The cause was one
+# unset variable and not one of the seven things the output named.
+#
+# So every declared name is defaulted to empty below, and §12 then asserts that
+# each one is actually exercised by something. Defaulting alone would trade a
+# misleading failure for a quiet pass, which is the worse of the two.
 python3 - "$WORKFLOW" "$WORK" <<'PY'
 import sys, yaml
 workflow, out = sys.argv[1], sys.argv[2]
@@ -35,7 +48,16 @@ for name, job in doc["jobs"].items():
     for step in job["steps"]:
         if "run" in step:
             open(f"{out}/{name}.sh", "w").write(step["run"])
+            # One `NAME=` per line, ready to hand to `env` as a default.
+            open(f"{out}/{name}.env", "w").write(
+                "".join(f"{key}=\n" for key in (step.get("env") or {}))
+            )
 PY
+
+[ -s "$WORK/issue.env" ] || { echo "no env: block was read from the issue step — the parse is broken, not the workflow"; exit 1; }
+
+mapfile -t ISSUE_DEFAULTS < "$WORK/issue.env"
+mapfile -t PR_DEFAULTS < "$WORK/pull_request.env"
 
 # --- the stub -------------------------------------------------------------
 # Records every call and answers the four questions the workflow asks: what
@@ -67,19 +89,42 @@ check()    { if [ "$2" = "$3" ]; then echo "  ok   $1"; pass=$((pass+1)); else e
 contains() { if grep -qF -- "$2" <<<"$1"; then echo "  ok   $3"; pass=$((pass+1)); else echo "  FAIL $3"; fail=$((fail+1)); fi; }
 absent()   { if grep -qF -- "$2" <<<"$1"; then echo "  FAIL $3"; fail=$((fail+1)); else echo "  ok   $3"; pass=$((pass+1)); fi; }
 
+# What a case set, so §12 can tell an exercised variable from a defaulted one.
+# `env` and the trailing `bash` are not assignments and are skipped.
+note_set() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in [A-Z_]*=*) echo "${arg%%=*}" >> "$WORK/exercised" ;; esac
+  done
+}
+
+# The defaults come first and the case's own `env` comes after, so a case always
+# wins over the empty default for a variable it cares about.
 run_issue() {
   : > "$WORK/gh.log"
+  note_set "$@"
   GH_LOG="$WORK/gh.log" PATH="$BIN:$PATH" \
+    env "${ISSUE_DEFAULTS[@]}" \
     REPO=Kolonie-AI/kolonie-platform NUMBER=123 AUTHOR=someagent AREA=platform \
     "$@" bash "$WORK/issue.sh" 2>&1
 }
 
 run_pr() {
   : > "$WORK/gh.log"
+  note_set "$@"
   GH_LOG="$WORK/gh.log" PATH="$BIN:$PATH" \
+    env "${PR_DEFAULTS[@]}" \
     REPO=Kolonie-AI/kolonie-platform NUMBER=456 AUTHOR=someagent AREA=platform \
     "$@" bash "$WORK/pull_request.sh" 2>&1
 }
+
+# Set by `run_issue`/`run_pr` themselves rather than by any case.
+printf '%s\n' REPO NUMBER AUTHOR AREA > "$WORK/exercised"
+
+# `GH_TOKEN` is the one declared variable no case can exercise: the stub `gh`
+# never authenticates, so there is nothing for a value to change. Named here so
+# that §12's list is a decision rather than an omission.
+UNEXERCISED_BY_DESIGN="GH_TOKEN"
 
 echo "== 1. an issue from someone without push access gets all three labels"
 # The case the workflow exists for. It is unconditional for such an author: the
@@ -129,6 +174,34 @@ contains "$(cat "$WORK/gh.log")" "You could not have set these labels yourself" 
 out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 absent "$(cat "$WORK/gh.log")" "You could not have set these labels yourself" "and not to a maintainer"
 
+echo "== 5c. one of the Colony's own runners is labelled, never thanked (#413)"
+# The branch `0687f61` added, and until `#192` the only branch in the file with
+# no case. `kolonie-platform#408` is what it was written for: the log detector
+# files as a GitHub App this organisation runs, and arrived nineteen seconds
+# later labelled `from:citizen` and thanked. Nobody thanked anybody.
+out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot EXISTING='[]' BODY='moderation-runner is erroring.')
+log=$(cat "$WORK/gh.log")
+contains "$log" "--add-label area:platform" "area: applied, because it is the one label that is always true"
+absent "$log" "from:citizen" "not called a citizen's — there is no citizen"
+absent "$log" "needs-triage" "not marked needs-triage — the detector already routed it"
+absent "$log" "issue comment" "not thanked"
+
+out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot EXISTING='["area:platform"]' BODY='x')
+log=$(cat "$WORK/gh.log")
+absent "$log" "--add-label" "a runner that labelled itself is left entirely alone"
+absent "$log" "issue comment" "and still not thanked"
+contains "$out" "already labelled" "and said why"
+
+echo "== 5d. 'one of ours' is an and, and each half is load-bearing"
+# A case proving only the positive would pass a workflow that had dropped either
+# test — and dropping the prefix test would silence the thank-you for every bot
+# on the internet, which is the direction that costs a citizen something.
+out=$(run_issue env AUTHOR=dependabot AUTHOR_TYPE=Bot EXISTING='[]' BODY='x')
+contains "$(cat "$WORK/gh.log")" "from:citizen" "a Bot that is not one of ours takes the ordinary path"
+
+out=$(run_issue env AUTHOR=kolonie-fan AUTHOR_TYPE=User EXISTING='[]' BODY='x')
+contains "$(cat "$WORK/gh.log")" "from:citizen" "a person whose name starts kolonie- is still a person"
+
 echo "== 6. priority is never assigned, by any path"
 # p1/p2 encode what the Colony is trying to achieve, which a workflow cannot
 # know. If this assertion ever fails, the workflow has started making a
@@ -171,6 +244,32 @@ echo "== 11. Conventional Commits: the shapes the guide documents are accepted"
 for title in 'feat: add x' 'fix(ledger): resolve y' 'docs: update z' 'test: add cases' 'feat!: breaking'; do
   out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs' TITLE="$title" BRANCH='fix/x-1' BODY='Fixes #12')
   absent "$(cat "$WORK/gh.log")" "pr comment" "accepted: $title"
+done
+
+echo "== 12. every variable the workflow hands the script is exercised by a case"
+# The half of `#192` that the defaults do not cover. Defaulting a new variable to
+# empty stops it killing the run, and on its own it would let the branch that
+# variable was added for go untested while the file reported green — which is the
+# failure `kolonie-docs#190` spent a whole check refusing.
+#
+# So this fails on the *variable*, by name, at the moment somebody adds one. The
+# message is what the last two days were missing: `AUTHOR_TYPE is declared and no
+# case sets it` rather than seven assertions about labelling that never ran.
+sort -u "$WORK/exercised" > "$WORK/exercised.sorted"
+for env_file in "$WORK/issue.env" "$WORK/pull_request.env"; do
+  step=$(basename "$env_file" .env)
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    [ -z "$key" ] && continue
+    [ "$key" = "$UNEXERCISED_BY_DESIGN" ] && continue
+    if grep -qxF -- "$key" "$WORK/exercised.sorted"; then
+      echo "  ok   $step: $key"
+      pass=$((pass+1))
+    else
+      echo "  FAIL $step: $key is declared by the workflow and no case sets it — add one before it defaults silently"
+      fail=$((fail+1))
+    fi
+  done < "$env_file"
 done
 
 echo
