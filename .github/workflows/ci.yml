@@ -72,9 +72,24 @@ jobs:
           python3 .github/tests/check-links.test.py
           python3 .github/tests/red-lines.test.py
           python3 .github/tests/build-skill.test.py
+          python3 .github/tests/check-incident-order.test.py
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .
+
+      # `kolonie-docs#190`. `operations/incidents.md` said *newest first* for six
+      # days without being newest first, in four commits that each appended to the
+      # end. It is the cheapest possible thing to get wrong — an entry in the wrong
+      # place is identical, in the diff that adds it, to an entry in the right one —
+      # and the cost is that the oldest entry reads as the end of the file, so
+      # everything below it is unreachable by the file's own navigation.
+      #
+      # It shares the link check's failure mode and for the same reason its test
+      # runs first: a parser that finds no headings reports a perfectly ordered
+      # file. The check answers that with a floor and by treating an unreadable
+      # heading as an error rather than a skip.
+      - name: The incidents are still newest first
+        run: python3 .github/scripts/check-incident-order.py operations/incidents.md
 
       - name: The copies of the red lines still agree
         env:

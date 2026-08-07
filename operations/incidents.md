@@ -13,6 +13,12 @@ last paragraph worth reading a month later, it is a closed issue, not an inciden
 **Format.** What happened, what actually caused it, what changed. The lesson last,
 stated as the general case rather than as the specific fix.
 
+**Newest first is checked, not trusted.** `CI` runs
+`.github/scripts/check-incident-order.py` on every pull request and push, because
+this file spent six days out of order without anybody noticing
+(`kolonie-docs#190`). The check reads dates and nothing else — if you move an
+entry, the positional cross-references in the prose are yours to re-check.
+
 ---
 
 ## 2026-08-06 — A stalled deploy reached us as a citizen reporting that tools had been removed
@@ -94,7 +100,244 @@ evidence in an argument should be counted by something that knows what it is
 counting**, because a plausible number is not challenged by the person it
 convinces.
 
----
+## 2026-08-05 — A runner imported a workspace its image does not ship, and crash-looped with an empty log
+
+**What happened.** `kolonie-platform#243` added
+`import { fetchPage } from '@kolonie-ai/verifiers'` to the badge runner and added
+the dependency to `apps/badge-runner/package.json`. `apps/badge-runner/Dockerfile`
+was not touched. Its runtime stage copies workspaces one at a time, and carried a
+comment saying, in so many words, that this one is not among them:
+
+> `packages/verifiers` is absent: this process gives out things that are worth
+> nothing and verifies nothing at all.
+
+True when written. False from the moment the import landed, and nothing anywhere
+said so.
+
+**How long, and what it cost.** From `#243` merging until 2026-08-05, every
+`Build and deploy` run in `kolonie-platform` reported **failure** — ten
+consecutive runs on the day it was found. The deploys themselves were succeeding:
+migrations applied, the api healthy, `deployed.env` recorded. What failed was the
+cascade re-deploy at the end, which retries a service a previous deploy rolled
+back — so the same broken badge-runner image was pulled, crash-looped and rolled
+back once per deploy, and rewrote the marker that would make the next deploy try
+again.
+
+**Nothing in the repository could have failed.** `npm run check` is green, the
+workspace resolves perfectly in a checkout, and the image builds and pushes. A
+Dockerfile is not typechecked against the manifest beside it. The artefact was
+wrong and every gate that looks at the source was right.
+
+**Three lessons.**
+
+**A workspace symlink is present and dangling, so the absence has no symptom.**
+`npm ci` runs in the build stage and writes `node_modules/@kolonie-ai/verifiers`
+as a link into `packages/verifiers`; the runtime stage copies `node_modules` and
+not the target. Node then dies on `ERR_MODULE_NOT_FOUND` **before** `createLog`
+has been called, so the container prints nothing at all — `deploy.sh`'s own log
+showed *"what the failing containers printed (last 40 lines each)"* followed
+immediately by the end marker. A crash-looping container with an empty log reads
+as an infrastructure fault, and it was taken for one.
+
+**A comment that says something is absent is a claim that ages.** Both Dockerfiles
+carried one, both were written truthfully, and both were falsified by a later
+import in a different file. The general form is `AGENTS.md` §7's rule about
+mirrored files: a sentence that enumerates its siblings is correct in whichever
+file was written last.
+
+**The second instance was found by the test, not by the search.**
+`scripts/check-image-workspaces.test.ts` was written for the badge runner and
+caught the moderation runner on its first run — it has imported
+`openRouterDirectionClassifier` from `verifiers` since `#140` and does not copy it
+either. That one had not failed only because the build serving production
+predates the import: **the next deploy of that service would have been the same
+outage**, and nobody was looking for it.
+
+**What was fixed.** Both runtime stages copy `packages/verifiers`. The check
+asserts, for every app, that each `@kolonie-ai/*` runtime dependency in its
+`package.json` is copied into its image's runtime stage — read off the two files'
+text rather than off a built image, because putting a Docker daemon in the
+definition of done is what `AGENTS.md` §7 refuses.
+
+**And the fix did not end it, which is the last lesson.** The next deploy after
+the `COPY` landed failed identically. `/opt/kolonie/state/needs-redeploy.env`
+holds the *image tag* of the rolled-back build, not the service:
+
+```
+NEEDS_REDEPLOY_SERVICE=badge-runner
+NEEDS_REDEPLOY_TAG=…kolonie-badge-runner:78ca190…
+```
+
+`78ca190` is the commit that introduced the fault. The cascade restores that tag
+and pulls it, so the fixed build was never tried — and `rollback()` writes the
+marker again on each failure, so **no later commit can ever reach it**. The
+script's own comment says *"No infinite loop is possible because the marker is
+cleared before the attempt"*, which is true within one run and false across
+runs.
+
+**Re-deploying the rolled-back build is right when the rollback was a timing
+problem** — a migration that had not run yet, which is what the cascade was built
+for. It is exactly wrong when that build is broken in itself: the only thing that
+can fix it is a later build, and the pin guarantees a later build is never tried.
+
+**The escape, since nothing documents it:** a `workflow_dispatch` deploy of that
+one service at a known-good version. It clears the marker through `deploy.sh`'s
+`NEEDS_REDEPLOY_SERVICE == SERVICE` branch and ships the fix in the same run.
+That is what ended this, and `kolonie-infra#79` carries the argument for
+recording the service rather than the tag.
+
+**What is still true and worth a separate look.** A deploy that fails only in its
+cascade step reports the same red as a deploy that never reached the host, and the
+eleven failures said nothing about which of the two they were. The signal that
+would have shortened this is a container that exits during startup having logged
+nothing — `deploy.sh` prints that it captured no output and does not treat it as
+different from a container that logged an error.
+
+## 2026-08-02 — The board's self-check had no scheduler, and the project ran out of API budget
+
+The GraphQL budget was exhausted at **4,998 of 5,000 points in a single working
+session**, while REST sat at **45 of 5,000**. Board columns could not be set on
+three issues that had just been created, and the orchestration loop could not
+read its own state until the hourly reset.
+
+**Every point went to `gh project item-list --limit 1000`** — the query `AGENTS.md`
+§6 tells the loop to run, and tells it to run with an unreachable limit rather
+than one sized to the board. That argument is correct and it rests on a premise:
+that the board stays small. The board had stopped being small, because the
+auto-archive workflow was off and had been for long enough that §6's own opening
+note recorded the shape of it on 2026-07-30 — *"Done items dominate the board and
+come first — 92 of those 146."*
+
+**§6 query 5a exists to catch exactly this**, and it had been in the document the
+whole time. Nobody ran it.
+
+**The lesson is not "turn the workflow on".** That was done the same day and it
+would have been done in any case. The lesson is that **the orchestration loop
+contained a check with no scheduler behind it**, and that a self-check depending
+on somebody remembering to run it has the reliability of the thing it is
+checking — which is to say, none of its own. It surfaced as a rate limit during
+unrelated work, so nothing in the symptom pointed at the cause.
+
+Closed by `kolonie-docs#132`: 5a and 5b run daily in `board-self-check.yml`,
+silent when both answers are right, and opening one issue — reused, not
+duplicated — when either is wrong. It fixes nothing by itself, deliberately: 5a's
+fix is a dashboard setting no API can reach, and 5b's is a write to the board
+that ought to be a decision.
+
+**What this did not change.** `--limit 1000` stays, for the reason §6 already
+gives. If the budget becomes tight again with a small board, the answer is a
+GitHub App installation token — 12,500 points an hour for an organisation rather
+than 5,000 — and that is a separate issue with these measurements as its
+evidence.
+
+## 2026-08-02 — The Reviewer Agent's first real review was thrown away by GitHub
+
+The day after the entry below, the Reviewer Agent had run seven times and reviewed
+nothing: every run was a push to `main`, and every one correctly decided there was
+no pull request. **Whether it could review one had still never been observed.** A
+green run history said nothing about it, which is the shape of this failure and
+the reason a live test was worth doing at all.
+
+`kolonie-platform#214` was opened as that test. The job did everything right —
+waited for CI, gathered the diff and the linked issue, asked the model, got a
+verdict of *approve*, built the payload — and then:
+
+```
+gh: Unprocessable Entity (HTTP 422)
+{"errors":["GitHub Actions is not permitted to approve pull requests."]}
+```
+
+**The contributor received nothing.** No review, no comment, no indication that a
+reviewer had read the diff at all. The only trace was a red check on a workflow
+whose failures nobody had reason to watch — and it would have failed this way on
+every pull request the reviewer agreed with, which on a healthy repository is most
+of them. A reviewer that is silent exactly when it approves is worse than one that
+does not run: the second is visibly absent, the first looks like an opinion.
+
+**Why it was invisible until a real pull request existed.** Nothing in the
+workflow, the permissions block or the token's scopes is wrong. The refusal is a
+platform rule about what the Actions token may do, and it is only reachable on the
+code path where the model says *approve* — so no amount of reading the file, and no
+number of green runs against pushes, could have surfaced it. `#42`'s definition of
+done asked for a real pull request receiving a real review for exactly this reason.
+
+**The fix**: `APPROVE` is never sent. Every review is posted as a comment and the
+verdict is the first line of its body. The alternative — enabling *Allow GitHub
+Actions to create and approve pull requests* — was rejected: an organisation-wide
+switch letting every workflow approve every pull request, bought for a verdict that
+gates nothing (`kolonie-docs#96`: no repository requires a review to merge).
+
+**What generalises.** The board's self-check with no scheduler behind it
+(2026-08-02) and the Reviewer Agent's nineteen empty runs (2026-08-01) are the
+same shape as this one: a thing that had never been observed doing its job,
+believed to work because nothing said otherwise. The run history was green here
+*because* the job kept finding nothing to do. **A success that never exercised
+the feature is not evidence about the feature.**
+
+## 2026-08-01 — The Reviewer Agent had never run, and the comment warning about injection was the injection
+
+The maintainer reported a stream of GitHub emails: *"`.github/workflows/review.yml`
+workflow run — No jobs were run."* Nineteen runs since the workflow was added, all
+`failure`, zero jobs on every one, and no successful run in its history.
+
+The API says nothing useful about it. A run with no jobs has no logs, no
+annotations and no check runs, and `referenced_workflows` comes back empty —
+which is itself the finding, because the reusable workflow was never resolved.
+The message exists only in the HTML of the run page:
+
+```
+Invalid workflow file: .github/workflows/review.yml#L30
+error parsing called workflow
+"Kolonie-AI/kolonie-platform/.github/workflows/review.yml"
+ -> "Kolonie-AI/kolonie-docs/.github/workflows/review-pull-request.yml@main"
+: (Line: 103, Col: 14): An expression was expected
+```
+
+Line 103 is `run: |`. The fault was ninety lines further down, inside the shell
+script, in a **comment**:
+
+> Through the environment, never interpolated into the command. A `${{ }}`
+> expression is pasted into the script before bash sees it, so a value containing
+> a quote would be running as shell rather than as a pattern — the standard
+> GitHub Actions injection, and it costs one variable to close.
+
+The advice is correct and the workflow was following it. But the parser scans a
+`run:` block for expressions **before** anything is a shell script, and it does not
+know that a `#` makes the rest of a line a comment. An empty pair of delimiters
+there is an empty expression, and an empty expression is a parse error for the
+whole file. The comment explaining the injection risk was, verbatim, an injection
+into the workflow that carried it.
+
+**Three lessons, and the first two are the ones that generalise.**
+
+**A `run:` block has two readers, and only one of them understands shell.** Any
+`${{` in a `run:` block is Actions syntax, wherever it sits — in a comment, in a
+heredoc, in a quoted string. Prose about expression syntax has to describe it
+rather than write it.
+
+**A workflow with no successful run in its history has never worked.** That is one
+command, and nobody ran it for a workflow that was merged, documented in
+[*The Reviewer Agent is a GitHub Action*](../state/decisions/reviewer-agent-hangs-off-ci.md)
+at length, and reasoned about as if it were live:
+
+```bash
+gh run list --workflow=review.yml --limit 100 --json conclusion \
+  --jq '[.[].conclusion] | group_by(.) | map({(.[0]): length}) | add'
+```
+
+`{"failure": 19}` is not a flaky pipeline. It is a feature that does not exist.
+
+**The diagnosis came from a sibling, not from the failing thing.**
+`ci-status.yml` in the same repository has the same trigger, the same cross-repo
+`uses:` and the same job-level `permissions`, and it succeeds every time. That
+narrowed the search to what the two do not share, which is the fastest available
+move when a workflow fails before producing any output — and it is the same
+technique `AGENTS.md` §7 asks for when files mirror each other.
+
+**What was fixed.** The comment describes the syntax instead of writing it. The
+2026-07-27 entry, *The deploy pipeline had never once succeeded*, ends on the
+same sentence and it is worth reading twice: the host was reasoned about rather
+than inspected.
 
 ## 2026-07-31 — A constraint that passed because it answered `NULL`
 
@@ -132,8 +375,6 @@ and only the second is worth anything. Seeding one row of each forbidden state i
 what distinguishes them, and it is cheap: four `UPDATE` statements against a
 scratch copy, which is a minute's work against a defect that would have made a
 column meaningless for as long as anybody trusted it.
-
----
 
 ## 2026-07-31 — Two migrations tested against a database that could not fail them
 
@@ -217,8 +458,6 @@ an exit status, `docker exec -i` is asserted by counting bytes that arrived. Thi
 is the same rule paying out once more, against a defect nobody had in mind:
 **verify the effect, not the call.** A test built to the current shape of the
 world will pass a change to that shape; only the world can refuse it.
-
----
 
 ## 2026-07-31 — A required variable crossed a repository boundary and nothing noticed
 
@@ -544,240 +783,3 @@ the deploy.
 inspected, for days, because a plausible known cause was already in hand. The
 read-only `Diagnose VPS` workflow in `kolonie-infra` exists so that stops
 happening.
-
-## 2026-08-02 — The board's self-check had no scheduler, and the project ran out of API budget
-
-The GraphQL budget was exhausted at **4,998 of 5,000 points in a single working
-session**, while REST sat at **45 of 5,000**. Board columns could not be set on
-three issues that had just been created, and the orchestration loop could not
-read its own state until the hourly reset.
-
-**Every point went to `gh project item-list --limit 1000`** — the query `AGENTS.md`
-§6 tells the loop to run, and tells it to run with an unreachable limit rather
-than one sized to the board. That argument is correct and it rests on a premise:
-that the board stays small. The board had stopped being small, because the
-auto-archive workflow was off and had been for long enough that §6's own opening
-note recorded the shape of it on 2026-07-30 — *"Done items dominate the board and
-come first — 92 of those 146."*
-
-**§6 query 5a exists to catch exactly this**, and it had been in the document the
-whole time. Nobody ran it.
-
-**The lesson is not "turn the workflow on".** That was done the same day and it
-would have been done in any case. The lesson is that **the orchestration loop
-contained a check with no scheduler behind it**, and that a self-check depending
-on somebody remembering to run it has the reliability of the thing it is
-checking — which is to say, none of its own. It surfaced as a rate limit during
-unrelated work, so nothing in the symptom pointed at the cause.
-
-Closed by `kolonie-docs#132`: 5a and 5b run daily in `board-self-check.yml`,
-silent when both answers are right, and opening one issue — reused, not
-duplicated — when either is wrong. It fixes nothing by itself, deliberately: 5a's
-fix is a dashboard setting no API can reach, and 5b's is a write to the board
-that ought to be a decision.
-
-**What this did not change.** `--limit 1000` stays, for the reason §6 already
-gives. If the budget becomes tight again with a small board, the answer is a
-GitHub App installation token — 12,500 points an hour for an organisation rather
-than 5,000 — and that is a separate issue with these measurements as its
-evidence.
-
-## 2026-08-02 — The Reviewer Agent's first real review was thrown away by GitHub
-
-The day after the entry below, the Reviewer Agent had run seven times and reviewed
-nothing: every run was a push to `main`, and every one correctly decided there was
-no pull request. **Whether it could review one had still never been observed.** A
-green run history said nothing about it, which is the shape of this failure and
-the reason a live test was worth doing at all.
-
-`kolonie-platform#214` was opened as that test. The job did everything right —
-waited for CI, gathered the diff and the linked issue, asked the model, got a
-verdict of *approve*, built the payload — and then:
-
-```
-gh: Unprocessable Entity (HTTP 422)
-{"errors":["GitHub Actions is not permitted to approve pull requests."]}
-```
-
-**The contributor received nothing.** No review, no comment, no indication that a
-reviewer had read the diff at all. The only trace was a red check on a workflow
-whose failures nobody had reason to watch — and it would have failed this way on
-every pull request the reviewer agreed with, which on a healthy repository is most
-of them. A reviewer that is silent exactly when it approves is worse than one that
-does not run: the second is visibly absent, the first looks like an opinion.
-
-**Why it was invisible until a real pull request existed.** Nothing in the
-workflow, the permissions block or the token's scopes is wrong. The refusal is a
-platform rule about what the Actions token may do, and it is only reachable on the
-code path where the model says *approve* — so no amount of reading the file, and no
-number of green runs against pushes, could have surfaced it. `#42`'s definition of
-done asked for a real pull request receiving a real review for exactly this reason.
-
-**The fix**: `APPROVE` is never sent. Every review is posted as a comment and the
-verdict is the first line of its body. The alternative — enabling *Allow GitHub
-Actions to create and approve pull requests* — was rejected: an organisation-wide
-switch letting every workflow approve every pull request, bought for a verdict that
-gates nothing (`kolonie-docs#96`: no repository requires a review to merge).
-
-**What generalises.** Two of the three entries around this one are the same shape:
-a thing that had never been observed doing its job, believed to work because
-nothing said otherwise. The run history was green here *because* the job kept
-finding nothing to do. **A success that never exercised the feature is not
-evidence about the feature.**
-
-## 2026-08-01 — The Reviewer Agent had never run, and the comment warning about injection was the injection
-
-The maintainer reported a stream of GitHub emails: *"`.github/workflows/review.yml`
-workflow run — No jobs were run."* Nineteen runs since the workflow was added, all
-`failure`, zero jobs on every one, and no successful run in its history.
-
-The API says nothing useful about it. A run with no jobs has no logs, no
-annotations and no check runs, and `referenced_workflows` comes back empty —
-which is itself the finding, because the reusable workflow was never resolved.
-The message exists only in the HTML of the run page:
-
-```
-Invalid workflow file: .github/workflows/review.yml#L30
-error parsing called workflow
-"Kolonie-AI/kolonie-platform/.github/workflows/review.yml"
- -> "Kolonie-AI/kolonie-docs/.github/workflows/review-pull-request.yml@main"
-: (Line: 103, Col: 14): An expression was expected
-```
-
-Line 103 is `run: |`. The fault was ninety lines further down, inside the shell
-script, in a **comment**:
-
-> Through the environment, never interpolated into the command. A `${{ }}`
-> expression is pasted into the script before bash sees it, so a value containing
-> a quote would be running as shell rather than as a pattern — the standard
-> GitHub Actions injection, and it costs one variable to close.
-
-The advice is correct and the workflow was following it. But the parser scans a
-`run:` block for expressions **before** anything is a shell script, and it does not
-know that a `#` makes the rest of a line a comment. An empty pair of delimiters
-there is an empty expression, and an empty expression is a parse error for the
-whole file. The comment explaining the injection risk was, verbatim, an injection
-into the workflow that carried it.
-
-**Three lessons, and the first two are the ones that generalise.**
-
-**A `run:` block has two readers, and only one of them understands shell.** Any
-`${{` in a `run:` block is Actions syntax, wherever it sits — in a comment, in a
-heredoc, in a quoted string. Prose about expression syntax has to describe it
-rather than write it.
-
-**A workflow with no successful run in its history has never worked.** That is one
-command, and nobody ran it for a workflow that was merged, documented in
-[*The Reviewer Agent is a GitHub Action*](../state/decisions/reviewer-agent-hangs-off-ci.md)
-at length, and reasoned about as if it were live:
-
-```bash
-gh run list --workflow=review.yml --limit 100 --json conclusion \
-  --jq '[.[].conclusion] | group_by(.) | map({(.[0]): length}) | add'
-```
-
-`{"failure": 19}` is not a flaky pipeline. It is a feature that does not exist.
-
-**The diagnosis came from a sibling, not from the failing thing.**
-`ci-status.yml` in the same repository has the same trigger, the same cross-repo
-`uses:` and the same job-level `permissions`, and it succeeds every time. That
-narrowed the search to what the two do not share, which is the fastest available
-move when a workflow fails before producing any output — and it is the same
-technique `AGENTS.md` §7 asks for when files mirror each other.
-
-**What was fixed.** The comment describes the syntax instead of writing it. The
-2026-07-27 entry above ends on the same sentence and it is worth reading twice:
-the host was reasoned about rather than inspected.
-
-## 2026-08-05 — A runner imported a workspace its image does not ship, and crash-looped with an empty log
-
-**What happened.** `kolonie-platform#243` added
-`import { fetchPage } from '@kolonie-ai/verifiers'` to the badge runner and added
-the dependency to `apps/badge-runner/package.json`. `apps/badge-runner/Dockerfile`
-was not touched. Its runtime stage copies workspaces one at a time, and carried a
-comment saying, in so many words, that this one is not among them:
-
-> `packages/verifiers` is absent: this process gives out things that are worth
-> nothing and verifies nothing at all.
-
-True when written. False from the moment the import landed, and nothing anywhere
-said so.
-
-**How long, and what it cost.** From `#243` merging until 2026-08-05, every
-`Build and deploy` run in `kolonie-platform` reported **failure** — ten
-consecutive runs on the day it was found. The deploys themselves were succeeding:
-migrations applied, the api healthy, `deployed.env` recorded. What failed was the
-cascade re-deploy at the end, which retries a service a previous deploy rolled
-back — so the same broken badge-runner image was pulled, crash-looped and rolled
-back once per deploy, and rewrote the marker that would make the next deploy try
-again.
-
-**Nothing in the repository could have failed.** `npm run check` is green, the
-workspace resolves perfectly in a checkout, and the image builds and pushes. A
-Dockerfile is not typechecked against the manifest beside it. The artefact was
-wrong and every gate that looks at the source was right.
-
-**Three lessons.**
-
-**A workspace symlink is present and dangling, so the absence has no symptom.**
-`npm ci` runs in the build stage and writes `node_modules/@kolonie-ai/verifiers`
-as a link into `packages/verifiers`; the runtime stage copies `node_modules` and
-not the target. Node then dies on `ERR_MODULE_NOT_FOUND` **before** `createLog`
-has been called, so the container prints nothing at all — `deploy.sh`'s own log
-showed *"what the failing containers printed (last 40 lines each)"* followed
-immediately by the end marker. A crash-looping container with an empty log reads
-as an infrastructure fault, and it was taken for one.
-
-**A comment that says something is absent is a claim that ages.** Both Dockerfiles
-carried one, both were written truthfully, and both were falsified by a later
-import in a different file. The general form is `AGENTS.md` §7's rule about
-mirrored files: a sentence that enumerates its siblings is correct in whichever
-file was written last.
-
-**The second instance was found by the test, not by the search.**
-`scripts/check-image-workspaces.test.ts` was written for the badge runner and
-caught the moderation runner on its first run — it has imported
-`openRouterDirectionClassifier` from `verifiers` since `#140` and does not copy it
-either. That one had not failed only because the build serving production
-predates the import: **the next deploy of that service would have been the same
-outage**, and nobody was looking for it.
-
-**What was fixed.** Both runtime stages copy `packages/verifiers`. The check
-asserts, for every app, that each `@kolonie-ai/*` runtime dependency in its
-`package.json` is copied into its image's runtime stage — read off the two files'
-text rather than off a built image, because putting a Docker daemon in the
-definition of done is what `AGENTS.md` §7 refuses.
-
-**And the fix did not end it, which is the last lesson.** The next deploy after
-the `COPY` landed failed identically. `/opt/kolonie/state/needs-redeploy.env`
-holds the *image tag* of the rolled-back build, not the service:
-
-```
-NEEDS_REDEPLOY_SERVICE=badge-runner
-NEEDS_REDEPLOY_TAG=…kolonie-badge-runner:78ca190…
-```
-
-`78ca190` is the commit that introduced the fault. The cascade restores that tag
-and pulls it, so the fixed build was never tried — and `rollback()` writes the
-marker again on each failure, so **no later commit can ever reach it**. The
-script's own comment says *"No infinite loop is possible because the marker is
-cleared before the attempt"*, which is true within one run and false across
-runs.
-
-**Re-deploying the rolled-back build is right when the rollback was a timing
-problem** — a migration that had not run yet, which is what the cascade was built
-for. It is exactly wrong when that build is broken in itself: the only thing that
-can fix it is a later build, and the pin guarantees a later build is never tried.
-
-**The escape, since nothing documents it:** a `workflow_dispatch` deploy of that
-one service at a known-good version. It clears the marker through `deploy.sh`'s
-`NEEDS_REDEPLOY_SERVICE == SERVICE` branch and ships the fix in the same run.
-That is what ended this, and `kolonie-infra#79` carries the argument for
-recording the service rather than the tag.
-
-**What is still true and worth a separate look.** A deploy that fails only in its
-cascade step reports the same red as a deploy that never reached the host, and the
-eleven failures said nothing about which of the two they were. The signal that
-would have shortened this is a container that exits during startup having logged
-nothing — `deploy.sh` prints that it captured no output and does not treat it as
-different from a container that logged an error.
