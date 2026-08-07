@@ -14,3 +14,7 @@ Thumbs.db
 
 # Python bytecode from the workflow scripts and their tests.
 __pycache__/
+
+# The issue the opencode worker is working, written into the checkout because
+# opencode's sandbox refuses to read outside it (#142). Never committed.
+opencode-issue.json

@@ -205,8 +205,22 @@ jobs:
           branch="opencode/issue-${ISSUE}"
           git switch -c "$branch"
 
+          # **Inside the checkout, not in `/tmp`** (2026-08-07). opencode's
+          # sandbox auto-rejects reading outside the working directory:
+          #
+          #     ! permission requested: external_directory (/tmp/*); auto-rejecting
+          #     ✗ Read /tmp/issue.json failed
+          #
+          # so the first real run reached the model, was refused the issue it had
+          # been told to work, made no change and failed. The refusal is correct
+          # and is not the thing to relax — an unattended agent that may read
+          # anywhere on the runner is a larger permission than this experiment
+          # needs. The file moves instead.
+          #
+          # `.gitignore`d, so a run cannot commit the issue text into the
+          # repository it is editing.
           gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" \
-            --json number,title,body,comments > /tmp/issue.json
+            --json number,title,body,comments > ./opencode-issue.json
 
           opencode run --model openrouter/anthropic/claude-sonnet-4.5 "$(cat <<PROMPT
           You are working issue #${ISSUE} in this repository, unattended. Nobody is
@@ -214,7 +228,7 @@ jobs:
           make the smallest defensible change and say in the pull request body
           exactly what you were unsure about.
 
-          The issue, with its comments, is in /tmp/issue.json.
+          The issue, with its comments, is in ./opencode-issue.json at the repository root.
 
           Read AGENTS.md first — it is binding, and it is the entry point.
 
