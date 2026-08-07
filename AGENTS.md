@@ -206,8 +206,9 @@ rejected for the coin ledger. One record, or none.
 
 The board mostly maintains itself. GitHub's built-in workflows move items on close,
 on PR link and on merge, and add new issues from **five of the organisation's
-twelve repositories**. **You move an item only when you change what is true** —
-finishing a spec (→ Ready), hitting a blocker (→ Blocked).
+thirteen issue-bearing repositories**, excluding `.github` (measured 2026-08-07).
+**You move an item only when you change what is true** — finishing a spec
+(→ Ready), hitting a blocker (→ Blocked).
 
 **Removing the `blocked:human` label also moves the item, straight to Ready**, and
 that one is easy to trip over because it is a *label* edit producing a *column*
@@ -661,8 +662,9 @@ The slack is because the archive filter turns on `updated:` and not `closed:`, s
 an issue still collecting comments after it closes stays longer than a fortnight,
 legitimately.
 
-**5b — the arriving.** Five of the ten repositories have no auto-add workflow and
-cannot be given one (§4), so an issue opened in one of them is invisible until
+**5b — the arriving.** Eight of the organisation's thirteen issue-bearing
+repositories, excluding `.github`, have no auto-add workflow (measured 2026-08-07)
+and cannot be given one (§4), so an issue opened in one of them is invisible until
 somebody adds it by hand. 5b lists every open issue that is not on the board.
 **No output is the right answer.** Anything it prints is work nobody is going to
 see, and the fix is one command per line:
