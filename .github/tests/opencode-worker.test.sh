@@ -347,6 +347,34 @@ boarded "10:Ready"
 check "an unprioritised issue is still taken when it is all there is" \
   "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
+# `#234`'s definition of done: one queue holding one of every case at once, so
+# that the three tiers are shown to order against each other rather than each
+# being right on its own. Deliberately laid out worst-first — the newest p1 is
+# last in the fixture and first out of the queue.
+case_setup
+issued "40|2026-08-01T00:00:00Z|agent:opencode" \
+       "30|2026-08-02T00:00:00Z|agent:opencode,p2" \
+       "20|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website" \
+       "10|2026-08-06T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+boarded "40:Ready" "30:Ready" \
+        "20:Ready:Kolonie-AI/kolonie-website" \
+        "10:Ready:Kolonie-AI/kolonie-platform"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err")
+check "one of each case: the newest p1 still goes first" \
+  "$(q 10 Kolonie-AI/kolonie-platform)" "$out"
+contains "and the unprioritised one is named, not silently last" \
+  "#40 carries neither p1 nor p2" "$(cat "$WORK/err")"
+
+# The same queue with the p1 gone, to show the second and third tiers order
+# against each other and not merely against p1.
+case_setup
+issued "40|2026-08-01T00:00:00Z|agent:opencode" \
+       "30|2026-08-02T00:00:00Z|agent:opencode,p2" \
+       "20|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website"
+boarded "40:Ready" "30:Ready" "20:Ready:Kolonie-AI/kolonie-website"
+check "with no p1, the oldest p2 goes before a p2 and both before no priority" \
+  "$(q 20 Kolonie-AI/kolonie-website)" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
 # A search that fails is not an empty queue, for the same reason an unreadable
 # board is not: the workflow reads the exit code separately from the output and
 # can only do that if this script draws the distinction.

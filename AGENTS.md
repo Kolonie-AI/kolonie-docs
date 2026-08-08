@@ -544,6 +544,29 @@ obvious reading is wrong in both halves:
 **The workflow never removes it.** Removing it would be deciding an issue may
 never be tried again, which is not a worker's decision to take.
 
+#### The order it takes them in
+
+> **`p1` before `p2`. Within a tier, oldest creation date first. An issue
+> carrying neither sorts last, and the run's log names it.**
+
+Written here rather than only in the workflow because somebody labelling five
+issues should be able to predict the order without reading a shell script
+(`kolonie-docs#234`). **Oldest means the issue's creation date**, and the
+consequence is deliberate: labelling an old issue puts it near the front. Old
+issues are the ones that rot.
+
+**`bug` is not a tier**, although it was considered. `bug` is a *type*, not an
+urgency, and the paragraph above defends exactly two priorities. A bug that
+matters is a `p1` — somebody decided that when they triaged it, and sorting bugs
+ahead of priorities would overrule a decision already taken using a label that
+says nothing about urgency. The one-line version: **the priority label is the
+priority.**
+
+**Nothing here is a third priority, a weight, a number or a stored queue
+position.** The order is derived from the labels and the dates every time it is
+asked for. A recorded position would be a second record of a fact that is already
+there — the same refusal §4 makes about status.
+
 #### It is the one label that changes what *you* may do
 
 > **An issue carrying `agent:opencode` is not yours: do not work it, do not move
