@@ -76,6 +76,8 @@ jobs:
           python3 .github/tests/check-incident-order.test.py
           python3 .github/tests/check-brand-surfaces.test.py
           bash .github/tests/no-gateway-leak.test.sh
+          bash .github/tests/opencode-worker.test.sh
+          bash .github/tests/opencode-context.test.sh
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .

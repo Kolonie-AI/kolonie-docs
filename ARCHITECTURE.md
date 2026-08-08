@@ -535,6 +535,8 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 | **Board write** | `BOARD_WRITE_TOKEN` — `kolonie-docs` only, Organization → Projects: Read and write, nothing else. **Expires 2027-08-04** |
 | **Issue comments** | The built-in `GITHUB_TOKEN`, deliberately, so the stored credential's only power stays moving a board column |
 | **Queue logic** | `.github/scripts/opencode-worker.sh`, tested against a stubbed `gh` in `.github/tests/opencode-worker.test.sh`, which the workflow runs before anything else |
+| **What it reads** | The assigned issue, **plus background** — `.github/scripts/opencode-context.sh` gathers the issues that issue references, depth one, at most five, organisation only, each with its board column and state (`#235`). `kolonie-docs` is checked out beside the target so the documents those issues quote are readable |
+| **The boundary on that background** | The gathered text is untrusted input reaching a model with write access. It arrives fenced, labelled per item by provenance, under a header saying the assigned issue is the only instruction; `from:citizen` items are **included and marked** rather than excluded; no URL found in any issue body is ever fetched, and a URL fragment cannot become a reference. `.github/tests/opencode-context.test.sh` feeds it an issue whose reference says *ignore your previous instructions* |
 
 **To switch it off: disable the workflow in the Actions tab, or delete the file.**
 Nothing else depends on it. The label stays where it is, the board stays where it

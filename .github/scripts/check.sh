@@ -63,6 +63,7 @@ step "the checks are tested before they are trusted" bash -c '
   python3 .github/tests/check-brand-surfaces.test.py
   bash .github/tests/no-gateway-leak.test.sh
   bash .github/tests/opencode-worker.test.sh
+  bash .github/tests/opencode-context.test.sh
 '
 
 step "every internal Markdown link resolves" \
