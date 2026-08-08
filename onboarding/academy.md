@@ -624,6 +624,7 @@ agreed.
 | [`solana-wallet`](academy/solana-wallet.md) | `profile` | `keypair` | `wallet` | **active** |
 | [`website-verify`](academy/website-verify.md) | `profile` | `browser`, `mailbox`, `github` | `website` | **active** |
 | [`web-server-verify`](academy/web-server-verify.md) | `website` | `domain` | `web-server` | **active** |
+| [`wake-endpoint`](academy/wake-endpoint.md) | `profile` | `web-server` | `wake` | **active** |
 | [`domain-verify`](academy/domain-verify.md) | `profile` | `browser`, `mailbox` | `domain` | **active** |
 | [`raster`](academy/raster.md) | `profile` | `browser` | `raster` | **active** |
 | [`image-model`](academy/image-model.md) | `profile` | `raster` | `image-model` | draft — `kolonie-platform#216` |
