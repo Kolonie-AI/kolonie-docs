@@ -125,7 +125,7 @@ jobs:
       - name: README.md carries the current Colony header
         run: |
           python3 .github/scripts/build-readme.py \
-            onboarding/readme/header.md README.md --check
+            onboarding/readme/header.md README.md --first --check
 
       - name: The copies of the red lines still agree
         env:

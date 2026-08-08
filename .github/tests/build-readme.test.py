@@ -65,10 +65,18 @@ def expect(name: str, ok: bool, detail: str = "") -> None:
 def run(header: str, target: str, *flags: str):
     """Run the generator over two temporary files.
 
+    `--first` is passed unless a case says otherwise, because that is how the
+    header — the region every case below is about unless it names another — is
+    invoked in CI.
+
     Returns `(exit_code, target_text_after, stderr)`. A `Problem` is caught and
     reported as the exit code `main`'s caller would turn it into, so the tests
     read the same for both kinds of failure.
     """
+    if "--region" not in flags and "--no-first" not in flags:
+        flags = (*flags, "--first")
+    flags = tuple(f for f in flags if f != "--no-first")
+
     with tempfile.TemporaryDirectory() as tmp:
         header_path = Path(tmp) / "header.md"
         target_path = Path(tmp) / "README.md"
@@ -205,6 +213,70 @@ expect(
 
 
 print()
+print("a second region, and the close marker they share")
+
+INTRO_OPEN = build_readme.opener("skill-intro")
+expect("a named region gets its own open marker", INTRO_OPEN == "<!-- kolonie:skill-intro -->")
+
+# **The case this whole section exists for.** `<!-- kolonie:end -->` is the same
+# line for every region — deliberately, so a reader meets one closing marker
+# rather than one per name — which means `splice` finds every close in the file
+# and has to pick the right one. The right one is the *first close below the
+# open*, and the failure it prevents is the header's region swallowing everything
+# down to the skill intro's close: the repository's own title, in seven files, in
+# a pull request that says it is a header change.
+two = (
+    f"{OPEN}\n{CLOSE}\n"
+    "\n# kolonie-example\n\nThe repository's own title, between the regions.\n\n"
+    f"{INTRO_OPEN}\n{CLOSE}\n"
+    "\n## Install\n"
+)
+code, text, _ = run(HEADER, two)
+expect(
+    "generating the header does not reach the second region's close",
+    code == 0 and "The repository's own title, between the regions." in text,
+    f"code {code}",
+)
+expect("and the second region is left empty and intact", code == 0 and f"{INTRO_OPEN}\n{CLOSE}" in text)
+
+code, text, _ = run("The intro.\n", text, "--region", "skill-intro")
+expect(
+    "generating the second region does not touch the first",
+    code == 0 and text.startswith(f"{OPEN}\n**Kolonie AI** — the header.\n{CLOSE}"),
+    text[:80],
+)
+expect(
+    "and the title between them survives both passes",
+    "The repository's own title, between the regions." in text and "The intro." in text,
+)
+
+# `--first` is a flag rather than always-on, and this is the half of that which
+# would otherwise be untested: the skill intro sits under the repository's own
+# title by design, so the same position that is an error for the header must be
+# accepted here.
+code, _, err = run("The intro.\n", two, "--region", "skill-intro")
+expect(
+    "a named region below line 1 is accepted",
+    code == 0,
+    f"code {code}, err {err.strip()!r}",
+)
+
+code, _, err = run("The intro.\n", f"# title\n\n{OPEN}\n{CLOSE}\n", "--no-first")
+expect(
+    "and the header without --first is accepted too, so the flag is what enforces it",
+    code == 0,
+    f"code {code}, err {err.strip()!r}",
+)
+
+code, _, err = run("The intro.\n", f"{OPEN}\n{CLOSE}\n", "--region", "skill-intro")
+expect(
+    "a missing named region names the region in the error",
+    code == 2 and "skill-intro" in err,
+    f"code {code}, err {err.strip()!r}",
+)
+
+
+print()
 print("against the real header")
 
 real = (ROOT / "onboarding" / "readme" / "header.md").read_text(encoding="utf-8")
@@ -231,6 +303,49 @@ expect(
 expect(
     "no repository is named, because one header serves all thirteen",
     "kolonie-platform" not in real and "kolonie-infra" not in real,
+)
+
+
+print()
+print("against the real skill intro")
+
+intro = (ROOT / "onboarding" / "readme" / "skill-intro.md").read_text(encoding="utf-8")
+
+# `kolonie-docs#221`: "The install command is the first code block on the page."
+# The intro sits directly above it in all seven, so a fenced block here would take
+# that position and nothing else would notice.
+expect(
+    "the intro contains no fenced code block, so the install command keeps first place",
+    "```" not in intro,
+)
+expect(
+    "it shows the register rather than only asserting it",
+    "https://kolonie.ai/illustrations/what-an-agent-holds.png" in intro,
+)
+
+# The image is `kolonie-website#74`'s, referenced by absolute URL and committed in
+# none of the seven. `#221` and `#219` both require that, for camo's sake and for
+# the palette's.
+expect(
+    "the image is referenced from the website, not committed",
+    "](./" not in intro and "src=\"/" not in intro,
+)
+
+# A generated image says nothing to a screen reader, and this one is the most
+# persuasive picture the project has. An empty alt would be the quiet failure.
+alt = intro.split('alt="')[1].split('"')[0] if 'alt="' in intro else ""
+expect("the image has a real alt", len(alt.split()) > 8, f"alt was {alt!r}")
+
+# `#221`: "No count, no provider guarantee." Both are claims that are disproved by
+# the first agent who checks, and the second one is live — `kolonie-platform#482`
+# found no honest signup route for a phone-less citizen on Bluesky or X.
+expect(
+    "no provider guarantee",
+    "does not promise you that any particular provider will accept you" in intro,
+)
+expect(
+    "and no count of agents or citizens",
+    not any(word.strip(",.").isdigit() for word in intro.split()),
 )
 
 
