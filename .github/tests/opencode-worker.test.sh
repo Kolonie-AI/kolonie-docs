@@ -498,8 +498,29 @@ log=$(cat "$GH_LOG")
 absent "never removes the queue label" "remove-label" "$log"
 absent "never edits a label at all" "issue edit" "$log"
 absent "never comments — that is GITHUB_TOKEN's job in the workflow" "issue comment" "$log"
-absent "never merges" "pr merge" "$log"
+# The *script* never merges and never pushes. Since `#232` the **workflow** does
+# enable auto-merge, deliberately — but the queue logic must stay incapable of
+# it, because this is the file that runs with the board credential.
+absent "the queue logic never merges — auto-merge is the workflow's, on GITHUB_TOKEN" "pr merge" "$log"
 absent "never pushes" "push" "$log"
+
+echo
+echo "the workflow cannot merge past a failing check (#232)"
+
+WORKFLOW="$ROOT/.github/workflows/opencode-worker.yml"
+wf=$(cat "$WORKFLOW")
+# Comments stripped before the forbidden-flag assertions, because the workflow
+# *explains* why it does not use `--admin` and an assertion that cannot tell the
+# explanation from the flag would forbid writing the reasoning down. That trade
+# goes the other way: the reasoning is the part that stops somebody adding the
+# flag back next year.
+wf_commands=$(grep -v '^[[:space:]]*#' "$WORKFLOW")
+absent "no --admin on any command in the workflow" "--admin" "$wf_commands"
+absent "no force push" "push --force" "$wf_commands"
+absent "and no force-with-lease either" "force-with-lease" "$wf_commands"
+contains "auto-merge is queued, never waited on" "--auto --squash" "$wf"
+contains "and it is gated on the target having a required check" \
+  "branches/main/protection" "$wf"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

@@ -507,15 +507,72 @@ jobs:
           eval "$CHECK_COMMAND"
 
           git push --set-upstream origin "$branch"
+
+          # ## Auto-merge, and the one thing it must never become (`#232`)
+          #
+          # The maintainer, 2026-08-08: *"der OpenCode ist ja auch von uns, das
+          # macht eigentlich keinen Sinn, dass er mit PRs arbeitet … der sollte
+          # direkt dann auch pushen so wie du das machst."* A person sat in this
+          # loop five times in twenty-six minutes on 2026-08-07 with nothing to
+          # add.
+          #
+          # **The pull request stays and the waiting goes.** Not a direct push,
+          # and the difference is not trust — it is *who is still there
+          # afterwards*. When a push turns `main` red the orchestrator sees it
+          # and fixes it; this worker runs on a schedule, finishes, and is gone.
+          # A broken `main` at 03:20 stays broken until somebody looks. Auto-merge
+          # is indistinguishable from a push from the maintainer's side and keeps
+          # the one property a push gives up: **the check ran before the code
+          # landed, not after.**
+          #
+          # ### Which is exactly why it is refused where nothing would check
+          #
+          # Auto-merge on a branch with **no required status check merges
+          # immediately** — that is a direct push wearing a pull request's
+          # clothes, and it gives up the only thing this design is buying.
+          #
+          # So the workflow **asks the target repository** whether `main` requires
+          # a check, and enables auto-merge only if it does. Asked, not mapped: a
+          # per-repository allow-list here would be the second record of a fact
+          # the repository already holds, which is what `#231` refused for the
+          # check command one screen up. Measured 2026-08-08 — `kolonie-docs`,
+          # `kolonie-platform`, `kolonie-infra` and `kolonie-website` require one;
+          # `kolonie-email` has no CI at all and therefore does not.
+          required=$(gh api "repos/$TARGET_REPO/branches/main/protection" \
+            --jq '[.required_status_checks.contexts // []] | flatten | join(", ")' 2>/dev/null || true)
+
+          if [ -n "$required" ]; then
+            merge_note="**This will merge itself** when the checks pass — nobody needs to press anything. Required here: \`${required}\`. If a check goes red it stays open and waits for a person, which is the whole point of it being a pull request at all."
+          else
+            merge_note="**This will NOT merge itself, and that is deliberate.** \`${TARGET_REPO}\` has no required status check on \`main\`, so auto-merge would land this the moment it was enabled, with nothing having verified it — a direct push wearing a pull request's clothes. It waits for a person until that repository has a check to wait for."
+          fi
+
           url=$(gh pr create --repo "$TARGET_REPO" --base main --head "$branch" \
             --title "$(git log -1 --pretty=%s)" \
             --body "Opened by the hourly opencode worker for #${ISSUE}, unattended.
 
           Closes #${ISSUE}
 
-          Nobody reviewed this before it was opened. It is part of \`kolonie-docs#142\`, an experiment with a stated end: each outcome is recorded. \`${CHECK_COMMAND}\` passed on this branch before this was opened. **The worker does not merge** — an agent that merged its own work would remove the measurement the experiment exists to take.")
+          Nobody reviewed this before it was opened. It is part of \`kolonie-docs#142\`, an experiment with a stated end: each outcome is recorded. \`${CHECK_COMMAND}\` passed on this branch before this was opened.
+
+          ${merge_note}")
           echo "pull request: $url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
+
+          # `--auto` queues it; nothing waits inside this run. `--squash` so one
+          # issue is one commit on `main` and the branch's intermediate steps do
+          # not become history.
+          #
+          # **No `--admin`, no force, and no retry that disables a job.** If the
+          # check is wrong, the check is the thing to fix — a worker that could
+          # merge past a red check would be a worker that merges its own unchecked
+          # work, which is the state `#142` exists to measure rather than create.
+          if [ -n "$required" ]; then
+            gh pr merge "$url" --repo "$TARGET_REPO" --auto --squash
+            echo "auto-merge enabled; it lands when ${required} reports green"
+          else
+            echo "::warning::auto-merge NOT enabled — $TARGET_REPO has no required status check on main, so it would merge unverified. The pull request waits for a person."
+          fi
 
       - name: Move it to In Review
         if: success() && steps.queue.outputs.issue
