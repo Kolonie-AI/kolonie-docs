@@ -179,6 +179,23 @@ normalise_line() {
   sed -E 's/[0-9a-f]{8,}/<hex>/g; s/[0-9]+/<n>/g' | cut -c1-160
 }
 
+# --- query 2d: lines carrying no level at all ---------------------------------
+# **The residue, reported where somebody sees it** (`kolonie-infra#97`). 3,211
+# lines a day carried no `level`, measured 2026-08-09 — 3.7 % of everything — and
+# every query in this file filters on one, so those lines are invisible to the
+# only thing that reads the logs.
+#
+# `kolonie-infra#97` fixed the share of it that was a bug (nginx's error log) and
+# named the share that genuinely cannot carry one: Postgres statement
+# continuations, and npm banners at startup. **What was missing was the
+# measurement**, which is this: a number that appears once a day is a number that
+# gets fixed, and one that needs somebody to think of the question is not.
+q_unlevelled_by_service() {
+  loki /loki/api/v1/query \
+    "query=sum by (service) (count_over_time({job=\"containers\"} | level=\"\" [24h]))" \
+    "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(no service label)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
+}
+
 # --- query 3: which services said nothing at all -----------------------------
 # **No model, no key, and no configured list of services.** The expected set is
 # whatever logged in the last seven days; anything in that set and not in the
@@ -261,6 +278,7 @@ cmd_gather() {
   # Three files, and they are separate because they answer different questions:
   # what happened today, what normally happens, and what today's looked like.
   q_errors_by_service 24h "$NOW"  > "$dir/errors-today.tsv"
+  q_unlevelled_by_service "$NOW"  > "$dir/unlevelled.tsv"
 
   # **The baseline is the seven days before today, per service, per day.** Not a
   # global threshold: `traefik` at 221 errors a day and `badge-runner` at 0 do
@@ -376,6 +394,27 @@ cmd_gather() {
       echo "needs somebody to think of the question is not."
     else
       echo "No service logged an error in the last 24 hours."
+    fi
+
+    # `kolonie-infra#97` step 3, in as many words: *report the residue where
+    # somebody sees it.*
+    echo
+    echo "### Lines carrying no level at all"
+    echo
+    if [ -s "$dir/unlevelled.tsv" ]; then
+      awk -F'\t' '{ printf "- `%s` — %s\n", $1, $2; t += $2 } END { printf "\n**%d in the last 24 hours.**\n", t + 0 }' \
+        "$dir/unlevelled.tsv"
+      echo
+      echo "Every query above filters on \`level\`, so these are invisible to all of"
+      echo "them. Some legitimately cannot carry one — Postgres statement"
+      echo "continuations are the body of a record whose first line is already"
+      echo "labelled, and npm banners are output rather than events."
+      echo "\`promtail/promtail.yml\` stage 5d names them and says why."
+      echo "**A number that moves here is worth a look**: it means either a new"
+      echo "log shape nothing recognises, or an incident dragging continuation"
+      echo "lines behind it."
+    else
+      echo "None: every line in the last 24 hours carried a level."
     fi
 
     if [ -s "$dir/errors-grouped.md" ]; then
