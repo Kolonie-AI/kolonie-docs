@@ -420,6 +420,48 @@ exists.
 open decision), `decision` (needs an architectural decision recorded before work
 starts), plus the GitHub defaults `bug` and `documentation`.
 
+**Origin** — `from:citizen`, `from:watcher`, `needs-triage`. Where an issue came
+from, which changes how it is read and what may be done to it.
+
+### `from:watcher` — observed by a machine, not judged by a person
+
+**Applied by the watcher workflows, never by a person.** `watch-agent.yml`,
+`board-self-check.yml` and `red-on-main.yml` put it on everything they file. An
+issue *you* opened after reading a log is yours, not theirs — a human read it and
+decided it mattered, and that judgement is exactly the thing this label marks the
+absence of.
+
+**It does not decide priority**, the same rule `from:citizen` has. Class 6 above
+keeps `p1`/`p2` off issues that arrived from outside because a workflow cannot
+know the Colony's aims; a watcher knows less still — it knows a query returned
+something.
+
+**A machine-observed fact is a different kind of claim from a human judgement**,
+and that is what the label is for. *`umami` has stopped logging* is a
+measurement: either it is true or the query is wrong. *The Atlas needs a curation
+surface* is somebody's view. Reading the board without knowing which is which
+costs the reader the difference, and the difference decides how much of an issue
+to trust before checking it.
+
+**What it makes answerable**, in three searches rather than by reading six issues
+and remembering where each came from — which is the only reason to have it:
+
+```bash
+gh search issues --owner Kolonie-AI --label from:watcher --state closed   # how many were real
+gh search issues --owner Kolonie-AI --label from:watcher --state open     # how long they sit
+```
+
+The first is what decides whether the thresholds in `kolonie-docs#236` are set
+right, and the second is what says whether the watchers are reporting into a
+void. Neither needs a dashboard.
+
+**Where it exists: `kolonie-docs`, and only there** (created 2026-08-08,
+`kolonie-docs#238`). All three watcher workflows file into `$GITHUB_REPOSITORY`
+and all three live here, so that is the whole of the set today. **Backfilled onto
+the six issues filed before the label existed** — `#146`, `#149`, `#179`, `#156`,
+`#191`, `#196` — because a label that only covers what came after it cannot answer
+the questions above.
+
 ### `blocked:human` — the one label that gates autonomy
 
 **An issue is `blocked:human` if and only if it touches one of these seven
