@@ -62,6 +62,16 @@ chmod +x "$WORK/bin/curl"
 cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
+# `#237`: issue bodies travel as `--body-file` now, so a stub that logged only
+# the argument list could no longer see what was written. Log the file too, or
+# every assertion about body text silently passes on an empty haystack.
+for _i in $(seq 1 $#); do
+  eval "_a=\${$_i}"
+  if [ "$_a" = --body-file ]; then
+    eval "_f=\${$((_i + 1))}"
+    [ -f "$_f" ] && cat "$_f" >> "$GH_LOG"
+  fi
+done
 case "$1 $2" in
   "issue list")
       n=$(cat "$FIX/.calls" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$FIX/.calls"
@@ -198,7 +208,10 @@ expect "the title names the silent service" \
 
 # The guard `#133` asks to be code, now keyed on the service rather than on a
 # fixed string: a second run while that service's issue is open comments on it.
-setup; echo "417" > "$FIX/existing"; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:417, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: silent-service:verifier-runner -->\n\nmore prose"}]' > $FIX/existing; printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 bash "$SCRIPT" report "$WORK/out" >/dev/null
 expect "with one open, no second issue is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"

@@ -78,6 +78,7 @@ jobs:
           bash .github/tests/no-gateway-leak.test.sh
           bash .github/tests/opencode-worker.test.sh
           bash .github/tests/opencode-context.test.sh
+          bash .github/tests/watch-finding.test.sh
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .

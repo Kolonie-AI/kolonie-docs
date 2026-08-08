@@ -363,6 +363,8 @@ cmd_decide() {
   return 0
 }
 
+FINDING="$(dirname "${BASH_SOURCE[0]}")/watch-finding.sh"
+
 # --- reporting ----------------------------------------------------------------
 # **One issue per silent service** (`#165`). Listed and filtered rather than
 # searched, and then waited for — both of those are `kolonie-docs#150`'s lesson
@@ -404,31 +406,29 @@ await_visible() {
 # which is a comment about the thing the issue is about, not an unrelated finding
 # on a shared thread.
 cmd_report() {
-  local dir="$1" service title existing body
+  local dir="$1" service title body_file
 
   [ -s "$dir/silent.txt" ] || { echo "nothing silent — filing nothing"; return 0; }
 
   while read -r service; do
     [ -n "$service" ] || continue
     title=$(title_for "$service")
+    body_file=$(mktemp)
 
-    body=$(printf '%s\n\n%s\n\n%s\n\n---\n\n%s\n\n%s\n' \
-      "\`$service\` logged nothing in the last 24 hours, having logged at some point in the previous 7 days." \
-      "**A dead runner throws no errors**, so nothing that reads errors can see this. That is why the check is deterministic and separate, and why it is the one alarm this workflow files." \
-      "$(cat "$dir/numbers.md")" \
-      "[Full run](${RUN_URL:-no run url})" \
-      "Filed by \`watch-agent.yml\`, which reads the previous day out of Loki once a day. It is silent when nothing is wrong. **It never closes an issue**: whether this is dealt with is a person's call, not a workflow's — including when the service starts logging again, because a service that came back is a thing somebody should know happened.")
+    {
+      printf '%s\n\n' "\`$service\` logged nothing in the last 24 hours, having logged at some point in the previous 7 days."
+      printf '%s\n\n' "**A dead runner throws no errors**, so nothing that reads errors can see this. That is why the check is deterministic and separate, and why it is the one alarm this workflow files."
+      cat "$dir/numbers.md"
+      printf '\n\n[Full run](%s)\n\n' "${RUN_URL:-no run url}"
+      bash "$FINDING" footer "silent-service:$service" \
+        "one service that has stopped logging — the service name and that condition, not the wording or yesterday's line counts" \
+        "watch-agent.yml"
+    } > "$body_file"
 
-    existing=$(existing_issue "$title")
-    if [ -n "$existing" ]; then
-      gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" \
-        --body "Still silent: \`$service\` logged nothing in the last 24 hours either. [Full run](${RUN_URL:-no run url})"
-      echo "commented on #$existing for $service"
-    else
-      gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
-        --label p1 --label area:docs --body "$body"
-      await_visible "$title"
-    fi
+    # `#237`: identity, then one of three behaviours. Nothing here searches by
+    # title — a title carries yesterday's numbers and never matches tomorrow's.
+    bash "$FINDING" place "silent-service:$service" "$title" "$body_file" p1 area:docs from:watcher
+    rm -f "$body_file"
   done < "$dir/silent.txt"
 }
 

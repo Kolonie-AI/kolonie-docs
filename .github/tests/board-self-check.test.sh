@@ -34,6 +34,16 @@ mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
+# `#237`: issue bodies travel as `--body-file` now, so a stub that logged only
+# the argument list could no longer see what was written. Log the file too, or
+# every assertion about body text silently passes on an empty haystack.
+for _i in $(seq 1 $#); do
+  eval "_a=\${$_i}"
+  if [ "$_a" = --body-file ]; then
+    eval "_f=\${$((_i + 1))}"
+    [ -f "$_f" ] && cat "$_f" >> "$GH_LOG"
+  fi
+done
 case "$1 $2" in
   "api graphql")
     if [[ "$*" == *"projectV2(number:1){ id }"* ]]; then cat "$GH_FIXTURES/readable" 2>/dev/null
@@ -44,7 +54,13 @@ case "$1 $2" in
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
   "issue list")
-    if [[ "$*" == *"--label area:docs"* ]]; then
+    # Two different listings reach this stub and they must not be confused.
+    # `#237` moved the *finding* lookup into watch-finding.sh, which asks for
+    # `--state all` because a closed finding that came back is the case the
+    # whole issue is about. 5b's own listing asks for `--state open` per
+    # repository. Gating on the label stopped working when the lookup moved;
+    # gating on `true` swallowed 5b's listing as well, which is worse.
+    if [[ "$*" == *"--state all"* ]]; then
       # `existing_delay` is how many of these answer empty before `existing`
       # starts coming back — the propagation `await_visible` waits out.
       n=$(cat "$GH_FIXTURES/.calls" 2>/dev/null || echo 0); n=$((n + 1))
@@ -153,14 +169,20 @@ bash "$SCRIPT" report "$WORK/report" >/dev/null
 expect "with no open issue, one is created" "$(logged 'issue create' && echo yes || echo no)"
 expect "and it is labelled area:docs" "$(logged 'area:docs' && echo yes || echo no)"
 
-setup; echo '77' > "$GH_FIXTURES/existing"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:77, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: board-unmaintained -->\n\nmore prose"}]' > $GH_FIXTURES/existing
 printf '5a — something is wrong\n' > "$WORK/report"
 bash "$SCRIPT" report "$WORK/report" >/dev/null
 expect "with one already open, no second issue is created" \
   "$(logged 'issue create' && echo no || echo yes)" "$(grep -c . "$GH_LOG") gh calls"
 expect "it comments on the open one instead" "$(logged 'issue comment 77' && echo yes || echo no)"
 
-setup; echo '77' > "$GH_FIXTURES/existing"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:77, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: board-unmaintained -->\n\nmore prose"}]' > $GH_FIXTURES/existing
 bash "$SCRIPT" resolve >/dev/null
 expect "when both answers are right again, the issue is closed" \
   "$(logged 'issue close 77' && echo yes || echo no)"
@@ -173,7 +195,10 @@ expect "and closing nothing is not an error" "$(logged 'issue close' && echo no 
 # the script: search is eventually consistent, so a second run inside the
 # indexing window would file a second issue. A stub cannot reproduce that
 # latency, which is why the criterion also required a live rehearsal.
-setup; echo '77' > "$GH_FIXTURES/existing"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:77, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: board-unmaintained -->\n\nmore prose"}]' > $GH_FIXTURES/existing
 printf '5a — x\n' > "$WORK/report"
 bash "$SCRIPT" report "$WORK/report" >/dev/null
 expect "the lookup does not go through the search index" \
@@ -182,13 +207,19 @@ expect "the lookup does not go through the search index" \
 # And dropping `--search` was not enough, which is what `kolonie-docs#150`
 # measured: no listing shows a just-filed issue either. So the filing run waits
 # for its own issue rather than leaving the next run to race it.
-setup; echo '2' > "$GH_FIXTURES/existing_delay"; echo '77' > "$GH_FIXTURES/existing"
+setup; echo '2' > "$GH_FIXTURES/existing_delay"; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:77, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: board-unmaintained -->\n\nmore prose"}]' > $GH_FIXTURES/existing
 printf '5a — x\n' > "$WORK/report"
 out=$(bash "$SCRIPT" report "$WORK/report")
 expect "a filed issue is waited for until it is findable" \
   "$([[ "$out" == *"findable as #77"* ]] && echo yes || echo no)" "$out"
 
-setup; echo '99' > "$GH_FIXTURES/existing_delay"; echo '77' > "$GH_FIXTURES/existing"
+setup; echo '99' > "$GH_FIXTURES/existing_delay"; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:77, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: board-unmaintained -->\n\nmore prose"}]' > $GH_FIXTURES/existing
 printf '5a — x\n' > "$WORK/report"
 out=$(bash "$SCRIPT" report "$WORK/report")
 expect "and the wait is bounded and loud rather than a hang" \

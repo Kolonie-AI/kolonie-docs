@@ -37,6 +37,16 @@ mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
+# `#237`: issue bodies travel as `--body-file` now, so a stub that logged only
+# the argument list could no longer see what was written. Log the file too, or
+# every assertion about body text silently passes on an empty haystack.
+for _i in $(seq 1 $#); do
+  eval "_a=\${$_i}"
+  if [ "$_a" = --body-file ]; then
+    eval "_f=\${$((_i + 1))}"
+    [ -f "$_f" ] && cat "$_f" >> "$GH_LOG"
+  fi
+done
 case "$1 $2" in
   "api repos/Kolonie-AI/kolonie-docs/actions/workflows")
       # Two calls, one endpoint: the reachability probe asks for a count and the
@@ -192,7 +202,10 @@ expect "an unreadable file history keeps the finding rather than dropping it" \
 echo
 echo "one issue, reused rather than duplicated"
 
-setup; echo "418" > "$FIX/existing"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:418, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: workflow-red-on-main -->\n\nmore prose"}]' > $FIX/existing
 printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 bash "$SCRIPT" check "$WORK/report.md" >/dev/null
 bash "$SCRIPT" report "$WORK/report.md" >/dev/null
@@ -201,7 +214,10 @@ expect "it comments on the open one" "$(logged "issue comment 418" && echo yes |
 
 # Two red workflows are one condition with a list, not two issues: the thing that
 # needs reading is "this repository has red runs nobody is looking at".
-setup; echo "418" > "$FIX/existing"
+setup; # `#237`: an existing finding is now recognised by the marker in its body,
+# not by its title, so the stub returns what `gh issue list --json` returns.
+jq -n '[{number:418, state:"OPEN", title:"whatever it was called",
+          body:"prose\n\n<!-- watch-finding: workflow-red-on-main -->\n\nmore prose"}]' > $FIX/existing
 printf 'failure\tabc1234\thttps://example.invalid/ci/12\t2026-08-06T10:00:00Z\n'       > "$FIX/runs.11"
 printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
 bash "$SCRIPT" check "$WORK/report.md" >/dev/null

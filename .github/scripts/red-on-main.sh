@@ -232,26 +232,26 @@ await_visible() {
   return 1
 }
 
+FINDING="$(dirname "${BASH_SOURCE[0]}")/watch-finding.sh"
+
 cmd_report() {
-  local report="$1" body existing
+  local report="$1" body_file
 
   [ -s "$report" ] || { echo "nothing red — filing nothing"; return 0; }
 
-  body=$(printf '%s\n\n%s\n\n%s\n\n%s\n' \
-    "$(cat "$report")" \
-    "**Nothing here is a merge gate.** A red run on \`main\` blocks nothing and this does not change that; it only makes the run visible to somebody. What to do with it is a person's call." \
-    "[Full run](${RUN_URL:-no run url})" \
-    "Filed by \`red-on-main.yml\`, which asks once a day whether any workflow's most recent completed run on \`main\` concluded \`failure\`. It is silent on a day when none has. It reuses this issue rather than opening a second one, it re-runs nothing, and **it never closes an issue** — a workflow that has gone green again is something somebody should read, not have tidied away. \`kolonie-docs#193\`.")
+  body_file=$(mktemp)
+  {
+    cat "$report"
+    printf '\n\n%s\n\n' "**Nothing here is a merge gate.** A red run on \`main\` blocks nothing and this does not change that; it only makes the run visible to somebody. What to do with it is a person's call."
+    printf '[Full run](%s)\n\n' "${RUN_URL:-no run url}"
+    printf '%s\n\n' "Filed by \`red-on-main.yml\`, which asks once a day whether any workflow's most recent completed run on \`main\` concluded \`failure\`. It is silent on a day when none has, and it re-runs nothing. \`kolonie-docs#193\`."
+    bash "$FINDING" footer workflow-red-on-main \
+      "the repository having any workflow whose latest run on \`main\` is red — one condition with a list attached, not one finding per workflow" \
+      "red-on-main.yml"
+  } > "$body_file"
 
-  existing=$(existing_issue)
-  if [ -n "$existing" ]; then
-    gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
-    echo "commented on #$existing"
-  else
-    gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
-      --label p2 --label area:docs --body "$body"
-    await_visible
-  fi
+  bash "$FINDING" place workflow-red-on-main "$TITLE" "$body_file" p2 area:docs from:watcher
+  rm -f "$body_file"
 }
 
 case "${1:-check}" in

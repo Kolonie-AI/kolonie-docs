@@ -257,27 +257,36 @@ await_visible() {
   return 1
 }
 
-cmd_report() {
-  local report="$1" body existing
-  body=$(printf '%s\n\n%s\n\n%s\n' \
-    "$(cat "$report")" \
-    "[Full run](${RUN_URL:-no run url})" \
-    "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily. It is silent when both are right, it reuses this issue rather than opening a second, and it closes it when the answers are right again. It never archives, adds or edits a board item — the fix is a decision, so it stays a person's or an agent's to take.")
+FINDING="$(dirname "${BASH_SOURCE[0]}")/watch-finding.sh"
 
-  existing=$(existing_issue)
-  if [ -n "$existing" ]; then
-    gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
-    echo "commented on #$existing"
-  else
-    gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
-      --label p1 --label area:docs --body "$body"
-    await_visible
-  fi
+cmd_report() {
+  local report="$1" body_file
+  body_file=$(mktemp)
+
+  {
+    cat "$report"
+    printf '\n\n[Full run](%s)\n\n' "${RUN_URL:-no run url}"
+    printf '%s\n\n' "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily. It never archives, adds or edits a board item — the fix is a decision, so it stays a person's or an agent's to take."
+    bash "$FINDING" footer board-unmaintained \
+      "the board failing its own maintenance check — 5a, 5b or both, regardless of which of them it was or what the numbers were that day" \
+      "board-self-check.yml"
+  } > "$body_file"
+
+  # `#237`. This is the finding that was filed three times — #146, #149 and
+  # #179 — because the old guard looked only at *open* issues, so a closed one
+  # that came back was invisible and a second issue was correct behaviour.
+  bash "$FINDING" place board-unmaintained "$TITLE" "$body_file" p1 area:docs from:watcher
+  rm -f "$body_file"
 }
 
+# Closing is the mirror of `place`, and it has to resolve the finding the same
+# way or the two disagree about which issue they mean (`#237`). It closes only an
+# issue that is currently open: reopening on recurrence means a closed one is
+# already the state this is trying to reach.
 cmd_resolve() {
-  local existing
-  existing=$(existing_issue)
+  local found existing
+  found=$(bash "$FINDING" find board-unmaintained)
+  existing=$(jq -r 'select(.state == "OPEN") | .number' <<<"${found:-null}" 2>/dev/null)
   if [ -n "$existing" ]; then
     gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
       --comment "Both answers are right again: the board is pruning itself and every open issue is on it. [Run](${RUN_URL:-no run url})"
