@@ -382,9 +382,16 @@ been since 2026-07-27; what was missing was this query.
 ## 5. Labels
 
 Labels carry what belongs to the **issue**, never its status. Five repositories
-carry issues — `kolonie-docs`, `kolonie-platform`, `kolonie-infra`,
-`kolonie-website` and `kolonie-openclaw` — and their label vocabularies are not
-identical (measured with `gh label list` on 2026-08-07).
+carry issues **on the board** — `kolonie-docs`, `kolonie-platform`,
+`kolonie-infra`, `kolonie-website` and `kolonie-email` — and their label
+vocabularies are not identical (measured with `gh label list` on 2026-08-08).
+
+**`kolonie-email` replaces `kolonie-openclaw` in that list**, which said
+`kolonie-openclaw` until 2026-08-08 and had stopped being true: measured that day,
+`kolonie-openclaw` has no item on the board and `kolonie-email` has one. The
+skill repositories all *accept* issues; none of them puts one on the board, which
+is the distinction that matters here because it is the board that decides what an
+agent — or the worker — can pick up.
 
 **Priority**
 
@@ -537,11 +544,70 @@ obvious reading is wrong in both halves:
 **The workflow never removes it.** Removing it would be deciding an issue may
 never be tried again, which is not a worker's decision to take.
 
-**Who may apply it, and to what.** Anyone — the maintainer, an agent, the human.
-Only to an issue that is in **Ready** and is one of: a defect with a reproduction
-in the issue; a documented statement the repository contradicts; a mechanical
-change across named files. **Anything containing a decision is out of scope**, and
-an issue carrying `blocked:human` is out of scope by construction.
+#### It is the one label that changes what *you* may do
+
+> **An issue carrying `agent:opencode` is not yours: do not work it, do not move
+> it, do not rewrite it.** It is claimed by a schedule rather than by a person,
+> and the schedule cannot see that you started.
+
+**This existed only in a chat message until `kolonie-docs#233`**, which is the
+whole reason it is here. §6's loop tells an arriving agent to find work in Ready
+and did not exclude the queue — so a copy of the orchestrating agent, following
+this file exactly as instructed, would pick up an issue the worker is queued to
+take. The point of this file is that a copy can replace the current agent and
+continue from the same state; a rule living in a conversation defeats that by
+construction.
+
+**And the direction that is easy to forget: do not put the label on an issue that
+is already In Progress.** `pick` only ever returns an issue in **Ready**, so
+labelling something in flight does nothing at all — but it reads as an
+instruction to whoever applied it, and they will wait for a run that is never
+coming.
+
+#### Who applies it, and who never does
+
+**The maintainer says which issues go to the worker. The orchestrating agent
+proposes candidates and applies the label after confirmation. The worker never
+labels anything** — it reads the queue, takes the oldest, and puts it back if it
+fails.
+
+Recorded because it is an operating agreement rather than a deduction, and
+because the previous version of this paragraph said *"Anyone — the maintainer, an
+agent, the human"*, which is not what is actually done.
+
+**What makes a good candidate**, because the maintainer will ask for suggestions
+and an agent should have a basis for answering rather than a feeling:
+
+- specified well enough that nobody has to be asked a question
+- bounded to files it can read from the issue
+- with a check that fails clearly when the change is wrong
+- **not** a decision, not money, keys or governance, and not anything carrying
+  `blocked:human`
+
+**That last line is not a new rule.** It is the seven classes above, applied to a
+queue nobody supervises in real time. An issue in any of them is out of scope by
+construction, and `blocked:human` is excluded by the worker's own query as well,
+belt-and-braces — if one ever carries the label, the queue is the wrong place to
+find that out.
+
+#### Which repositories carry the label
+
+**Only `kolonie-docs`, until 2026-08-08.** Measured that day against every
+repository in the organisation: it was the single one, which meant
+`kolonie-docs#231`'s organisation-wide queue could find nothing outside this
+repository however it searched. It now exists in the five that carry issues *on
+the board*:
+
+| Repository | `agent:opencode` |
+|---|---|
+| `kolonie-docs` | yes, since 2026-08-04 |
+| `kolonie-platform`, `kolonie-infra`, `kolonie-website`, `kolonie-email` | yes, created 2026-08-08 |
+| the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** |
+
+**The last row is a decision and not an omission.** The worker takes an issue
+only if the board says it is in **Ready**, and those repositories put nothing on
+the board — so an issue there could carry the label and never be picked, which is
+a label that lies. If one of them joins the board, it gets the label then.
 
 It is an experiment with a stated end — five issues, then a written answer to
 *would we let this run on issues nobody looked at first?* — and not the citizen
@@ -717,13 +783,19 @@ gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json > "$board"
 **1. What can be started right now, by anyone:**
 
 ```bash
-jq -r '.items[] | select(.status=="Ready") | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
+jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("agent:opencode") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
+
+**Queries 1 and 2 exclude `agent:opencode`, and that is not a refinement — it is
+the rule** (`kolonie-docs#233`). An issue in Ready carrying that label is waiting
+for the hourly worker, not for you. §5 says why the label is the one that changes
+what you may do; this is where it becomes a command rather than a paragraph
+somebody has to remember having read.
 
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-jq -r '.items[] | select(.status=="Ready" and (.labels // [] | index("p1"))) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
+jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("p1")) and ((.labels // []) | index("agent:opencode") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:
