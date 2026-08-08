@@ -122,6 +122,13 @@ against, so the steward's review is what the Colony now spends before knowing
 whether the sponsor will pay. The steward is paid for deciding either way
 (D-105), so the cost is real and lands on the Colony rather than on the steward.
 
+**That payment is `0.001 SOL` — `1_000_000` lamports — per quest decided**, since
+2026-08-08. It was five credits, which was five US cents, and D-106 left it with
+no unit. Paying it in SOL makes it a real transfer where it used to be a unit the
+Colony minted for itself, and the honest reading of that is that it costs the
+Colony something now: the fee is what it comes out of. The amount and why
+stopping was refused are [D-110](https://github.com/Kolonie-AI/kolonie-platform/blob/main/docs/decisions.md).
+
 ### What a sponsor pays and what a citizen receives
 
 **The Colony takes a platform fee of 25% of every accepted report**, decided
@@ -286,9 +293,9 @@ it prices the difference.
 
 | Tier | How it is proven | Ceiling per accepted report |
 |---|---|---|
-| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | **1000 credits** ($10) |
-| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | **100 credits** ($1) |
-| **Soft** | Only the citizen's own claim — *"visited this page"* | **5 credits** ($0.05) |
+| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | **0.1 SOL** — `100_000_000` lamports |
+| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | **0.01 SOL** — `10_000_000` lamports |
+| **Soft** | Only the citizen's own claim — *"visited this page"* | **0.0005 SOL** — `500_000` lamports |
 
 The ceiling belongs to the **tier**, not to the individual Quest. A sponsor cannot
 raise the payout on a soft Quest by offering more; the tier is what it is.
@@ -301,19 +308,47 @@ doctrine by accident. Adopting them makes this document the source and the
 constant the copy, which is the direction round the rest of this file already
 works.
 
+**They are denominated in lamports, and they float in dollar terms.** Until
+2026-08-08 they read 1000 / 100 / 5 credits, and one credit was one US cent.
+D-106 settles in SOL, so a ceiling in cents had nothing left to compare against —
+the write path reads `reward.lamports`. Ten dollars is not a number of lamports;
+it is a number of lamports *at a price*, and the price moves. Converting at write
+time was refused: it needs a USD/SOL rate the Colony does not have, and a ceiling
+that depends on a third party makes a quest refusable for a reason the sponsor
+cannot see. The full argument, including why the ceilings were kept at all, is
+[D-110](https://github.com/Kolonie-AI/kolonie-platform/blob/main/docs/decisions.md).
+
+For scale rather than for arithmetic: at **USD 74.52 per SOL, measured
+2026-08-08**, the three are about **$7.45**, **$0.75** and **$0.037**. Those
+numbers are already out of date; the lamports are the rule.
+
 **What each ceiling is an argument about:**
 
 - **Hard is capped too, and that is not a contradiction of the word.** *Full*
   means the tier imposes no ceiling of its own — but an unbounded per-report
-  figure is one typo away from a quest that empties a balance on its first
-  accepted report, and the invoice bounds the total rather than the unit. Ten
-  dollars a report is far above anything the Colony has been asked for.
+  figure is one typo away from a quest priced by mistake, and a tenth of a SOL a
+  report is far above anything the Colony has been asked for. **The argument that
+  a typo *empties a balance* is gone with D-106** and is not what this rests on:
+  the sponsor pays an invoice for capacity × unit, so a mistake costs at the
+  moment it is invoiced rather than silently. What survives is that a ceiling is
+  the only thing standing between the tier names and their meaning.
 - **Colony-judged is an order of magnitude below it**, because the evidence is
   the Colony's own model reading the sponsor's own criteria. That is worth
   paying for and it is not a third party saying yes.
-- **Soft is five cents**, which is the sentence above this table made into a
-  number: *a softly verified Quest must never pay more than the reputation it
-  risks.*
+- **Soft is a two-hundredth of hard**, which is the sentence above this table
+  made into a number: *a softly verified Quest must never pay more than the
+  reputation it risks.* This one is not about protecting a sponsor's money at all
+  — it is what the Colony will let itself advertise — which is why the tier
+  ceilings outlived the balance they were once also protecting.
+
+The ratio between the three is unchanged at **200 : 20 : 1**. That is the part of
+this table that was ever an argument; the absolute figures follow a price.
+
+**One consequence worth naming.** A soft quest paying at its ceiling is *below*
+the chain's rent-exempt minimum, so a citizen's first such payout cannot go out
+on its own — it accrues until it clears, which is what `kolonie-platform#505`
+already does for every payout and is physics rather than a policy of ours. It is
+not new: the pilot pays a hundredth of that.
 
 All three are far above the pilot's one cent, so nothing the Colony runs today is
 constrained by them. They exist to be a ceiling before there is something to
