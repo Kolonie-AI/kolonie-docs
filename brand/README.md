@@ -67,9 +67,16 @@ surface nobody here chose.
 
 ## 3. Where it is used, right now
 
-Measured **2026-08-07**. A register in the manner of
-[`growth/README.md`](../growth/README.md): present tense, and a row that stops
-being true is replaced rather than annotated.
+Measured **2026-08-07**, and the last two rows again on **2026-08-08**. A
+register in the manner of [`growth/README.md`](../growth/README.md): present
+tense, and a row that stops being true is replaced rather than annotated.
+
+Those two rows are the only ones here whose truth lives in somebody else's
+settings page rather than in a file, so they are the only ones that can stop
+being true without a commit anywhere. `.github/scripts/check-brand-surfaces.py`
+reads both from GitHub on every push and goes red when this table disagrees with
+it — which is what `kolonie-docs#224` asked for, after the avatar row spent a day
+describing an identicon that had already been replaced.
 
 | Surface | State right now |
 |---|---|
@@ -80,8 +87,8 @@ being true is replaced rather than annotated.
 | iOS home screen, Android home screen | The heavy cut. The Android pair is named by `kolonie.ai/site.webmanifest`, which carries icons and a name and makes no claim about the site being an application |
 | A2A agent card, `ai-plugin.json` | Both point `iconUrl` and `logo_url` at the same file, the heavy cut. Two descriptors naming two images is how they start disagreeing |
 | `kolonie.ai/mark.svg` | The regular cut, served on its own for anything that needs it at size |
-| GitHub organisation avatar | **Still GitHub's identicon.** No API can set it; it is a web-form upload. [`kolonie-docs#199`](https://github.com/Kolonie-AI/kolonie-docs/issues/199) |
-| Fourteen repository social previews | **Unset.** Same form, same issue |
+| GitHub organisation avatar | **Set.** The mark, 460×460, `sha256:c47ae6de328166f0533bdfdc659f6e69aeccf37e8313b551f2ebfa29d3f0b5cd` — uploaded by the maintainer between 2026-08-07 and 2026-08-08, found by measurement rather than told ([`kolonie-docs#224`](https://github.com/Kolonie-AI/kolonie-docs/issues/224)). The digest is here so the row is falsifiable: no API distinguishes an uploaded avatar from the identicon, and `.github/scripts/check-brand-surfaces.py` compares this one on every push |
+| Repository social previews | **Unset.** Not one of them, and a web-form upload per repository is the only way to change that — no API can do it — [`kolonie-docs#199`](https://github.com/Kolonie-AI/kolonie-docs/issues/199). `usesCustomOpenGraphImage` answers it over GraphQL, and the same check reads it, so this row goes red the day one is set rather than the day somebody looks |
 | `console.kolonie.ai` | **Nothing.** A sponsor is asked for money on a page carrying no mark. [`kolonie-platform#498`](https://github.com/Kolonie-AI/kolonie-platform/issues/498) |
 | Registry and directory listings | **Nothing yet.** `server.json` carries the heavy cut and the listing is a republish away, which is the operator's step. Which channels can carry it at all — and the three that cannot — is [`growth/README.md`](../growth/README.md) |
 | Thirteen repository READMEs | The heavy cut at 72px, right-aligned, in the generated header region every `README.md` opens with. Referenced from `kolonie.ai` and committed in none of them — [`onboarding/readme/`](../onboarding/readme/README.md) and [`kolonie-docs#219`](https://github.com/Kolonie-AI/kolonie-docs/issues/219). Seven of them carried a hand-placed copy of the same `<img>` before that, which is what generating it replaced |

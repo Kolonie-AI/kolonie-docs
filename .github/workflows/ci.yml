@@ -74,6 +74,7 @@ jobs:
           python3 .github/tests/build-skill.test.py
           python3 .github/tests/build-readme.test.py
           python3 .github/tests/check-incident-order.test.py
+          python3 .github/tests/check-brand-surfaces.test.py
           bash .github/tests/no-gateway-leak.test.sh
 
       - name: Every internal Markdown link resolves
@@ -122,6 +123,30 @@ jobs:
       #
       # The other twelve run the same comparison from `.github/workflows/readme.yml`,
       # against `kolonie-docs@main`.
+      # `kolonie-docs#224`. `#199` is the one issue here written to be a *record*
+      # rather than a task, on the argument that nothing else would notice the
+      # maintainer had acted. Something was done — the organisation avatar — and
+      # the record did not close behind it, so `#199` and `brand/README.md` §3
+      # both described an identicon that had already been replaced.
+      #
+      # **The mechanism `#199` bet on is the mechanism that failed**, and the
+      # fourteen social previews it also covers would have failed the same way.
+      # This is the replacement: two surfaces whose truth lives in somebody
+      # else's settings page, read from GitHub and compared against what §3 says
+      # about them. Red in either direction — a row that has stopped being true
+      # is the whole point, and a row that says *Set* after somebody removed an
+      # image is the same failure pointing the other way.
+      #
+      # It needs the token to reach GraphQL, which is where the answer is:
+      # `#224` recommends `GET /repos/{owner}/{repo}` and that field is absent
+      # from every REST response measured on 2026-08-08, ours and other
+      # people's. `Repository.usesCustomOpenGraphImage` is a boolean and one
+      # query covers the organisation.
+      - name: brand/README.md §3 still describes the surfaces GitHub is serving
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/check-brand-surfaces.py brand/README.md
+
       - name: README.md carries the current Colony header
         run: |
           python3 .github/scripts/build-readme.py \
