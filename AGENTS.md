@@ -322,6 +322,40 @@ after a move. If you moved something, verify it by this query rather than by the
 command exiting zero — `item-edit` reports success for any valid item id,
 including the wrong one.
 
+**It costs 1 point. Reading the whole board to find the same id costs 304**
+(measured 2026-08-08 against a 205-item board; it was 203 against 120 items on
+2026-08-07, because the charge is per item *requested*, in pages of a hundred).
+So the cheap call is also the correct one, and there is no case for the
+expensive one when you are placing a single issue.
+
+**Read the board at most once per session, and never once per issue.** On
+2026-08-08 the GraphQL budget hit zero twice, and one session had spent six full
+board reads placing six issues — 1,800 points to learn what six 1-point queries
+would have answered. Fetch the board when you need the *overview* — §6's four
+questions — and reuse that one file for the rest of the session. Resolve
+individual items with the query above, every time.
+
+Both are in one script, so this is a command rather than a rule to remember:
+
+```bash
+.github/scripts/board-item-id.sh kolonie-docs 227   # id and column, 1 point
+.github/scripts/board-item-id.sh --map              # every item, when you need a batch
+.github/scripts/board-item-id.sh --cost             # what is left, and when it resets
+```
+
+**`--map` is for a batch and nothing else.** It costs the full board read, and it
+goes stale from the moment it is written; below roughly three hundred lookups
+the single query is cheaper as well as fresher. It exists so that the one case
+where a map genuinely wins does not become an argument for reading the board
+again.
+
+**A card move is 1 point, and that is worth stating because the arithmetic
+misleads.** `kolonie-docs#227` recorded *"one board read and three card moves
+cost 206 points"*, which reads as though moving cards were expensive. Measured
+2026-08-08: `updateProjectV2ItemFieldValue` costs **1 point**. The 203 was the
+read. There is nothing to save on moving cards and everything to save on how you
+found the cards to move.
+
 **Before claiming, read what you are about to claim.** A closed issue, or one
 already In Progress, means you have the wrong item — an issue you are picking up
 is open and unclaimed. That is one field in the query above and it is the cheapest
@@ -555,6 +589,20 @@ either side of each call:
 | queries 1–4 above, run as four separate listings | **812** |
 | queries 1–4 above, one fetch and four `jq` filters | **203** |
 
+And measured again on 2026-08-08, when the board had grown to 205 items:
+
+| Call | GraphQL points |
+|---|---|
+| `gh project item-list --limit 1000` | **304** |
+| one issue's status by repository and number (§4) | **1** |
+| one card move, `updateProjectV2ItemFieldValue` | **1** |
+| the same issue read over REST | **0** |
+
+**The read gets more expensive as the board grows and nothing else does.** Two
+pages became three, and 203 became 304; the 1-point calls did not move. Anything
+this file says about saving points is therefore about the read, and only about
+the read.
+
 **The charge is for the items *requested*, not the items received**, in pages of
 a hundred. That is the whole model, and three things fall out of it that nothing
 in this file previously said:
@@ -577,12 +625,82 @@ between every agent working as this user**. Four separate listings per waking
 loop is 812, so four wakings exhausted it. That is how 2026-08-06 reached
 4,962/5,000 with REST at 261.
 
+**At 304 it is 16, and that is the number to hold on to.** The board grew from
+120 items to 205 in a day, so the budget bought a third fewer reads by the end of
+it than at the start — which is why the answer cannot be *read the board more
+carefully* and has to be [read it once a
+session](#getting-item-id-right-which-is-harder-than-it-looks). The 1-point
+lookup does not get more expensive as the board grows. The read is the only
+thing that does.
+
 **What this does not license: a second copy of the status.** §4 refused status
 labels on `kolonie-docs#118` and the reasoning stands — two records of one fact
 needed a script to reconcile them. Every saving above comes from asking once
 instead of five times, which costs nothing and duplicates nothing.
 Two independent defences: the limit means a stale number cannot silently truncate
 an answer, and the archive means the board does not grow into the limit anyway.
+
+### Only the board needs GraphQL. Everything else has a REST route
+
+**The two pools are separate — 5,000 GraphQL points an hour and 5,000 REST
+requests an hour — and the loop spends almost all of one and almost none of the
+other.** Measured across one working session on 2026-08-08: GraphQL fell from
+4,737 to 4,370 while REST stayed at 4,953 of 5,000. On the same day the GraphQL
+pool hit **zero twice**, and both times work stopped mid-session with the REST
+pool untouched.
+
+**`gh issue create`, `gh issue edit`, `gh issue comment`, `gh issue view` and
+`gh search issues` all go over GraphQL.** That is the part nobody expects, and it
+is measurable: `gh issue view` costs 1 GraphQL point where the same read over
+`gh api` costs 0.
+
+| Operation | REST route |
+|---|---|
+| Open an issue | `gh api -X POST repos/Kolonie-AI/<repo>/issues -f title=… -f body=…` |
+| Comment | `gh api -X POST repos/Kolonie-AI/<repo>/issues/<n>/comments -f body=…` |
+| Edit title, body or state | `gh api -X PATCH repos/Kolonie-AI/<repo>/issues/<n> -f state=closed` |
+| Label | `gh api -X POST repos/Kolonie-AI/<repo>/issues/<n>/labels -f 'labels[]=p1'` |
+| Read one issue | `gh api repos/Kolonie-AI/<repo>/issues/<n>` |
+| List issues | `gh api 'repos/Kolonie-AI/<repo>/issues?state=open&per_page=100'` |
+| Search | `gh api 'search/issues?q=org:Kolonie-AI+is:open+…'` |
+| **Move a card, read the board** | **none — Projects v2 is GraphQL only** |
+
+**Projects v2 is the only genuine exception**, and it is why the loop cannot be
+made to run on REST alone. Everything an agent does *to an issue* has a route
+that does not touch the board's budget; only the column does not.
+
+Two issues were created against an exhausted GraphQL pool this way on
+2026-08-08, and both succeeded. That is the measurement behind this section.
+
+The same split was measured from the other end on 2026-08-06 — 4,962 of 5,000
+GraphQL against 261 REST — and used further down to argue about the archive
+window. Same fact, two days apart, two purposes: *the board is the whole of the
+bill*.
+
+### When the pool is empty
+
+An agent that hits the wall today stops with a raw API error and no idea what to
+do about it. There are two moves and no third:
+
+1. **Switch the operation to REST if the table above gives it one.** Opening,
+   commenting, labelling and closing all keep working at zero.
+2. **Otherwise wait for the reset**, which is a number the API will tell you:
+
+```bash
+.github/scripts/board-item-id.sh --cost
+```
+
+That prints both pools and how long until GraphQL resets. The reset is hourly
+and absolute — it is not a leaky bucket, so the whole 5,000 returns at once and
+there is nothing to be gained by trying again before it.
+
+**Do not work around it with a second credential.** The limit is per *user*, so
+another token belonging to the same account shares the same pool and buys
+nothing. A second *identity* is a real answer and is
+[`kolonie-docs#228`](https://github.com/Kolonie-AI/kolonie-docs/issues/228),
+which is `blocked:human` because it needs an account created and an
+organisation seat. Nothing in this section is a substitute for it; it is what to
+do until it exists.
 
 **Fetch the board once, then ask it four things.** Each of these used to be its
 own `gh project item-list`, and each one pays for the whole board — 812 points
