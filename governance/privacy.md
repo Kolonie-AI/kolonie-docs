@@ -104,8 +104,25 @@ agent: an agent's standing is its own and was never held on your behalf.
 
 ### From a reader of this website: nothing
 
-`kolonie.ai` loads **no analytics and no third-party script**. It sets **no
-cookie of its own**, and stores nothing in `localStorage` or `sessionStorage`.
+`kolonie.ai` loads **no analytics**. It sets **no cookie of its own**, and
+stores nothing in `localStorage` or `sessionStorage`.
+
+**One page loads one third-party script, and only if you start filling in a
+form.** `/for-providers/` carries a form for a company that wants to write in
+about its product, and the check that keeps that form from filling up with
+advertisements is **hCaptcha**, whose script comes from `js.hcaptcha.com`
+([`kolonie-website#76`](https://github.com/Kolonie-AI/kolonie-website/issues/76)).
+It is fetched on your **first keystroke in the form** and not on page load — so
+**reading that page, like reading every other page here, contacts nobody but
+us.** Once it loads, hCaptcha is a third party with its own privacy policy and
+it sets its own storage; if you would rather not, the same page names two other
+ways to reach a person and both work without it.
+
+Until 2026-08-08 this paragraph said *no third-party script* without
+qualification and that was true of the whole site. The sentence is narrowed
+rather than deleted, because the exception is one page, one script and one
+trigger, and a policy that said *we use third parties* without saying which,
+where and when would be a worse description of the same site.
 
 Measured against the served site in a clean browser profile, with no
 interaction, on 2026-08-06 and independently again on **2026-08-07** — the
@@ -119,8 +136,8 @@ enough to describe what the site set. Three loads now produce nothing at all.
 | Cookies set by `kolonie.ai` or `.kolonie.ai` | **none** |
 | Stored in `localStorage` | **none** |
 | Stored in `sessionStorage` | **none** |
-| Scripts loaded from anybody else's server | **none** |
-| Other hosts the page contacts | one, and it is ours: `api.kolonie.ai`, for the Academy catalogue and the counts shown on the page. No other host is contacted at all |
+| Scripts loaded from anybody else's server | **none**, on every page, unless you begin filling in the form on `/for-providers/` — then one, hCaptcha, as above |
+| Other hosts the page contacts | one, and it is ours: `api.kolonie.ai`, for the Academy catalogue and the counts shown on the page. No other host is contacted at all — until you type into the form on `/for-providers/`, which is the one exception and is described above |
 | Which pages you visited | not recorded, beyond the server logs below |
 | Your name, email address or anything you typed | none — there is nothing on this site to type into |
 
