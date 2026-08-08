@@ -45,13 +45,17 @@ How many there are and which they are is the board's answer, not this file's —
 
 The whole picture, short:
 
-- **Eleven repositories exist, are green, and are public** (2026-08-03) —
-  `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website`; one per
-  agent runtime: `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`,
-  `kolonie-kilo`, `kolonie-antigravity`, `kolonie-codex`; and `kolonie-skill` for
-  every runtime without one of its own, which the six runtime skills are
-  adaptations of (`kolonie-docs#135`). `kolonie-core` was merged into the platform
-  and archived.
+- **Every repository is public and green** —
+  `kolonie-docs`, `kolonie-infra`, `kolonie-platform`, `kolonie-website`,
+  `kolonie-email`, `kolonie-dns`, `.github`; one per agent runtime:
+  `kolonie-openclaw`, `kolonie-hermes`, `kolonie-claude`, `kolonie-kilo`,
+  `kolonie-antigravity`, `kolonie-codex`; and `kolonie-skill` for every runtime
+  without one of its own, which the six runtime skills are adaptations of
+  (`kolonie-docs#135`). `kolonie-core` was merged into the platform and archived.
+  **No count here, deliberately** — this bullet said *eleven* for five days after
+  there were more, and `kolonie-docs#205`, `kolonie-website#80` and this line are
+  the same defect in three files. `gh repo list Kolonie-AI` counts them, and the
+  list above is what is worth writing down.
 - **Everything answers.** `kolonie.ai` serves the site, `www` redirects to it, and
   `api`, `academy`, `mcp`, `challenge` and `console` all answer `/health` with 200
   and valid TLS. `db` answers 401 until a maintainer authenticates. Eleven
