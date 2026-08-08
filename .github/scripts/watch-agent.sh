@@ -142,6 +142,43 @@ q_slugs() {
     "time=$NOW"
 }
 
+# --- query 2b: errors per service, over a window ------------------------------
+# **The number nobody was looking at.** 674 error lines in 24 hours, measured
+# 2026-08-08 across eleven services, and nothing reported them anywhere — the
+# workflow read yesterday out of Loki and said only which services had gone
+# *quiet*. Silence is rare; errors are continuous, and a degradation lives in
+# them before it becomes an outage (`kolonie-docs#236`).
+q_errors_by_service() {
+  loki /loki/api/v1/query \
+    "query=sum by (service) (count_over_time({job=\"containers\", level=\"error\"}[$1]))" \
+    "time=$2" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
+}
+
+# --- query 2c: one service's error lines, for grouping by message -------------
+# `q_slugs` above reads the `event` field and therefore sees only the services
+# that log JSON. **Three of the four noisiest do not** — `traefik`, `postgres`
+# and `loki` log prose, and they were 458 of the 650 measured on 2026-08-09. So
+# the grouping has to work on the raw line as well.
+q_error_lines() {
+  loki /loki/api/v1/query_range \
+    "query={job=\"containers\", level=\"error\", service=\"$1\"}" \
+    "start=$2" "end=$3" "limit=1000" \
+    | jq -r '.data.result // [] | .[] | .values[] | .[1]' 2>/dev/null
+}
+
+# **Normalise before counting, or every line is unique.** Measured by hand on
+# 2026-08-09: postgres logged the same failure 177 times and no two lines were
+# byte-identical — each carries a timestamp, a backend pid and a character
+# offset. Grouping raw lines would have reported 177 distinct findings, which is
+# the same as reporting none.
+#
+# Digits and hex runs collapse; the rest of the line is what says *what* went
+# wrong. It is crude on purpose — a cleverer normaliser is one that can be wrong
+# in a way nobody notices.
+normalise_line() {
+  sed -E 's/[0-9a-f]{8,}/<hex>/g; s/[0-9]+/<n>/g' | cut -c1-160
+}
+
 # --- query 3: which services said nothing at all -----------------------------
 # **No model, no key, and no configured list of services.** The expected set is
 # whatever logged in the last seven days; anything in that set and not in the
@@ -219,6 +256,46 @@ cmd_gather() {
   comm -23 "$dir/quiet.txt" <(retired_services) > "$dir/silent.txt"
   retired_stale >&2
 
+  # --- the errors, which are the larger half (`#236`) ------------------------
+  #
+  # Three files, and they are separate because they answer different questions:
+  # what happened today, what normally happens, and what today's looked like.
+  q_errors_by_service 24h "$NOW"  > "$dir/errors-today.tsv"
+
+  # **The baseline is the seven days before today, per service, per day.** Not a
+  # global threshold: `traefik` at 221 errors a day and `badge-runner` at 0 do
+  # not share one, and a number that fits both would either drown in the first or
+  # never fire for the second. Measured 2026-08-09.
+  q_errors_by_service 7d "$DAY_AGO" \
+    | awk -F'\t' '{ printf "%s\t%.2f\n", $1, $2 / 7 }' > "$dir/errors-baseline.tsv"
+
+  # The grouped messages, for the services that had any. Capped at the noisiest
+  # few: a summary that lists everything is one nobody finishes.
+  : > "$dir/errors-grouped.md"
+  while IFS=$'\t' read -r service count; do
+    [ -n "$service" ] || continue
+    [ "$count" -gt 0 ] || continue
+    {
+      printf '\n**`%s`** — %s error lines:\n\n' "$service" "$count"
+      q_error_lines "$service" "$DAY_AGO" "$NOW" \
+        | normalise_line | sort | uniq -c | sort -rn | head -5 \
+        | sed -E 's/^ *([0-9]+) /- **\1×** `/; s/$/`/'
+    } >> "$dir/errors-grouped.md"
+  done < <(sort -t$'\t' -k2 -rn "$dir/errors-today.tsv" | head -6)
+
+  # The strings never seen before today, which is the third trigger. Compared
+  # against the six days *before* yesterday so that a string introduced yesterday
+  # and repeated today is not "new" twice.
+  : > "$dir/errors-new-strings.txt"
+  while IFS=$'\t' read -r service count; do
+    [ -n "$service" ] || continue
+    [ "$count" -gt 0 ] || continue
+    comm -23 \
+      <(q_error_lines "$service" "$DAY_AGO" "$NOW" | normalise_line | sort -u) \
+      <(q_error_lines "$service" "$WEEK_AGO" "$DAY_AGO" | normalise_line | sort -u) \
+      | sed "s|^|$service\t|" >> "$dir/errors-new-strings.txt"
+  done < <(sort -t$'\t' -k2 -rn "$dir/errors-today.tsv" | head -6)
+
   # The rehearsal's fabricated silent service, and it belongs **here** rather
   # than in the workflow step after `gather` has run. Appended afterwards it
   # reached `decide` but not `numbers.md`, so the first rehearsal filed an issue
@@ -280,6 +357,38 @@ cmd_gather() {
       echo
       sed 's/^/- `/; s/$/`/' "$dir/retired.txt"
     fi
+    # **The error volume per service, every day, whether or not anything is
+    # filed** (`#236`). That alone turns 674 from invisible into a number
+    # somebody sees, and it costs one query.
+    echo
+    echo "### Errors per service, last 24 hours"
+    echo
+    if [ -s "$dir/errors-today.tsv" ]; then
+      echo "| Service | Errors | Its own daily normal, previous 7 days |"
+      echo "|---|---:|---:|"
+      sort -t"$(printf '\t')" -k2 -rn "$dir/errors-today.tsv" | while IFS=$'\t' read -r service count; do
+        base=$(awk -F'\t' -v s="$service" '$1 == s { print $2 }' "$dir/errors-baseline.tsv")
+        printf '| `%s` | %s | %s |\n' "$service" "$count" "${base:-0}"
+      done
+      echo
+      echo "**Total: $(awk -F'\t' '{ t += $2 } END { print t + 0 }' "$dir/errors-today.tsv").**"
+      echo "A number that appears once a day is a number that gets fixed; one that"
+      echo "needs somebody to think of the question is not."
+    else
+      echo "No service logged an error in the last 24 hours."
+    fi
+
+    if [ -s "$dir/errors-grouped.md" ]; then
+      echo
+      echo "### What those errors actually were"
+      echo
+      echo "**Grouped by message, not by line** — six hundred repetitions of one"
+      echo "failure is one finding, and the count is the part that says how bad it"
+      echo "is. Digits and hex runs are collapsed before grouping, because no two"
+      echo "of those 177 postgres lines were byte-identical."
+      cat "$dir/errors-grouped.md"
+    fi
+
     echo
     echo "### The same counts per day, over as much history as the store holds"
     echo
@@ -356,9 +465,70 @@ cmd_summary() {
 # onto the eternal issue; what replaced it is `kolonie-platform#407`, which sees
 # the same errors every half hour and files one issue per signature. A daily
 # model opinion filing a daily issue would now be a second, worse copy of that.
+# **File on a change of shape, never on a threshold** (`#236`). A threshold on
+# absolute count would file every day and be ignored inside a week, which is the
+# same failure `#237` was about one level up — and it is why nothing in this file
+# holds a number of errors that means "bad".
+#
+# Three shapes are worth an issue, and each is measured against the service's own
+# history rather than against a global figure:
+#
+#   1. a service that produced NO errors yesterday and many today
+#   2. an error volume several times its own recent normal
+#   3. an error string never seen in the retained window
+#
+# `traefik` at 221 a day and `badge-runner` at 0 do not share a baseline, and a
+# global rule would either drown in the first or never fire for the second.
+ERROR_SPIKE_FACTOR=${ERROR_SPIKE_FACTOR:-5}
+ERROR_FLOOR=${ERROR_FLOOR:-10}
+
+# The floor is not a threshold on badness — it is a guard against arithmetic on
+# tiny numbers. A service that normally logs 1 error and logs 6 today is 6× its
+# baseline and is still nothing. Without it the shape rules fire on noise and the
+# channel is dead in a fortnight, which is the outcome this whole issue exists to
+# avoid.
+cmd_errors_changed() {
+  local dir="$1" found=0 service count base
+
+  # 0 means *something changed shape*, as a predicate should. The early-out has
+  # to say the opposite: no data is not a finding, and returning 0 here reported
+  # "an error volume changed shape" on a day with no errors at all.
+  : > "$dir/errors-changed.tsv"
+  [ -s "$dir/errors-today.tsv" ] || return 1
+
+  while IFS=$'\t' read -r service count; do
+    [ -n "$service" ] || continue
+    base=$(awk -F'\t' -v s="$service" '$1 == s { print $2 }' "$dir/errors-baseline.tsv")
+    base=${base:-0}
+
+    [ "$count" -ge "$ERROR_FLOOR" ] || continue
+
+    if awk -v b="$base" 'BEGIN { exit !(b == 0) }'; then
+      printf '%s\t%s\tnone in the previous 7 days, %s today\n' "$service" "$count" "$count"
+      found=1
+    elif awk -v c="$count" -v b="$base" -v f="$ERROR_SPIKE_FACTOR" 'BEGIN { exit !(c > b * f) }'; then
+      printf '%s\t%s\t%s today against a daily normal of %s\n' "$service" "$count" "$count" "$base"
+      found=1
+    fi
+  done < "$dir/errors-today.tsv" > "$dir/errors-changed.tsv"
+
+  if [ -s "$dir/errors-new-strings.txt" ]; then
+    found=1
+  fi
+
+  return $((1 - found))
+}
+
 cmd_decide() {
-  local dir="$1"
-  [ -s "$dir/silent.txt" ] && { echo "a service has gone silent"; return 1; }
+  local dir="$1" why=()
+
+  [ -s "$dir/silent.txt" ] && why+=("a service has gone silent")
+  cmd_errors_changed "$dir" && why+=("an error volume changed shape")
+
+  if [ ${#why[@]} -gt 0 ]; then
+    printf '%s\n' "${why[@]}"
+    return 1
+  fi
   echo "nothing to report"
   return 0
 }
@@ -405,8 +575,53 @@ await_visible() {
 # silent tomorrow gets a comment on its own issue rather than a second one —
 # which is a comment about the thing the issue is about, not an unrelated finding
 # on a shared thread.
+# One finding per service whose errors changed shape (`#236`), each with its own
+# identity so that `#237`'s three cases apply to it — a service still spiking
+# tomorrow comments rather than filing, and one that comes back reopens.
+#
+# **Per service, not one issue for "errors".** Two services degrading for
+# unrelated reasons are two problems, and merging them produces an issue nobody
+# can close.
+report_error_findings() {
+  local dir="$1" service count why body_file new_strings
+
+  [ -s "$dir/errors-changed.tsv" ] || return 0
+
+  while IFS=$'\t' read -r service count why; do
+    [ -n "$service" ] || continue
+    body_file=$(mktemp)
+    new_strings=$(awk -F'\t' -v s="$service" '$1 == s { print "- `" $2 "`" }' \
+      "$dir/errors-new-strings.txt" 2>/dev/null | head -5)
+
+    {
+      printf '`%s` logged **%s error lines** in the last 24 hours: %s.\n\n' "$service" "$count" "$why"
+      printf '%s\n\n' "**This is a change of shape, not a threshold being crossed.** Nothing here holds a number of errors that means *bad* — a fixed threshold would file every day and be ignored within a week. What triggered this is the volume against **its own** recent normal."
+      if [ -n "$new_strings" ]; then
+        printf '%s\n\n%s\n\n' "**Error strings not seen in the previous 7 days:**" "$new_strings"
+      fi
+      if [ -s "$dir/errors-grouped.md" ]; then
+        printf '%s\n' "**What the errors were, grouped by message rather than by line:**"
+        cat "$dir/errors-grouped.md"
+        printf '\n'
+      fi
+      printf '%s\n\n' "$(cat "$dir/numbers.md" 2>/dev/null)"
+      printf '[Full run](%s)\n\n' "${RUN_URL:-no run url}"
+      bash "$FINDING" footer "error-shape:$service" \
+        "one service whose error volume changed shape — the service and that condition, not the count on any given day or which messages made it up" \
+        "watch-agent.yml"
+    } > "$body_file"
+
+    bash "$FINDING" place "error-shape:$service" \
+      "\`$service\` is logging errors it does not normally log" \
+      "$body_file" p1 area:infra from:watcher
+    rm -f "$body_file"
+  done < "$dir/errors-changed.tsv"
+}
+
 cmd_report() {
   local dir="$1" service title body_file
+
+  report_error_findings "$dir"
 
   [ -s "$dir/silent.txt" ] || { echo "nothing silent — filing nothing"; return 0; }
 

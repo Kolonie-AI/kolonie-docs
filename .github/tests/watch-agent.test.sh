@@ -391,6 +391,84 @@ expect "and says what answered" "$([[ "$out" == *"401"* ]] && echo yes || echo n
 expect "and files nothing" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
+echo "errors, which are the larger half (#236)"
+
+# `cmd_errors_changed` is exercised directly against fixture files rather than
+# through a stubbed Loki: what is under test is the *arithmetic on shapes*, and
+# routing it through a query stub would test the stub.
+changed() {
+  local dir=$1
+  ( set +e
+    # shellcheck disable=SC1090
+    source <(sed -n '/^ERROR_SPIKE_FACTOR=/,/^}/p' "$SCRIPT" | sed -n '/^cmd_errors_changed/,/^}/p')
+    ERROR_SPIKE_FACTOR=${ERROR_SPIKE_FACTOR:-5}
+    ERROR_FLOOR=${ERROR_FLOOR:-10}
+    cmd_errors_changed "$dir" && echo changed || echo unchanged )
+}
+
+mk() {
+  D=$(mktemp -d)
+  printf '%b' "$1" > "$D/errors-today.tsv"
+  printf '%b' "$2" > "$D/errors-baseline.tsv"
+  printf '%b' "${3:-}" > "$D/errors-new-strings.txt"
+}
+
+# 1 — none yesterday, many today.
+mk 'api\t40\n' 'api\t0.00\n'
+expect "a service with no recent errors and many today changes shape" \
+  "$([ "$(changed "$D")" = changed ] && echo yes || echo no)"
+expect "and the reason names the absence, not a threshold" \
+  "$(grep -q 'none in the previous 7 days' "$D/errors-changed.tsv" && echo yes || echo no)" \
+  "$(cat "$D/errors-changed.tsv")"
+
+# 2 — several times its own normal.
+mk 'traefik\t900\n' 'traefik\t31.57\n'
+expect "a volume several times its own normal changes shape" \
+  "$([ "$(changed "$D")" = changed ] && echo yes || echo no)"
+
+# A service at its ordinary volume is not a finding, however large that is. This
+# is the case a global threshold gets wrong, and traefik at 221/day is it.
+mk 'traefik\t221\n' 'traefik\t210.00\n'
+expect "a busy service at its ordinary volume files nothing" \
+  "$([ "$(changed "$D")" = unchanged ] && echo yes || echo no)" "$(cat "$D/errors-changed.tsv")"
+
+# The floor. 6 errors against a normal of 1 is 6x and is still nothing; without
+# this the rules fire on noise and the channel is dead in a fortnight.
+mk 'badge-runner\t6\n' 'badge-runner\t0.14\n'
+expect "a tiny number is not a spike however large the ratio" \
+  "$([ "$(changed "$D")" = unchanged ] && echo yes || echo no)" "$(cat "$D/errors-changed.tsv")"
+
+# 3 — a string never seen in the window, even at ordinary volume.
+mk 'postgres\t12\n' 'postgres\t14.00\n' 'postgres\tERROR: column sub.<n> does not exist\n'
+expect "an error string never seen before changes shape" \
+  "$([ "$(changed "$D")" = changed ] && echo yes || echo no)"
+
+# A quiet day is a quiet day.
+mk '' ''
+expect "no errors at all is not a finding" \
+  "$([ "$(changed "$D")" = unchanged ] && echo yes || echo no)"
+
+# Per-service baselines: one service spiking must not drag another in.
+mk 'traefik\t221\napi\t40\n' 'traefik\t210.00\napi\t0.00\n'
+changed "$D" >/dev/null
+expect "only the service that changed is named" \
+  "$([ "$(wc -l < "$D/errors-changed.tsv")" -eq 1 ] && grep -q '^api' "$D/errors-changed.tsv" && echo yes || echo no)" \
+  "$(cat "$D/errors-changed.tsv")"
+
+# The normaliser is what makes grouping possible at all: measured by hand on
+# 2026-08-09, postgres logged one failure 177 times and no two lines were
+# byte-identical.
+norm() { sed -n '/^normalise_line()/,/^}/p' "$SCRIPT" > "$WORK/norm.sh"; ( . "$WORK/norm.sh"; normalise_line ); }
+a=$(printf '2026-08-09 03:11:02.994 UTC [1481] kolonie@kolonie/postgres.js ERROR:  column sub.decided_at does not exist at character 77\n' | norm)
+b=$(printf '2026-08-09 07:44:51.001 UTC [2093] kolonie@kolonie/postgres.js ERROR:  column sub.decided_at does not exist at character 77\n' | norm)
+expect "two instances of one failure normalise to one string" \
+  "$([ "$a" = "$b" ] && echo yes || echo no)" "$a vs $b"
+
+c=$(printf '2026-08-09 03:11:02.994 UTC [1481] kolonie@kolonie/postgres.js ERROR:  invalid input value for enum erasure_reason\n' | norm)
+expect "and two different failures do not" \
+  "$([ "$a" != "$c" ] && echo yes || echo no)"
+
+echo
 echo "no threshold exists anywhere in this agent"
 
 # `#133`: "no per-service threshold exists anywhere in the workflow". A grep is a
