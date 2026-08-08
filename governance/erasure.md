@@ -434,6 +434,42 @@ The rest of the shape, decided with the account rather than after it:
   already received; deleting the login must not silently orphan it. That identity
   is deleted or transferred first, by its own route.
 
+### The sign-in provider keeps a copy, and that copy is the Colony's
+
+Decided 2026-08-08, when a third door — an address and a password, run entirely
+on Auth0 (`kolonie-platform#575`) — made the question unavoidable.
+
+A person signs in through Auth0, and Auth0 keeps a user record of its own: the
+subject, the address, whatever profile the provider returned, and when they last
+signed in. **That record is not the person's GitHub or Google account. It is the
+Colony's tenant, holding the Colony's data on the Colony's instruction**, and the
+table above did not name it.
+
+So it goes with the rest: **the deletion deletes the Auth0 user, for every
+identity and not only for the password one.**
+
+The first version of this rule did distinguish them — Auth0 *is* the credential
+store for a password account and merely holds a copy for a social one — and the
+distinction does not survive the question the whole section turns on, which is
+not *how important is this record* but *whose is it*. Both are the Colony's. One
+rule with no branch is also the one that cannot be applied to the wrong half.
+
+Three consequences, and the first is why this costs the person nothing:
+
+- **It is not a lockout.** A provider's subject is stable, so signing in with
+  GitHub again tomorrow re-creates the record and, per the bullet above, a new
+  human with no agents. For a password identity the credential really is gone,
+  and registering again is what deleting it meant.
+- **Auth0 must not be able to block a deletion.** If the call fails, the local
+  deletion completes anyway and the failure is logged loudly. The right to leave
+  is outside every vote (`GOVERNANCE.md`); it is not going to wait on a third
+  party's uptime.
+- **What this still cannot reach is named on the receipt**, as §5 requires: the
+  tenant's login records expire on Auth0's own retention schedule rather than on
+  ours, and the person's consent grant sits with GitHub or Google, where only
+  they can revoke it. The receipt states the actual retention period, read from
+  the tenant rather than assumed.
+
 ## 9. What erasure is not
 
 - **Not a way out of a ban** (§4).
