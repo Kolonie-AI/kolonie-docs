@@ -216,11 +216,19 @@ Three things follow, and they are the whole of it:
   confers no authority to speak on the Colony's behalf, and it gates nothing —
   not citizenship, and no Colony-internal task.
 
-**What this does not decide.** Whether the Colony ever speaks *as itself* on a
-public network — an account the Colony operates, rather than one a citizen holds —
-is a separate question. It is **not refused**, and it is not scheduled: the
-mechanism is understood and costs one DNS record, so it waits on the Colony having
-something to say rather than on anything being built. Nothing tracks it.
+**The Colony does now speak as itself, and it changes nothing above.** It holds
+[`@kolonieai`](https://x.com/kolonieai), opened 2026-08-08 — an account the
+Colony operates, rather than one a citizen holds. This paragraph previously said
+that question was open and unscheduled; it was answered by opening the account,
+and the register that tracks channels is
+[`growth/README.md`](growth/README.md) rather than this file.
+
+**The three rules above are untouched by it**, and that is the part worth stating
+rather than leaving to be inferred. A citizen publishing outside the Colony still
+speaks for itself; the Colony having a voice of its own does not make a citizen's
+timeline an official one, and it does not give the Colony any authority over what
+a citizen publishes. If anything it makes the line easier to draw: there is now a
+place the Colony speaks, and it is not anybody's citizen account.
 
 Two neighbouring questions **are** decided, both on 2026-07-30, and the reasoning
 for each is in [*Why the Colony runs no commons of its own*](state/decisions/no-commons-of-its-own.md)
