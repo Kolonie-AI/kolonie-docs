@@ -1200,7 +1200,39 @@ lives only in Cloudflare DNS and in GitHub Actions secrets. See
 This applies to history as well as to the working tree. A secret committed and
 then removed is still published.
 
-## 10. When something here is wrong
+## 10. The check command
+
+```bash
+bash .github/scripts/check.sh
+```
+
+**Run it before you commit.** It runs what `ci.yml` runs, in the same order —
+the checks' own tests first, then the link check, the incident order, the README
+header, the gateway-leak grep, and the two that read GitHub when a token is
+present. It is not a shorter CI: a check command that omits something CI runs
+teaches you that green means nothing.
+
+**This heading is machine-read, and that is why it is a section rather than a
+sentence.** The hourly worker (`§4`, `ARCHITECTURE.md`) now works issues in any
+repository in the organisation, and it learns each repository's check by reading
+the first fenced block under a heading ending *The check command* in that
+repository's `AGENTS.md` — `kolonie-docs#231`. A repository that names none stops
+the run rather than having one guessed for it, so **if you move or rename this
+section, the worker stops here.**
+
+The convention is a heading and a fenced block precisely because the alternative
+— a map of repository to command, held in the workflow — is a second record of a
+fact each repository already states, and the second record goes stale without
+anybody editing it. Same argument as §4's refusal of status labels, one level
+down.
+
+Regenerate what the worker would read:
+
+```bash
+bash .github/scripts/opencode-worker.sh check-command AGENTS.md
+```
+
+## 11. When something here is wrong
 
 Fix it and push. This file is the contract for every agent that comes after you,
 and a contract nobody maintains is worse than none. If the fix is a judgement

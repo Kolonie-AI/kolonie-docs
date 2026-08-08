@@ -113,12 +113,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          running=$(gh run list --repo "$GITHUB_REPOSITORY" \
-            --workflow opencode-worker.yml --status in_progress \
-            --limit 10 --json databaseId --jq 'length')
-          echo "in_progress runs, counting this one: $running"
-          if [ "$running" -gt 1 ]; then
-            echo "a previous run is still working. Exiting, and taking nothing."
+          # The query lives in the script since `#231`, so that the case where
+          # *it* fails is covered by a test — a `run:` block is the one part of
+          # this workflow nothing can exercise, which is why everything that can
+          # go wrong quietly is in the script.
+          if [ "$(bash .github/scripts/opencode-worker.sh solo)" = busy ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -161,8 +160,15 @@ jobs:
             echo "nothing queued this hour. Exiting 0."
             exit 0
           fi
-          echo "taking #$number"
-          echo "issue=$number" >> "$GITHUB_OUTPUT"
+
+          # `pick` prints "<owner/repo>\t<number>" since `#231`. The repository
+          # half is not decoration: five repositories each number their issues
+          # from 1, so a bare number identifies nothing (§4).
+          repo=${number%%$'\t'*}
+          issue=${number##*$'\t'}
+          echo "taking $repo#$issue"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "issue=$issue" >> "$GITHUB_OUTPUT"
 
       # Step 4, and the real lock. An issue in In Progress no longer matches the
       # query above, so even two overlapping runners could not take the same one.
@@ -177,7 +183,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/opencode-worker.sh claim "${{ steps.queue.outputs.issue }}"
+        run: |
+          bash .github/scripts/opencode-worker.sh claim \
+            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
 
       # Comments are `GITHUB_TOKEN`'s job, deliberately: the stored credential's
       # only power stays moving a board column, so a leak of it costs a column.
@@ -187,10 +195,81 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "$GITHUB_REPOSITORY" --body \
-            "Taken by the hourly opencode worker (\`#142\`), moved to **In Progress**: $RUN_URL
+          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
+            "Taken by the hourly opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
 
           This is an experiment with a stated end and no agent is watching it. If it opens a pull request, a person reviews and merges — it never merges its own work. If the run fails, this issue goes back to **Ready** with a comment saying which run failed."
+
+      # ## Which credential reaches the target repository (`#231`, 2026-08-08)
+      #
+      # `#231` says the checkout and the push *"use the stored credential that
+      # already exists for the board"*. **Measured on 2026-08-08, that is not
+      # available and the issue is wrong about it**, so it is recorded here
+      # rather than worked around in silence:
+      #
+      # - `github.token` is minted per run and scoped to the repository hosting
+      #   the workflow. It cannot check out or push to the other four. That is
+      #   the platform's rule, not a setting.
+      # - `BOARD_WRITE_TOKEN` is `kolonie-docs` only, Organization → Projects:
+      #   Read and write, **nothing else** — `ARCHITECTURE.md` says so and the
+      #   scope is deliberate. It cannot read a line of code anywhere.
+      #
+      # So an organisation-wide worker needs one credential the organisation
+      # does not yet hold: `WORKER_REPO_TOKEN`, contents and pull-requests write
+      # on the repositories it may work.
+      #
+      # **Until it exists, this degrades rather than guesses.** A `kolonie-docs`
+      # issue runs exactly as it did before on `github.token`; an issue anywhere
+      # else stops here with the reason, and `Put it back` returns it to Ready.
+      # The alternative — attempt the checkout and let it fail — produces
+      # `remote: Repository not found`, which reads as a deleted repository and
+      # sends the next reader looking in the wrong place entirely.
+      - name: Can this run reach the target repository?
+        id: reach
+        if: steps.queue.outputs.issue
+        env:
+          WORKER_REPO_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.queue.outputs.repo }}" = "$GITHUB_REPOSITORY" ]; then
+            echo "target is this repository; the run token is enough"
+            exit 0
+          fi
+          if [ -z "${WORKER_REPO_TOKEN:-}" ]; then
+            echo "::error::${{ steps.queue.outputs.repo }}#${{ steps.queue.outputs.issue }} is outside $GITHUB_REPOSITORY, and WORKER_REPO_TOKEN is not set. github.token cannot reach another repository and BOARD_WRITE_TOKEN is Projects-only by design. Taking nothing; the issue goes back to Ready."
+            exit 1
+          fi
+          echo "WORKER_REPO_TOKEN is set; the target is reachable"
+
+      # The target repository, alongside this one rather than instead of it.
+      # `kolonie-docs` stays checked out at the workspace root because every
+      # other repository's `AGENTS.md` points at it and its issues quote
+      # `GOVERNANCE.md` and `state/decisions/` constantly — a worker that
+      # replaced the checkout could reach none of that.
+      #
+      # `fetch-depth: 0` because the run compares the branch against
+      # `origin/main` to decide whether anything was committed.
+      - name: Check out the target repository
+        if: steps.queue.outputs.issue
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.queue.outputs.repo }}
+          path: target
+          fetch-depth: 0
+          token: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+
+      # Read, never mapped — `#231` refuses a repository-to-command table in this
+      # file because it is a second record of a fact each repository already
+      # states. A repository naming none stops the run here, before the model is
+      # paid for, rather than after it has written a change nothing can verify.
+      - name: What is the target repository's check command?
+        id: check
+        if: steps.queue.outputs.issue
+        run: |
+          set -euo pipefail
+          command=$(bash .github/scripts/opencode-worker.sh check-command target/AGENTS.md)
+          echo "check command: $command"
+          echo "command=$command" >> "$GITHUB_OUTPUT"
 
       - name: Install opencode
         if: steps.queue.outputs.issue
@@ -226,10 +305,23 @@ jobs:
           # names one. The gateway serves its whole catalogue on the same key,
           # so switching is a value rather than a migration.
           OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
-          GH_TOKEN: ${{ github.token }}
+          # Cross-repository since `#231`: `github.token` covers this repository
+          # and `WORKER_REPO_TOKEN` covers the rest. The fallback keeps a
+          # `kolonie-docs` issue working exactly as it did before the secret
+          # existed.
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           ISSUE: ${{ steps.queue.outputs.issue }}
+          TARGET_REPO: ${{ steps.queue.outputs.repo }}
+          CHECK_COMMAND: ${{ steps.check.outputs.command }}
         run: |
           set -euo pipefail
+
+          # Everything below happens **in the target repository's checkout**,
+          # which since `#231` may not be this one. `kolonie-docs` stays at the
+          # workspace root and stays readable — the issues in the other four
+          # quote it constantly.
+          cd target
+
           git config user.name "opencode worker"
           git config user.email "noreply@kolonie.ai"
           branch="opencode/issue-${ISSUE}"
@@ -247,9 +339,17 @@ jobs:
           # anywhere on the runner is a larger permission than this experiment
           # needs. The file moves instead.
           #
-          # `.gitignore`d, so a run cannot commit the issue text into the
-          # repository it is editing.
-          gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+          # **Excluded through `.git/info/exclude`, not `.gitignore`** (`#231`).
+          # It used to rely on a `.gitignore` entry committed in this repository,
+          # which stops being true the moment the target is one of the other
+          # four — and the failure is that the run commits the issue text and the
+          # runtime config into somebody else's repository. `info/exclude` is
+          # local to the checkout, needs no commit anywhere, and works in all
+          # five.
+          printf '%s\n' opencode-issue.json opencode-runtime.json opencode-refusal.txt \
+            >> .git/info/exclude
+
+          gh issue view "$ISSUE" --repo "$TARGET_REPO" \
             --json number,title,body,comments > ./opencode-issue.json
 
           # Refuse rather than guess. An unset secret would otherwise reach
@@ -281,11 +381,17 @@ jobs:
           # Changing `OPENCODE_LLM_MODEL` still changes the model on the next run
           # with no commit, which is the property the issue is about.
           #
-          # In the checkout and `.gitignore`d, for the reason the issue file is:
-          # opencode's sandbox refuses paths outside the working directory, and
-          # a config it cannot read is a failure mode already paid for once.
+          # In the checkout and excluded from it, for the reason the issue file
+          # is: opencode's sandbox refuses paths outside the working directory,
+          # and a config it cannot read is a failure mode already paid for once.
+          #
+          # **The source is `../opencode.json`** since `#231`. `opencode.json` is
+          # this repository's file and stays here; the working directory is the
+          # target's checkout, which is a different repository four times out of
+          # five and has no such file. Reading it from the target would mean
+          # every repository carrying a copy — five records of one fact.
           jq --arg m "$OPENCODE_LLM_MODEL" \
-            '.provider.gateway.models[$m] = {}' opencode.json \
+            '.provider.gateway.models[$m] = {}' ../opencode.json \
             > ./opencode-runtime.json
           export OPENCODE_CONFIG="$PWD/opencode-runtime.json"
 
@@ -309,6 +415,9 @@ jobs:
           The issue, with its comments, is in ./opencode-issue.json at the repository root.
 
           Read AGENTS.md first — it is binding, and it is the entry point.
+
+          This is ${TARGET_REPO}. Its check command is: ${CHECK_COMMAND}
+          Run it before you finish. A change that does not pass it is not done.
 
           Rules for this run:
           - Change only what the issue asks for. An adjacent improvement is out of
@@ -349,14 +458,23 @@ jobs:
             exit 1
           fi
 
+          # **The target repository's check, read from its own `AGENTS.md`**
+          # (`#231`). The prompt above asks the agent to run it; this runs it
+          # again after the fact, because an unattended agent reporting that it
+          # ran a check is exactly the claim this workflow exists to stop taking
+          # on trust. A red check here fails the run, the issue goes back to
+          # Ready, and no pull request is opened.
+          echo "running this repository's own check: $CHECK_COMMAND"
+          eval "$CHECK_COMMAND"
+
           git push --set-upstream origin "$branch"
-          url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+          url=$(gh pr create --repo "$TARGET_REPO" --base main --head "$branch" \
             --title "$(git log -1 --pretty=%s)" \
             --body "Opened by the hourly opencode worker for #${ISSUE}, unattended.
 
           Closes #${ISSUE}
 
-          Nobody reviewed this before it was opened. It is part of \`#142\`, an experiment with a stated end: five issues go through this and each outcome is recorded. **The worker does not merge** — an agent that merged its own work would remove the measurement the experiment exists to take.")
+          Nobody reviewed this before it was opened. It is part of \`kolonie-docs#142\`, an experiment with a stated end: each outcome is recorded. \`${CHECK_COMMAND}\` passed on this branch before this was opened. **The worker does not merge** — an agent that merged its own work would remove the measurement the experiment exists to take.")
           echo "pull request: $url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
@@ -365,7 +483,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/opencode-worker.sh review "${{ steps.queue.outputs.issue }}"
+        run: |
+          bash .github/scripts/opencode-worker.sh review \
+            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
 
       # **The recovery path.** Without it the first crash parks an issue in In
       # Progress forever, and `#142` observes that it will be the issue that most
@@ -377,15 +497,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/opencode-worker.sh release "${{ steps.queue.outputs.issue }}"
+        run: |
+          bash .github/scripts/opencode-worker.sh release \
+            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
 
       - name: Say why on the issue
         if: (failure() || cancelled()) && steps.queue.outputs.issue
         env:
-          GH_TOKEN: ${{ github.token }}
+          # The comment lands in the *target* repository, which `github.token`
+          # cannot reach when that is not this one. Same fallback as the work
+          # step, and for the same reason.
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "$GITHUB_REPOSITORY" --body \
+          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
             "The hourly opencode worker failed on this issue and has put it back in **Ready**: $RUN_URL
 
           The \`agent:opencode\` label is untouched, so it is queued again and will be tried on a later hour. If it fails repeatedly, that is a finding worth recording on \`#142\` rather than a reason to keep retrying."
