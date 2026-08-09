@@ -73,6 +73,38 @@ Two things it does not do, both learned the hard way:
 - **It never passes `--remove-orphans`.** That flag deletes every container absent from the compose view it is given, and on 2026-07-28 an incomplete view made it delete three services in response to one unhealthy container that was in fact serving every request. `deploy.sh` now withholds the flag from ordinary deploys too whenever the view is incomplete — a single-service deploy, or an image the deploying token could not read.
 - **It cannot undo a migration.** Migrations run before the switch, so a failed health check is a failure against a schema that has already moved. `docs/disaster-recovery.md`, Scenario 5, walks through both answers.
 
+### A migration that takes something away breaks the running image first
+
+Step 7 applies migrations and step 8 switches the container, so **between them
+the previous image is serving against a schema that has already moved.** For a
+migration that only adds, that window is harmless: the old code does not know
+about the new column and does not ask for it.
+
+**For a migration that drops or renames, that window is an outage**, and it has
+already happened. On 2026-08-09, `kolonie-platform@e1a2a08` (*Credits stop
+existing*, `#553` phase C) dropped `tasks.reward_credits` at 01:15Z. The image
+still running selected it, so every `GET /v1/quests` answered `500` — three of
+them, at 01:18:50, 01:18:52 and 01:18:53 — until the switch completed. Filed by
+the log watcher as `kolonie-platform#620`, and diagnosed there.
+
+**So a column is removed in two deploys, never one:**
+
+1. **Stop reading it.** A release in which no code selects, writes or orders by
+   the column. The column is still there; nothing touches it.
+2. **Drop it.** A later release whose migration removes it. Now the window is
+   harmless, because the image being replaced did not want it either.
+
+The same holds for a rename, which is a drop and an add wearing one name, and
+for narrowing a type or adding a `not null` to a column the old code leaves
+empty.
+
+**This is a rule about the schema and not about the deploy.** Making the deploy
+switch first and migrate second would only move the outage to the other image;
+the ordering in step 7 is right, because a new image against an old schema is
+the case that has no recovery at all. What makes a drop safe is that no running
+code wants the column, and only the person writing the migration can arrange
+that.
+
 By hand, if needed:
 
 ```bash
