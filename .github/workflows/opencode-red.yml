@@ -1,0 +1,84 @@
+name: opencode red
+
+# A worker pull request that goes red gives its issue back (`#240`).
+#
+# ## Why this is not a step in the worker
+#
+# `#232` gave the worker auto-merge and asked that *"a red run leaves the pull
+# request open and returns the issue to Ready"*. Half of that was built there and
+# half of it could not be: there are two different reds, and only one of them is
+# a *run*.
+#
+# The worker's own run going red — including the target repository's check, which
+# `#231` made it execute before opening anything — is handled inside the run: no
+# pull request is created, the issue goes back to Ready, and a comment names the
+# failure. **CI on the pull request reports later, when the run is over.** The
+# pull request correctly stays open unmerged and the issue stays in **In
+# Review**, which after `#232` is a column claiming somebody is coming when
+# nobody is.
+#
+# So this is triggered by the checks rather than by the worker, because the
+# worker has exited by then and cannot be the thing that notices.
+#
+# ## The decision is in the script, with the argument
+#
+# `.github/scripts/opencode-red.sh` closes the pull request when it returns the
+# issue to Ready, and keeps the branch. The reasoning is at the top of that file
+# — `#240` asks whoever takes it to decide and say why, and a workflow header is
+# not where a decision like that stays readable.
+#
+# **All the logic is in that script and none of it is here**, for the reason
+# `opencode-worker.sh` gives: a `run:` block cannot be tested, and the parts of
+# this that go wrong quietly — an inconclusive check treated as a red, a second
+# comment on every re-run, a pull request that is not the worker's — are exactly
+# the parts nobody notices from a green run.
+# `.github/tests/opencode-red.test.sh` proves them against a stubbed `gh`.
+
+on:
+  # `check_suite` rather than `check_run`: a suite concludes once, and a run
+  # concludes per job — three jobs would be three events and three attempts to
+  # do the same thing. The script is idempotent anyway, and this is the cheaper
+  # half of that belt and braces.
+  check_suite:
+    types: [completed]
+  # So a person can correct a stuck issue without waiting for a check to report
+  # again, which is the recovery path `#142` says the design cannot do for
+  # itself.
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: The pull request number in this repository
+        required: true
+      conclusion:
+        description: What its checks concluded — failure, timed_out, or anything else to test the no-op
+        required: false
+        default: failure
+
+# Read-only for the repository itself. Everything this workflow writes — closing
+# the pull request, the comment, the column — goes through `BOARD_WRITE_TOKEN`,
+# which is the credential the worker already uses for the board.
+permissions:
+  contents: read
+
+jobs:
+  return-the-issue:
+    runs-on: ubuntu-latest
+    # A suite with no pull request attached is a push build, and there is nothing
+    # to decide about it. Skipped here rather than in the script so the ordinary
+    # case costs no job at all.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.check_suite.pull_requests[0] != null
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Return the issue if the checks went red
+        env:
+          # The same token the worker moves cards with. `github.token` cannot
+          # write to a project, which is why this exists at all.
+          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PR: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request || github.event.check_suite.pull_requests[0].number }}
+          CONCLUSION: ${{ github.event_name == 'workflow_dispatch' && inputs.conclusion || github.event.check_suite.conclusion }}
+        run: |
+          bash .github/scripts/opencode-red.sh handle "$GITHUB_REPOSITORY" "$PR" "$CONCLUSION"
