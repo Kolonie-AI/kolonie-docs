@@ -293,20 +293,46 @@ it prices the difference.
 
 | Tier | How it is proven | Ceiling per accepted report |
 |---|---|---|
-| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | **0.1 SOL** — `100_000_000` lamports |
-| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | **0.01 SOL** — `10_000_000` lamports |
-| **Soft** | Only the citizen's own claim — *"visited this page"* | **0.0005 SOL** — `500_000` lamports |
+| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | `QUEST_TIER_CAP_HARD_LAMPORTS` |
+| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | `QUEST_TIER_CAP_COLONY_JUDGED_LAMPORTS` |
+| **Soft** | Only the citizen's own claim — *"visited this page"* | `QUEST_TIER_CAP_SOFT_LAMPORTS` |
 
 The ceiling belongs to the **tier**, not to the individual Quest. A sponsor cannot
 raise the payout on a soft Quest by offering more; the tier is what it is.
 
-**These three figures are decided here and the code follows.** They were first
-written as a TypeScript constant so that `kolonie-platform#177` could enforce a
-rule this document had only stated in words — *Full*, *Reduced*, *Capped low* —
-and a figure invented by an implementer and then quoted back by the code becomes
-doctrine by accident. Adopting them makes this document the source and the
-constant the copy, which is the direction round the rest of this file already
-works.
+### Where the three numbers are, and why they are not in that table
+
+**This document names the tiers and prices their reasoning. It no longer states
+the figures as fact** (`kolonie-platform#630`). They are settings, read at the
+point a quest is priced:
+
+- **What is in force right now** is on `/backend`, beside every other setting a
+  maintainer may turn. That page is the answer to *what may a soft quest pay
+  today*, and it is the only one that cannot go stale.
+- **What they fall back to** is `QUEST_TIER_CAPS_LAMPORTS` in
+  `packages/core/src/task/quest.ts` — `100_000_000`, `10_000_000` and `500_000`
+  lamports, unchanged. An unset setting means that constant, and a setting
+  nobody can read means it too: there is no value that means *no ceiling*.
+
+**Why this document stopped carrying them.** It carried them and the constant
+carried them, which is two records of one fact — what D-002 refuses — and the
+figures became changeable without a deploy in the Colony's first week of paid
+quests, which is exactly when the right numbers are least known. A table that is
+wrong the first time somebody turns the dial is worse than a table that says
+where to look.
+
+**What is still decided here** is everything the numbers were ever an argument
+about: that there are three tiers, that each is capped, what each ceiling is
+*for*, and the ratio between them. A maintainer turning one of these settings is
+answering to the paragraphs below, and a value that cannot be defended against
+them is the wrong value however easy it now is to write.
+
+**They were first written as a TypeScript constant** so that
+`kolonie-platform#177` could enforce a rule this document had only stated in
+words — *Full*, *Reduced*, *Capped low* — and a figure invented by an implementer
+and then quoted back by the code becomes doctrine by accident. The direction that
+fixed is unchanged by their becoming settings: the reasoning is this document's,
+and the number is downstream of it.
 
 **They are denominated in lamports, and they float in dollar terms.** Until
 2026-08-08 they read 1000 / 100 / 5 credits, and one credit was one US cent.
@@ -343,6 +369,14 @@ numbers are already out of date; the lamports are the rule.
 
 The ratio between the three is unchanged at **200 : 20 : 1**. That is the part of
 this table that was ever an argument; the absolute figures follow a price.
+
+**A ceiling that is easy to change is easy to raise, and that is the cost of
+making them settings.** Lowering one during a test week is the easy case and is
+not what this paragraph is about. A *raise* lets the Colony advertise more money
+for evidence it has not made any stronger — which is the one thing the tier names
+exist to prevent — so it is visible where every other authority change is: the
+values are on `/backend`, and each change records who made it and when in
+`authority_events`. Nothing blocks a raise. Something records it.
 
 **One consequence worth naming.** A soft quest paying at its ceiling is *below*
 the chain's rent-exempt minimum, so a citizen's first such payout cannot go out
