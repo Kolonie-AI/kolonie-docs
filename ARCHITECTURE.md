@@ -509,7 +509,7 @@ tools a given machine has. See [operations/testing.md](operations/testing.md).
 
 Compose files, Traefik config and the deploy/rollback/healthcheck scripts live in `kolonie-infra`. See [operations/deployment.md](operations/deployment.md) for the process.
 
-## The hourly opencode worker
+## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of
 the architecture and not the citizen contribution skill. It exists to answer one
@@ -521,7 +521,7 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 
 | | |
 |---|---|
-| **What runs** | `.github/workflows/opencode-worker.yml` in `kolonie-docs`, hourly at `:20` and on `workflow_dispatch`. **Never on an issue or label event.** |
+| **What runs** | `.github/workflows/opencode-worker.yml` in `kolonie-docs`, every twenty minutes at `:00`, `:20` and `:40`, and on `workflow_dispatch`. **Never on an issue or label event.** |
 | **Queue** | Issues labelled `agent:opencode` sitting in **Ready**, without `blocked:human`, **anywhere in the organisation** (`#231`, 2026-08-08 — it was `kolonie-docs` only until then, and the queue there emptied). `p1` before `p2`, then oldest by creation date; an issue with neither priority sorts last and the log names it |
 | **Which repository** | Whichever the picked issue lives in. It is checked out at `target/` beside `kolonie-docs`, worked there, and the pull request opens there. One search call for all five, served by GitHub's **search** allowance — a third pool, separate from `core` and `graphql` |
 | **The target's check** | Read from the target repository's own `AGENTS.md`: the first fenced block under a heading ending *The check command*. **Never a map held in the workflow** — that would be a second record of a fact each repository already states. A repository naming none stops the run instead of having one guessed |
