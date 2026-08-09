@@ -835,11 +835,14 @@ contains "and the comment carries the excerpt, not only a link" \
   "steps.why.outputs.excerpt" "$wf"
 contains "and names the step that failed" "steps.why.outputs.step" "$wf"
 # The sentence `previous-failures` counts. Changing it here without changing it
-# in the script makes every failure before that day invisible to the count.
+# in the script makes every failure before that day invisible to the count —
+# which is exactly what `50ae76a` did by dropping the word *hourly* from the
+# comment and not from the marker. The needle is now the part of the sentence
+# that survives a cadence change, and this asserts both halves still carry it.
 contains "the failure comment still opens with the sentence the count matches" \
-  "The hourly opencode worker failed on this issue" "$wf"
+  "opencode worker failed on this issue" "$wf"
 contains "and it is the same sentence the script looks for" \
-  "The hourly opencode worker failed on this issue" "$(cat "$SCRIPT")"
+  "opencode worker failed on this issue" "$(cat "$SCRIPT")"
 
 # `#246`: three properties of the workflow that only the file can carry.
 contains "the model runs without the repository token in its environment" \
@@ -892,6 +895,16 @@ else
   echo "         prerequisite at line ${prereq_line:-none}, check at line ${check_line:-none}"
   FAILURES+=("the prerequisite runs before the check")
 fi
+
+# `#251`: a failing issue leaves the queue rather than being retried forever.
+contains "a failed run takes the label off the issue it took" \
+  "gh issue edit \"\$ISSUE\" --repo \"\$REPO\" --remove-label agent:opencode" "$wf"
+contains "and says so in the comment, as something a person reverses" \
+  "put the label back once the reason above is dealt with" "$wf"
+contains "a removal that failed is reported rather than swallowed" \
+  "could not be removed" "$wf"
+contains "and the counter now finds a second failure worth naming" \
+  '"$failures" -ge 2' "$wf"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

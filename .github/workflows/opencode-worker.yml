@@ -965,22 +965,59 @@ jobs:
             fi
           } > "$body"
 
-          # **Three failures on one issue is a finding, not a queue** — it will
-          # otherwise loop hourly with nobody noticing the pattern, which is the
-          # exact shape of a worker-side failure. The count comes off this
-          # issue's own comments, so it needs no state anywhere.
+          # **How many times this issue has failed now.** The count comes off
+          # this issue's own comments, so it needs no state anywhere — and since
+          # `#251` it can exceed one only if a person put the label back, which
+          # makes it a more useful number than it was rather than a less useful
+          # one.
           failures=$(bash .github/scripts/opencode-worker.sh previous-failures "$REPO" "$ISSUE")
           failures=$((failures + 1))
-          if [ "$failures" -ge 3 ]; then
+          if [ "$failures" -ge 2 ]; then
             {
               echo
-              echo "⚠️ **This is failure number ${failures} on this issue.** That is a finding rather than a queue: an issue the worker keeps failing is either specified in a way it cannot act on, or is hitting something in the worker itself. \`kolonie-docs#142\` is where that gets recorded — not another hour of retries."
+              echo "⚠️ **This is failure number ${failures} on this issue**, and the label was put back after the last one. An issue that fails twice is either specified in a way the worker cannot act on, or is hitting something in the worker itself — \`kolonie-docs#142\` is where that gets recorded rather than in a third attempt."
             } >> "$body"
+          fi
+
+          # ## The label comes off, and the run says so (`#251`)
+          #
+          # **It used to stay on, and both verdicts above already argued that it
+          # should not.** *The issue genuinely is not done* and *the next run will
+          # very likely fail the same way* are both reasons not to try again in
+          # twenty minutes — and the worker retried anyway, because removing the
+          # label was described as *deciding an issue may never be tried again,
+          # which is not its decision*.
+          #
+          # That reading was wrong in one word. Removing the label decides
+          # nothing permanent: it takes the issue out of an unattended queue and
+          # puts it in front of a person, who puts it back in one click. What the
+          # old behaviour decided was that a failing issue would be retried
+          # indefinitely with nobody looking, which is the larger decision and the
+          # one nobody made.
+          #
+          # Measured 2026-08-09: `kolonie-infra#107` was taken three times in
+          # eighty minutes and refused identically each time, because its only
+          # possible implementation was one the worker is forbidden to write. The
+          # second and third runs learned nothing the first had not.
+          #
+          # **Best-effort, and never fatal.** A label that could not be removed is
+          # worth saying and is not worth failing a run that has already failed —
+          # the comment is written either way and says which happened.
+          if gh issue edit "$ISSUE" --repo "$REPO" --remove-label agent:opencode >/dev/null 2>&1; then
+            removed=yes
+          else
+            removed=no
           fi
 
           {
             echo
-            echo "The \`agent:opencode\` label is untouched, so it is queued again and will be tried on a later hour. The run link has the full log; the excerpt above is bounded and has every known secret taken out of it."
+            if [ "$removed" = yes ]; then
+              echo "**The \`agent:opencode\` label has been removed**, so the worker will not take this again on its own. That is not a verdict on the issue: put the label back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue."
+            else
+              echo "**The \`agent:opencode\` label could not be removed**, so this issue is still queued and may be taken again on the next run. That is a defect in this worker rather than a decision about the issue, and \`kolonie-docs#142\` is where it goes."
+            fi
+            echo
+            echo "The run link has the full log; the excerpt above is bounded and has every known secret taken out of it."
           } >> "$body"
 
           gh issue comment "$ISSUE" --repo "$REPO" --body-file "$body"

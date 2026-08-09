@@ -63,10 +63,18 @@
 #
 # ## What this never does
 #
-# **It never removes the `agent:opencode` label.** The label is queue membership
-# and not a status: the board column says what is happening to an issue, and the
-# label says who is allowed to work it. A worker that removed it would be
-# deciding an issue may never be tried again, which is not its decision.
+# **It never removes the `agent:opencode` label.** Nothing in *this script* does,
+# and that is still true: the label is queue membership and not a status, the
+# board column says what is happening to an issue, and the label says who is
+# allowed to work it.
+#
+# **The workflow removes it on a failure, and that is not a contradiction**
+# (`#251`). A worker that dropped the label from an issue it had merely finished
+# would be deciding the issue may never be tried again. Dropping it from one that
+# just failed decides only that the *next* attempt is a person's to start —
+# which is the smaller decision, and the one the alternative was making in
+# reverse: `kolonie-infra#107` was taken three times in eighty minutes and
+# refused identically, because retrying was the default and nobody had chosen it.
 #
 # **It never merges, never pushes to `main`, and never writes an issue comment
 # with the board token.** Comments are `GITHUB_TOKEN`'s job, so the stored
@@ -282,7 +290,13 @@ exports_from() {
 # The marker that makes a failure comment countable. It is the opening of the
 # comment the workflow has written since `#142`, unchanged on purpose: changing
 # it would make every failure before today invisible to the count below.
-FAILURE_MARKER=${FAILURE_MARKER:-The hourly opencode worker failed on this issue}
+# **Deliberately shorter than the sentence it matches** (`#251`). The comment
+# opened with *The hourly opencode worker failed…* until `50ae76a` dropped the
+# word when the schedule stopped being hourly — and the marker did not follow, so
+# for two commits every failure was invisible to this count. Matching from
+# `opencode worker failed` leaves it true of both wordings, so the history stays
+# countable and the cadence can change again without silently breaking it.
+FAILURE_MARKER=${FAILURE_MARKER:-opencode worker failed on this issue}
 
 # How much of a log may reach a public comment. Three separate bounds, because
 # they fail differently: a single line of minified output can be a megabyte, a

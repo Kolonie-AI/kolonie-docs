@@ -578,6 +578,13 @@ obvious reading is wrong in both halves:
 - **Not a status.** The board column says what is happening to an issue. The
   label says *who is allowed to work it*. An issue may carry the label in any
   column; only the ones in **Ready** are in the queue.
+- **Not permanent.** A run that fails **removes the label** and says so on the
+  issue (`kolonie-docs#251`). That is not a verdict on the issue and not a
+  refusal to try again: it takes the issue out of an unattended queue and puts
+  the next attempt in a person's hands. Put the label back and it rejoins.
+  Before this, a failing issue was retried every twenty minutes with nobody
+  watching — `kolonie-infra#107` was taken three times in eighty minutes and
+  refused identically each time.
 - **Not a trigger.** `.github/workflows/opencode-worker.yml` runs on a
   **schedule** and takes exactly one issue an hour. It does not run on
   `issues: [labeled]`, deliberately: labelling five issues would start five runs
