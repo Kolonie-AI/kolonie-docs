@@ -13,6 +13,7 @@
 #   opencode-worker.sh failed-step             # -> the name of this run's failed step
 #   opencode-worker.sh excerpt <file>          # -> its last lines, bounded and with every secret taken out
 #   opencode-worker.sh previous-failures <repo> <number>  # -> how many times the worker has already failed here
+#   opencode-worker.sh leak-check <file>...    # -> refuses if a secret this run holds is in what is about to be published
 #
 # **All of it is here rather than in the workflow**, for `board-self-check.sh`'s
 # reason: a workflow's `run:` blocks cannot be tested, and the parts of this that
@@ -290,12 +291,15 @@ EXCERPT_LINES=${EXCERPT_LINES:-20}
 EXCERPT_LINE_CHARS=${EXCERPT_LINE_CHARS:-300}
 EXCERPT_CHARS=${EXCERPT_CHARS:-2000}
 
-# The variables whose *values* must not appear in a comment. Same technique as
-# `no-gateway-leak.sh`: the values arrive in the environment and this file never
-# learns them at rest. A variable that is unset, or shorter than ten characters,
-# is skipped — a short needle would match half the output and turn the excerpt
-# into `[redacted]`.
-EXCERPT_GUARDED=${EXCERPT_GUARDED:-OPENCODE_LLM_API_KEY OPENCODE_LLM_BASE_URL OPENCODE_LLM_MODEL GH_TOKEN GITHUB_TOKEN WORKER_REPO_TOKEN BOARD_READ_TOKEN BOARD_WRITE_TOKEN}
+# The variables whose *values* must not leave this runner — redacted out of a
+# comment by `excerpt` (`#245`) and refused outright by `leak-check` (`#246`).
+#
+# **One list, because it is one fact.** Same technique as `no-gateway-leak.sh`:
+# the values arrive in the environment and this file never learns them at rest.
+# A variable that is unset, or shorter than ten characters, is skipped — a short
+# needle would match half of any text and turn the excerpt into `[redacted]` or
+# refuse every pull request.
+GUARDED_SECRETS=${GUARDED_SECRETS:-OPENCODE_LLM_API_KEY OPENCODE_LLM_BASE_URL OPENCODE_LLM_MODEL GH_TOKEN GITHUB_TOKEN WORKER_REPO_TOKEN BOARD_READ_TOKEN BOARD_WRITE_TOKEN}
 
 # **GitHub masks a secret's value in a log. It does not mask it in a comment.**
 # That is the whole reason this is more than a `tail`: the excerpt is being moved
@@ -313,7 +317,7 @@ excerpt_from() {
   while IFS= read -r line; do
     # By value first, with bash's literal replacement rather than a regex, so a
     # secret containing `/` or `.` cannot escape the substitution.
-    for name in $EXCERPT_GUARDED; do
+    for name in $GUARDED_SECRETS; do
       value=${!name:-}
       [ "${#value}" -ge 10 ] || continue
       line=${line//"$value"/[redacted: the value of $name]}
@@ -395,6 +399,62 @@ previous_failures() {
   # rather than read as one.
   [ -n "$count" ] || { echo 0; return 0; }
   awk '{ total += $1 } END { print total + 0 }' <<<"$count"
+}
+
+# Nothing that is about to be published carries a secret this run holds (`#246`).
+#
+# ## Why this exists next to a sandbox that was already there
+#
+# opencode's sandbox kept the model out of the runner's filesystem, on a
+# container GitHub throws away. **It never kept it out of the credentials**,
+# which were in its environment the whole time — a directory restriction does not
+# stop `env`. So the cheap thing was guarded and the expensive one was not.
+#
+# The expensive one is this: the run writes a **public** pull request, and a
+# model that has read a credential and is being thorough about documenting what
+# it did can put it in a body, a commit message or a test fixture — not
+# maliciously, just completely. GitHub masks a secret's value in a log. It does
+# not mask it in a pull request.
+#
+# ## By value, and deliberately not by shape
+#
+# `excerpt` above redacts by shape as well, because there the cost of a false
+# positive is a slightly less readable comment. Here the cost is a refused pull
+# request and an hour of work returned to the queue, so the test is the one that
+# cannot be wrong: does the literal value of a secret **this run holds** appear.
+# A repository that legitimately documents what a token looks like is not a leak
+# and must not be treated as one.
+#
+# **It prints no value, ever, including on failure** — the variable name and the
+# file are enough to act on, and a grep hit echoed into a public log would be the
+# leak this exists to prevent.
+leak_check() {
+  local failures=0 checked=0 name value file
+
+  for name in $GUARDED_SECRETS; do
+    value=${!name:-}
+    [ -n "$value" ] || continue
+    if [ "${#value}" -lt 10 ]; then
+      echo "skip: $name is set but shorter than 10 characters, so it cannot be searched for safely" >&2
+      continue
+    fi
+    checked=$((checked + 1))
+    for file in "$@"; do
+      [ -f "$file" ] || continue
+      if grep -qF -- "$value" "$file"; then
+        echo "REFUSED: the value of $name appears in $(basename "$file")" >&2
+        failures=$((failures + 1))
+      fi
+    done
+  done
+
+  if [ "$failures" -gt 0 ]; then
+    echo "Nothing was pushed. No value is printed above on purpose — the variable name and the file are enough to fix it." >&2
+    return 1
+  fi
+
+  echo "$checked secret(s) checked against $# file(s); none of them appears in what is about to be published"
+  return 0
 }
 
 set_status() {
@@ -573,6 +633,13 @@ case "${1:-}" in
     exit 0
     ;;
 
+  leak-check)
+    shift
+    [ "$#" -gt 0 ] || die "leak-check needs at least one file to read" 1
+    leak_check "$@"
+    exit $?
+    ;;
+
   solo)
     # *Am I the only run working right now?* Prints `busy` when a previous run is
     # still going, and nothing when it is not.
@@ -612,6 +679,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n>"
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | leak-check <file>..."
     ;;
 esac

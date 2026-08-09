@@ -661,6 +661,76 @@ check "no captured output is not an error" "0" "$rc"
 check "and produces nothing to put in the comment" "" "$out"
 
 echo
+echo "nothing leaves the runner carrying a secret (#246)"
+
+# The boundary where a secret would actually escape: GitHub masks a value in a
+# log and does not mask it in a pull request, and a public branch cannot be
+# taken back. `#246`'s definition of done asks for a fixture with a fake secret,
+# and this is it.
+case_setup
+cat > "$WORK/clean-diff" <<'DIFF'
+--- a/AGENTS.md
++++ b/AGENTS.md
++The check prerequisite is npm run test:db:up.
+DIFF
+printf 'A repository states what its check needs\n' > "$WORK/clean-messages"
+out=$(OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
+      OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+      bash "$SCRIPT" leak-check "$WORK/clean-diff" "$WORK/clean-messages" 2>&1); rc=$?
+check "an ordinary change is not refused" "0" "$rc"
+# The count of secrets is whatever this environment happens to hold — the run's
+# in production, a developer's `GH_TOKEN` here — so the assertion is on what was
+# read rather than on how many needles there were.
+contains "and it says what it checked" "against 2 file(s)" "$out"
+
+case_setup
+cat > "$WORK/leaky-diff" <<'DIFF'
++// the gateway we talk to
++const BASE = "https://gateway.invalid.example/v1"
+DIFF
+err=$(OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
+      OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+      bash "$SCRIPT" leak-check "$WORK/leaky-diff" 2>&1 >/dev/null); rc=$?
+check "a diff carrying the gateway URL is refused, not warned about" "1" "$rc"
+contains "and it names the variable, which is enough to fix it" \
+  "the value of OPENCODE_LLM_BASE_URL" "$err"
+contains "and the file" "leaky-diff" "$err"
+absent "and never the value — printing it here would be the leak itself" \
+  "gateway.invalid.example" "$err"
+
+# A commit message is published by the push exactly as the diff is.
+case_setup
+printf 'fix: talk to https://gateway.invalid.example/v1 directly\n' > "$WORK/leaky-messages"
+rc=0
+OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+  bash "$SCRIPT" leak-check "$WORK/clean-diff" "$WORK/leaky-messages" >/dev/null 2>&1 || rc=$?
+check "a commit message is checked as well as the diff" "1" "$rc"
+
+case_setup
+printf 'Opened by the hourly opencode worker. Key: ghp_0123456789abcdefghijkl\n' > "$WORK/leaky-body"
+rc=0
+GH_TOKEN="ghp_0123456789abcdefghijkl" \
+  bash "$SCRIPT" leak-check "$WORK/leaky-body" >/dev/null 2>&1 || rc=$?
+check "so is the pull request body" "1" "$rc"
+
+# The cost of a false positive here is a refused pull request and an hour of
+# work back in the queue, so the test is by value and deliberately not by shape:
+# a repository that documents what a token looks like is not leaking one.
+case_setup
+printf 'Set GH_TOKEN to a value like ghp_xxxxxxxxxxxxxxxxxxxx before running.\n' \
+  > "$WORK/documentation.md"
+rc=0
+GH_TOKEN="ghp_0123456789abcdefghijkl" \
+  bash "$SCRIPT" leak-check "$WORK/documentation.md" >/dev/null 2>&1 || rc=$?
+check "documentation that looks like a token is not a leak" "0" "$rc"
+
+case_setup
+printf 'nothing to see\n' > "$WORK/plain"
+out=$(GH_TOKEN="short" bash "$SCRIPT" leak-check "$WORK/plain" 2>&1); rc=$?
+check "a value too short to search for cannot refuse everything" "0" "$rc"
+contains "and it says it skipped it rather than passing quietly" "skip: GH_TOKEN" "$out"
+
+echo
 echo "which step failed, and how often this issue has (#245)"
 
 case_setup
@@ -770,6 +840,45 @@ contains "the failure comment still opens with the sentence the count matches" \
   "The hourly opencode worker failed on this issue" "$wf"
 contains "and it is the same sentence the script looks for" \
   "The hourly opencode worker failed on this issue" "$(cat "$SCRIPT")"
+
+# `#246`: three properties of the workflow that only the file can carry.
+contains "the model runs without the repository token in its environment" \
+  "env -u GH_TOKEN opencode run" "$wf_commands"
+contains "the worker's files live in the scratch directory, not the checkout" \
+  "SCRATCH=/tmp/opencode" "$wf_commands"
+absent "and #244's exclude workaround is gone with them" \
+  ".git/info/exclude" "$wf_commands"
+contains "and nothing is published before the leak check has passed" \
+  "leak-check" "$wf_commands"
+leak_line=$(grep -n 'opencode-worker.sh leak-check' "$WORKFLOW" | head -1 | cut -d: -f1)
+push_line=$(grep -n 'git push --set-upstream' "$WORKFLOW" | head -1 | cut -d: -f1)
+if [ -n "$leak_line" ] && [ -n "$push_line" ] && [ "$leak_line" -lt "$push_line" ]; then
+  echo "  ok   the leak check runs before the push, not merely before the pull request"
+else
+  echo "  FAIL the leak check runs before the push, not merely before the pull request"
+  echo "         leak check at line ${leak_line:-none}, push at line ${push_line:-none}"
+  FAILURES+=("the leak check runs before the push")
+fi
+
+# The named-directory grant, and it is a grant rather than an opening: `/tmp`
+# itself stays denied. The 2026-08-07 refusal asked for `/tmp/*`, which is
+# *everything a runner keeps in `/tmp`*.
+config=$(cat "$ROOT/opencode.json")
+contains "the scratch directory is granted by name" '"/tmp/opencode/*": "allow"' "$config"
+contains "and everything else outside the checkout is denied, not asked" \
+  '"external_directory"' "$config"
+if jq -e '.permission.external_directory["*"] == "deny"' "$ROOT/opencode.json" >/dev/null; then
+  echo "  ok   the wider grant is refused explicitly rather than left to a default"
+else
+  echo "  FAIL the wider grant is refused explicitly rather than left to a default"
+  FAILURES+=("external_directory defaults to deny")
+fi
+if jq -e '.permission.external_directory | has("/tmp/*") or has("/tmp") | not' "$ROOT/opencode.json" >/dev/null; then
+  echo "  ok   and /tmp itself is not granted"
+else
+  echo "  FAIL and /tmp itself is not granted"
+  FAILURES+=("/tmp is not granted")
+fi
 
 # `#247`: the prerequisite is worthless if it runs after the check. A `run:`
 # block cannot be executed by a test, so the ordering is asserted on the file.

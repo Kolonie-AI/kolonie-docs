@@ -19,6 +19,11 @@
       "gh release*": "deny",
       "gh secret*": "deny",
       "gh auth*": "deny"
+    },
+    "external_directory": {
+      "*": "deny",
+      "/tmp/opencode/*": "allow",
+      "/tmp/opencode/**": "allow"
     }
   },
   "instructions": ["AGENTS.md"]
