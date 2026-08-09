@@ -46,6 +46,18 @@ case "$1 $2" in
       exit 1
     fi
     ;;
+  # `#245` reads two things over REST: this run's steps, and the issue's own
+  # comments. Both are `gh api`, so the stub dispatches on the path.
+  "api "*)
+    if [ -s "$GH_FIXTURES/api_fails" ]; then
+      echo "HTTP 502" >&2
+      exit 1
+    fi
+    case "$2" in
+      */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
+      */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
+      *) ;;
+    esac ;;
   *) ;;
 esac
 STUB
@@ -413,6 +425,16 @@ case "$1 $2" in
       exit 1
     fi
     ;;
+  "api "*)
+    if [ -s "$GH_FIXTURES/api_fails" ]; then
+      echo "HTTP 502" >&2
+      exit 1
+    fi
+    case "$2" in
+      */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
+      */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
+      *) ;;
+    esac ;;
   *) ;;
 esac
 STUB
@@ -540,6 +562,137 @@ check "while what it may set still arrives" "ok" \
   "$(eval "$out"; printf '%s' "${DATABASE_URL:-}")"
 
 echo
+echo "a failure that says why (#245)"
+
+# The excerpt is moving build output from a place GitHub masks secrets in — a
+# log — to a place it does not: a public comment. So the bounding and the
+# filtering are the two properties worth proving, and `#245`'s definition of
+# done asks for both by name.
+#
+# The stub returns what `--jq` would already have reduced the response to,
+# which is the convention the `run list` cases above set: the fixture is the
+# answer, not the payload.
+
+case_setup
+{
+  for i in $(seq 1 200); do echo "line $i of build output"; done
+} > "$WORK/big.log"
+out=$(bash "$SCRIPT" excerpt "$WORK/big.log" 2>/dev/null)
+check "the excerpt is twenty lines and not two hundred" "20" "$(grep -c . <<<"$out")"
+contains "and it is the last of them, which is where the reason is" "line 200" "$out"
+absent "not the first" "line 1 of" "$out"
+
+case_setup
+{
+  printf 'a very long line: '
+  for i in $(seq 1 500); do printf 'xxxxxxxxxx'; done
+  printf '\n'
+} > "$WORK/long.log"
+out=$(bash "$SCRIPT" excerpt "$WORK/long.log" 2>/dev/null)
+if [ "${#out}" -le 400 ]; then
+  echo "  ok   one enormous line is cut rather than posted whole"
+else
+  echo "  FAIL one enormous line is cut rather than posted whole"
+  echo "         got ${#out} characters"
+  FAILURES+=("the line bound")
+fi
+contains "and says it was cut" "line truncated" "$out"
+
+case_setup
+{ for i in $(seq 1 20); do printf 'line %s: ' "$i"; for j in $(seq 1 40); do printf 'yyyyyyyyyy'; done; printf '\n'; done; } > "$WORK/wide.log"
+out=$(bash "$SCRIPT" excerpt "$WORK/wide.log" 2>/dev/null)
+if [ "${#out}" -le 2200 ]; then
+  echo "  ok   and twenty long lines are cut as a whole too"
+else
+  echo "  FAIL and twenty long lines are cut as a whole too"
+  echo "         got ${#out} characters"
+  FAILURES+=("the total bound")
+fi
+contains "and says so" "excerpt truncated" "$out"
+
+# The filtering, with a fake secret in the fixture — `#245`'s definition of
+# done. By value first: this is the case where the secret is one this run holds
+# and could be any shape at all.
+case_setup
+cat > "$WORK/leaky.log" <<'LOG'
+> npm run check
+fetching from https://gateway.invalid.example/v1 with key sk-live-abcdefghijklmnop
+GH_TOKEN=ghp_0123456789abcdefghijklmnopqrstuvwxyz
+DATABASE_URL=postgres://admin:hunter2@db.internal:5432/kolonie
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJlSGVyZQ
+MY_SERVICE_TOKEN=totally-secret-value
+LOG
+out=$(OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+      OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
+      bash "$SCRIPT" excerpt "$WORK/leaky.log" 2>/dev/null)
+absent "the gateway URL does not reach a comment" "gateway.invalid.example" "$out"
+absent "nor does the gateway key" "sk-live-abcdefghijklmnop" "$out"
+contains "and it says which variable it took out, which is enough to fix it" \
+  "the value of OPENCODE_LLM_BASE_URL" "$out"
+
+# By shape second, which is what value-matching cannot do: a credential this
+# run never held, printed by somebody else's build.
+absent "a GitHub token is redacted by shape, not only by value" \
+  "ghp_0123456789abcdefghijklmnopqrstuvwxyz" "$out"
+absent "so is a bearer token" "c2lnbmF0dXJlSGVyZQ" "$out"
+absent "so is a password inside a URL" "hunter2" "$out"
+absent "and an environment dump does not leak a value it never knew" \
+  "totally-secret-value" "$out"
+contains "while the line that says what actually failed survives" "npm run check" "$out"
+
+# A short or unset value must not be searched for: it would match half the
+# output and turn every excerpt into `[redacted]`.
+case_setup
+printf 'the build failed in packages/db\n' > "$WORK/short.log"
+out=$(OPENCODE_LLM_API_KEY="abc" bash "$SCRIPT" excerpt "$WORK/short.log" 2>/dev/null)
+check "a value too short to search for is skipped, not matched" \
+  "the build failed in packages/db" "$out"
+
+# The excerpt goes into a fenced block in a comment, so three backticks in the
+# output would end the fence and render the rest as prose.
+case_setup
+printf 'error in ```js\nconst x = 1\n```\n' > "$WORK/fenced.log"
+out=$(bash "$SCRIPT" excerpt "$WORK/fenced.log" 2>/dev/null)
+absent "a fence in the output cannot break out of the comment's fence" '```' "$out"
+
+case_setup
+out=$(bash "$SCRIPT" excerpt "$WORK/there-is-no-output-file" 2>/dev/null); rc=$?
+check "no captured output is not an error" "0" "$rc"
+check "and produces nothing to put in the comment" "" "$out"
+
+echo
+echo "which step failed, and how often this issue has (#245)"
+
+case_setup
+export GITHUB_RUN_ID=31302611039
+printf 'Work it\n' > "$GH_FIXTURES/jobs"
+check "the failed step is named" "Work it" "$(bash "$SCRIPT" failed-step 2>/dev/null)"
+
+case_setup
+export GITHUB_RUN_ID=31302611039
+echo yes > "$GH_FIXTURES/api_fails"
+out=$(bash "$SCRIPT" failed-step 2>/dev/null); rc=$?
+check "an API that will not answer does not fail the reporting step" "0" "$rc"
+check "it simply has no name to give" "" "$out"
+
+case_setup
+printf '2\n' > "$GH_FIXTURES/comments"
+check "prior failures on the issue are counted off its own comments" \
+  "2" "$(bash "$SCRIPT" previous-failures Kolonie-AI/kolonie-docs 10 2>/dev/null)"
+
+# `--paginate` with `--jq` prints one number per page rather than one total.
+case_setup
+printf '100\n2\n' > "$GH_FIXTURES/comments"
+check "and a paginated answer is added up rather than read as the first page" \
+  "102" "$(bash "$SCRIPT" previous-failures Kolonie-AI/kolonie-docs 10 2>/dev/null)"
+
+case_setup
+echo yes > "$GH_FIXTURES/api_fails"
+check "a count that cannot be read is zero, not a failure" \
+  "0" "$(bash "$SCRIPT" previous-failures Kolonie-AI/kolonie-docs 10 2>/dev/null)"
+unset GITHUB_RUN_ID
+
+echo
 echo "two runs cannot work at once (#231)"
 
 case_setup
@@ -604,6 +757,19 @@ absent "and no force-with-lease either" "force-with-lease" "$wf_commands"
 contains "auto-merge is queued, never waited on" "--auto --squash" "$wf"
 contains "and it is gated on the target having a required check" \
   "branches/main/protection" "$wf"
+
+# `#245`: the two places a failure is announced both have to carry the reason.
+# Neither can be executed by a test, so both are asserted on the file.
+contains "a failed run writes a job summary" "GITHUB_STEP_SUMMARY" "$wf"
+contains "and the comment carries the excerpt, not only a link" \
+  "steps.why.outputs.excerpt" "$wf"
+contains "and names the step that failed" "steps.why.outputs.step" "$wf"
+# The sentence `previous-failures` counts. Changing it here without changing it
+# in the script makes every failure before that day invisible to the count.
+contains "the failure comment still opens with the sentence the count matches" \
+  "The hourly opencode worker failed on this issue" "$wf"
+contains "and it is the same sentence the script looks for" \
+  "The hourly opencode worker failed on this issue" "$(cat "$SCRIPT")"
 
 # `#247`: the prerequisite is worthless if it runs after the check. A `run:`
 # block cannot be executed by a test, so the ordering is asserted on the file.

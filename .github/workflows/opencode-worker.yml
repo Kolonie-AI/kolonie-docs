@@ -345,6 +345,32 @@ jobs:
           # quote it constantly.
           cd target
 
+          # **Where a failure leaves its reason** (`#245`). Until now a failed
+          # run announced itself with a link and nothing else — on the issue, in
+          # the Actions list, and on a run page with no summary at all — so the
+          # comment carried the same information as the red cross.
+          #
+          # It has to be written on the way past rather than read back
+          # afterwards: **a job's log is not served by the API while that job is
+          # still running**, and the comment is written from inside this job.
+          # `$RUNNER_TEMP` survives between steps, so the reporting steps at the
+          # bottom read what this one wrote here.
+          FAILURE_DIR="$RUNNER_TEMP/opencode-failure"
+          mkdir -p "$FAILURE_DIR"
+
+          # The distinction the comment could not make and now can. **`work`**
+          # means the change did not pass the target's own check: the issue
+          # genuinely is not done and requeueing is right. **`worker`** means the
+          # issue was never the problem — a token, a checkout, the environment,
+          # the worker's own scratch files — and that one will fail the same way
+          # every hour until somebody looks.
+          fail() {
+            printf '%s\n' "$1" > "$FAILURE_DIR/kind"
+            printf '%s\n' "$2" > "$FAILURE_DIR/reason"
+            if [ -n "${3:-}" ] && [ -f "$3" ]; then cp "$3" "$FAILURE_DIR/output"; fi
+            exit 1
+          }
+
           git config user.name "opencode worker"
           git config user.email "noreply@kolonie.ai"
           branch="opencode/issue-${ISSUE}"
@@ -452,7 +478,7 @@ jobs:
           # is no committed default to fall back to.
           echo "model: gateway/${OPENCODE_LLM_MODEL}"
 
-          opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$(cat <<PROMPT
+          prompt=$(cat <<PROMPT
           You are working issue #${ISSUE} in this repository, unattended. Nobody is
           watching and nobody will answer a question, so if the issue is ambiguous,
           make the smallest defensible change and say in the pull request body
@@ -490,7 +516,16 @@ jobs:
           - If you conclude the issue cannot be done as specified, do not guess.
             Commit nothing, and write why to ./opencode-refusal.txt.
           PROMPT
-          )"
+          )
+
+          # Kept, rather than piped straight to the log, so that a run which dies
+          # inside opencode itself — the gateway, the tool, a permission it was
+          # refused — can say the last of what it printed instead of leaving a
+          # link (`#245`).
+          model_log="$RUNNER_TEMP/opencode-model.log"
+          if ! opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$prompt" 2>&1 | tee "$model_log"; then
+            fail worker "opencode's own run did not finish. That is the model, the gateway or the tool — not a verdict on the change" "$model_log"
+          fi
 
           # Both paths below were written against a `/tmp` the agent cannot
           # reach, and against a working tree it is told to leave clean. Both
@@ -499,7 +534,8 @@ jobs:
           if [ -s ./opencode-refusal.txt ]; then
             echo "the agent declined the issue:"
             cat ./opencode-refusal.txt
-            exit 1
+            fail work "the model declined the issue as specified and committed nothing. Its reason is below, and it is about the issue rather than about this run" \
+              ./opencode-refusal.txt
           fi
 
           # **Commits, not the working tree** (2026-08-07). This was
@@ -516,8 +552,9 @@ jobs:
           # open a pull request from exactly that range.
           if [ "$(git rev-list --count origin/main..HEAD)" -eq 0 ]; then
             echo "no commits on $branch — nothing to open a pull request for"
-            git status --porcelain
-            exit 1
+            git status --porcelain | tee "$RUNNER_TEMP/opencode-nocommits.log"
+            fail work "the model committed nothing to \`$branch\`, so there was nothing to open a pull request for" \
+              "$RUNNER_TEMP/opencode-nocommits.log"
           fi
 
           # **The target repository's check, read from its own `AGENTS.md`**
@@ -552,8 +589,9 @@ jobs:
           # which files were the worker's is how this returns.
           if [ -n "$(git status --porcelain)" ]; then
             echo "the worktree is not clean before the check; this is the worker's fault, not the change's" >&2
-            git status --porcelain >&2
-            exit 1
+            git status --porcelain | tee "$RUNNER_TEMP/opencode-dirty.log" >&2
+            fail worker "the worktree was not clean before the check ran, so the check's verdict would not have been about the change. The loose files are below" \
+              "$RUNNER_TEMP/opencode-dirty.log"
           fi
 
           # **What the check needs, before the check** (`#247`).
@@ -577,7 +615,10 @@ jobs:
           if [ -n "${CHECK_PREREQUISITE:-}" ]; then
             echo "the target declares a check prerequisite: $CHECK_PREREQUISITE"
             prereq_out=$(mktemp)
-            eval "$CHECK_PREREQUISITE" 2>&1 | tee "$prereq_out"
+            if ! eval "$CHECK_PREREQUISITE" 2>&1 | tee "$prereq_out"; then
+              fail worker "the target's check prerequisite (\`$CHECK_PREREQUISITE\`) did not run, so the check was never given what it asked for" \
+                "$prereq_out"
+            fi
 
             # Whatever environment it handed back — `export NAME=value` lines and
             # nothing else, quoted for exactly one `eval`. The script is where
@@ -592,7 +633,10 @@ jobs:
           fi
 
           echo "running this repository's own check: $CHECK_COMMAND"
-          eval "$CHECK_COMMAND"
+          check_log="$RUNNER_TEMP/opencode-check.log"
+          if ! eval "$CHECK_COMMAND" 2>&1 | tee "$check_log"; then
+            fail work "\`$CHECK_COMMAND\` did not pass on this branch, so the change is not done" "$check_log"
+          fi
 
           git push --set-upstream origin "$branch"
 
@@ -685,6 +729,107 @@ jobs:
           bash .github/scripts/opencode-worker.sh release \
             "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
 
+      # ## The reason goes where the failure is announced (`#245`, 2026-08-09)
+      #
+      # Before this, three places said a run had failed and none of them said
+      # why: the comment carried a link, the Actions list a red cross, and the
+      # run page had **no summary at all** — sixteen steps, one of them red, the
+      # reason several hundred lines inside it. Run `31302611039` failed because
+      # three of the worker's own scratch files tripped `prettier --check`, and
+      # reading that off the run took expanding *Work it* and scrolling.
+      #
+      # **Nobody watches the Actions tab**, so the comment is the more important
+      # half and the summary is the cheap one. This step computes both from the
+      # same two facts, so they cannot disagree.
+      #
+      # It runs without the issue guard on purpose: a run that fails **before**
+      # taking an issue — a board that will not answer, a queue that will not
+      # read — has no comment to leave and still deserves a summary saying so.
+      - name: What failed, and why
+        id: why
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # **The secrets are here to be redacted, not to be used** — the
+          # excerpt is moving output from a place GitHub masks secrets in (a
+          # log) to a place it does not (a public comment), and matching by
+          # value is the only way to catch one whatever it looks like. Same
+          # technique and same reasoning as `no-gateway-leak.sh`, which also
+          # takes the values in the environment and never prints one.
+          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
+          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
+          WORKER_REPO_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
+          BOARD_READ_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
+          BOARD_WRITE_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          REPO: ${{ steps.queue.outputs.repo }}
+          ISSUE: ${{ steps.queue.outputs.issue }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          FAILURE_DIR="$RUNNER_TEMP/opencode-failure"
+
+          # `failed-step` asks the API, because the steps that fail hardest — a
+          # checkout, an install — are the ones that cannot be made to write a
+          # file first. It never fails the caller: a reporting step that dies
+          # while reporting leaves exactly the silence this exists to remove.
+          step=$(bash .github/scripts/opencode-worker.sh failed-step)
+          [ -n "$step" ] || step="(no step reported a failure — the job itself was stopped)"
+
+          # **A missing marker means the model never got that far**, which is
+          # itself the answer: everything before `Work it` is the worker's own
+          # machinery, so `worker` is the correct default rather than a guess.
+          kind=$(cat "$FAILURE_DIR/kind" 2>/dev/null || echo worker)
+          reason=$(cat "$FAILURE_DIR/reason" 2>/dev/null || true)
+          [ -n "$reason" ] || reason="the run stopped in \`$step\`, before anything recorded a reason"
+
+          excerpt=$(bash .github/scripts/opencode-worker.sh excerpt "$FAILURE_DIR/output")
+
+          if [ "$kind" = work ]; then
+            verdict="**The work failed.** The change did not pass ${REPO:-the target}'s own check, so the issue genuinely is not done and putting it back in Ready is right."
+          else
+            verdict="**The worker failed, not the change.** The issue was never the problem here, so the next scheduled hour will very likely fail the same way — this one is worth a person's minute rather than another retry."
+          fi
+
+          # The delimiter carries a random component because the excerpt is
+          # arbitrary build output: a fixed one appearing in a log line would end
+          # the value early, and `$GITHUB_OUTPUT` would then be read as though
+          # the rest of the excerpt were more variables.
+          d="WORKER_EOF_${RANDOM}${RANDOM}"
+          {
+            echo "kind=$kind"
+            echo "step<<$d"; echo "$step"; echo "$d"
+            echo "reason<<$d"; echo "$reason"; echo "$d"
+            echo "verdict<<$d"; echo "$verdict"; echo "$d"
+            echo "excerpt<<$d"; echo "$excerpt"; echo "$d"
+          } >> "$GITHUB_OUTPUT"
+
+          # `$GITHUB_STEP_SUMMARY` renders at the top of the run page, which is
+          # the one place a red cross currently leads to and explains nothing.
+          {
+            echo "## The worker failed"
+            echo
+            if [ -n "${ISSUE:-}" ]; then
+              echo "**Working:** [${REPO}#${ISSUE}](${GITHUB_SERVER_URL}/${REPO}/issues/${ISSUE})"
+            else
+              echo "**Working:** nothing — the run failed before it took an issue."
+            fi
+            echo
+            echo "**Failed step:** \`${step}\`"
+            echo
+            echo "$verdict"
+            echo
+            echo "$reason"
+            if [ -n "$excerpt" ]; then
+              echo
+              echo "### The last of what it printed"
+              echo
+              echo '```'
+              echo "$excerpt"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Say why on the issue
         if: (failure() || cancelled()) && steps.queue.outputs.issue
         env:
@@ -693,8 +838,55 @@ jobs:
           # step, and for the same reason.
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ steps.queue.outputs.repo }}
+          ISSUE: ${{ steps.queue.outputs.issue }}
+          STEP: ${{ steps.why.outputs.step }}
+          REASON: ${{ steps.why.outputs.reason }}
+          VERDICT: ${{ steps.why.outputs.verdict }}
+          EXCERPT: ${{ steps.why.outputs.excerpt }}
         run: |
-          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
-            "The hourly opencode worker failed on this issue and has put it back in **Ready**: $RUN_URL
+          set -uo pipefail
 
-          The \`agent:opencode\` label is untouched, so it is queued again and will be tried on a later hour. If it fails repeatedly, that is a finding worth recording on \`#142\` rather than a reason to keep retrying."
+          # **The opening sentence is unchanged since `#142` on purpose.** It is
+          # what `previous-failures` counts, so rewording it would make every
+          # failure before today invisible to the count below.
+          body=$(mktemp)
+          {
+            echo "The hourly opencode worker failed on this issue and has put it back in **Ready**: $RUN_URL"
+            echo
+            echo "**Where:** \`${STEP}\`"
+            echo
+            echo "${VERDICT}"
+            echo
+            echo "${REASON}"
+            if [ -n "${EXCERPT:-}" ]; then
+              echo
+              echo "<details><summary>The last of what it printed</summary>"
+              echo
+              echo '```'
+              echo "${EXCERPT}"
+              echo '```'
+              echo
+              echo "</details>"
+            fi
+          } > "$body"
+
+          # **Three failures on one issue is a finding, not a queue** — it will
+          # otherwise loop hourly with nobody noticing the pattern, which is the
+          # exact shape of a worker-side failure. The count comes off this
+          # issue's own comments, so it needs no state anywhere.
+          failures=$(bash .github/scripts/opencode-worker.sh previous-failures "$REPO" "$ISSUE")
+          failures=$((failures + 1))
+          if [ "$failures" -ge 3 ]; then
+            {
+              echo
+              echo "⚠️ **This is failure number ${failures} on this issue.** That is a finding rather than a queue: an issue the worker keeps failing is either specified in a way it cannot act on, or is hitting something in the worker itself. \`kolonie-docs#142\` is where that gets recorded — not another hour of retries."
+            } >> "$body"
+          fi
+
+          {
+            echo
+            echo "The \`agent:opencode\` label is untouched, so it is queued again and will be tried on a later hour. The run link has the full log; the excerpt above is bounded and has every known secret taken out of it."
+          } >> "$body"
+
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file "$body"

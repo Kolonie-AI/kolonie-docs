@@ -10,6 +10,9 @@
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
 #   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
 #   opencode-worker.sh exports <file>          # -> the `export NAME=value` lines a prerequisite emitted, made safe
+#   opencode-worker.sh failed-step             # -> the name of this run's failed step
+#   opencode-worker.sh excerpt <file>          # -> its last lines, bounded and with every secret taken out
+#   opencode-worker.sh previous-failures <repo> <number>  # -> how many times the worker has already failed here
 #
 # **All of it is here rather than in the workflow**, for `board-self-check.sh`'s
 # reason: a workflow's `run:` blocks cannot be tested, and the parts of this that
@@ -262,6 +265,138 @@ exports_from() {
   done <"$file"
 }
 
+# ## Saying why a run failed, where the failure is announced (`#245`)
+#
+# A failed run used to say *it failed, here is a link* — on the issue, in the
+# Actions list, and on the run page, which had no summary at all. To learn that
+# run `31302611039` died because three of the worker's own scratch files tripped
+# `prettier --check`, somebody had to expand *Work it* and read past several
+# hundred lines of build output. The maintainer, 2026-08-09: *"man kann nicht so
+# richtig sehen, woran es liegt."*
+#
+# The three pieces below are what the workflow needs to say it instead, and they
+# are here rather than in a `run:` block because a `run:` block cannot be tested
+# — which is the reason this whole file exists.
+
+# The marker that makes a failure comment countable. It is the opening of the
+# comment the workflow has written since `#142`, unchanged on purpose: changing
+# it would make every failure before today invisible to the count below.
+FAILURE_MARKER=${FAILURE_MARKER:-The hourly opencode worker failed on this issue}
+
+# How much of a log may reach a public comment. Three separate bounds, because
+# they fail differently: a single line of minified output can be a megabyte, a
+# tail of twenty can still be long, and the comment must stay readable.
+EXCERPT_LINES=${EXCERPT_LINES:-20}
+EXCERPT_LINE_CHARS=${EXCERPT_LINE_CHARS:-300}
+EXCERPT_CHARS=${EXCERPT_CHARS:-2000}
+
+# The variables whose *values* must not appear in a comment. Same technique as
+# `no-gateway-leak.sh`: the values arrive in the environment and this file never
+# learns them at rest. A variable that is unset, or shorter than ten characters,
+# is skipped — a short needle would match half the output and turn the excerpt
+# into `[redacted]`.
+EXCERPT_GUARDED=${EXCERPT_GUARDED:-OPENCODE_LLM_API_KEY OPENCODE_LLM_BASE_URL OPENCODE_LLM_MODEL GH_TOKEN GITHUB_TOKEN WORKER_REPO_TOKEN BOARD_READ_TOKEN BOARD_WRITE_TOKEN}
+
+# **GitHub masks a secret's value in a log. It does not mask it in a comment.**
+# That is the whole reason this is more than a `tail`: the excerpt is being moved
+# from a place the platform protects to a place it does not.
+#
+# Two passes, and both are needed. By value catches the secrets this run holds,
+# exactly and whatever they look like. By shape catches what value-matching
+# cannot: a credential the target repository printed, a token in somebody else's
+# output, an environment dump. Neither is sufficient alone.
+excerpt_from() {
+  local file=$1
+  [ -f "$file" ] || return 0
+
+  local line name value out=""
+  while IFS= read -r line; do
+    # By value first, with bash's literal replacement rather than a regex, so a
+    # secret containing `/` or `.` cannot escape the substitution.
+    for name in $EXCERPT_GUARDED; do
+      value=${!name:-}
+      [ "${#value}" -ge 10 ] || continue
+      line=${line//"$value"/[redacted: the value of $name]}
+    done
+
+    # Then by shape. The last rule is the one that catches a `postgres://` or an
+    # `https://user:pass@` that nothing in this run put there.
+    #
+    # **The `NAME=value` rule runs before the token-shaped ones**, and the order
+    # is not arbitrary: with it last, `GH_TOKEN=ghp_…` was redacted twice — once
+    # into `[redacted: a GitHub token]` and then again over the front of that —
+    # leaving `GH_TOKEN=[redacted] a GitHub token]`. Nothing leaked, and it read
+    # like something had.
+    line=$(sed -E \
+      -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
+      -e 's/([A-Za-z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|CREDENTIAL))=[^[:space:]]+/\1=[redacted]/g' \
+      -e 's/gh[pousr]_[A-Za-z0-9]{16,}/[redacted: a GitHub token]/g' \
+      -e 's/github_pat_[A-Za-z0-9_]{20,}/[redacted: a GitHub token]/g' \
+      -e 's/(sk|xoxb|xoxp|xapp)-[A-Za-z0-9_-]{16,}/[redacted: an API key]/g' \
+      -e 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/[redacted: a token]/g' \
+      -e 's/[Bb]earer[[:space:]]+[A-Za-z0-9._~+/-]{16,}=*/[redacted: a bearer token]/g' \
+      -e 's#://[^/@:[:space:]]+:[^/@[:space:]]+@#://[redacted: credentials]@#g' \
+      <<<"$line")
+
+    # A fenced block is what carries this into a comment, so three backticks in
+    # the output would end the fence and let the rest render as prose.
+    line=${line//'```'/\'\'\'}
+    line=${line//$'\r'/}
+
+    if [ "${#line}" -gt "$EXCERPT_LINE_CHARS" ]; then
+      line="${line:0:$EXCERPT_LINE_CHARS}… (line truncated)"
+    fi
+    out+="$line"$'\n'
+  done < <(tail -n "$EXCERPT_LINES" "$file")
+
+  # Trailing newline off, then the last bound. The comment says the run link
+  # carries the rest, so a cut here loses nothing that cannot be gone and read.
+  out=${out%$'\n'}
+  if [ "${#out}" -gt "$EXCERPT_CHARS" ]; then
+    out="${out:0:$EXCERPT_CHARS}"$'\n'"… (excerpt truncated at $EXCERPT_CHARS characters; the run log has the rest)"
+  fi
+  printf '%s\n' "$out"
+}
+
+# Which step went red. Read from the API rather than tracked in a file, because
+# the steps that fail hardest — a checkout, an install — are the ones that cannot
+# be made to write a file first.
+#
+# **A job's log is not available while that job is still running**, which is why
+# this returns a *name* and the excerpt comes from a file the run wrote as it
+# went. The steps API does answer mid-run: a completed step carries its
+# conclusion while the job around it is still `in_progress`.
+#
+# It never fails the caller. A reporting step that dies while reporting leaves
+# exactly the silence it was added to remove.
+failed_step() {
+  local repo=${GITHUB_REPOSITORY:-} run=${GITHUB_RUN_ID:-}
+  [ -n "$repo" ] && [ -n "$run" ] || return 0
+  gh api "repos/$repo/actions/runs/$run/jobs" --paginate \
+    --jq '[.jobs[].steps[]? | select(.conclusion == "failure") | .name] | .[0] // empty' \
+    2>/dev/null || true
+}
+
+# How many times this issue has already been failed by the worker, counted off
+# its own comments.
+#
+# **It counts failures on the issue and not failures in a row**, and the
+# difference is worth stating rather than hiding behind the word *consecutive*:
+# nothing writes a comment when a run succeeds, so there is no marker to reset
+# against. A count of three means three failures on this issue, which is the
+# finding either way — an issue the worker cannot do will produce them one after
+# another, and one it can will not produce them at all.
+previous_failures() {
+  local repo=$1 number=$2
+  local count
+  count=$(gh api "repos/$repo/issues/$number/comments" --paginate \
+    --jq "[.[] | select(.body | contains(\"$FAILURE_MARKER\"))] | length" 2>/dev/null) || count=""
+  # `--paginate` with `--jq` prints one number per page, so they are added up
+  # rather than read as one.
+  [ -n "$count" ] || { echo 0; return 0; }
+  awk '{ total += $1 } END { print total + 0 }' <<<"$count"
+}
+
 set_status() {
   local item=$1 option=$2
   gh project item-edit --id "$item" --project-id "$PROJECT_ID" \
@@ -422,6 +557,22 @@ case "${1:-}" in
     exit 0
     ;;
 
+  failed-step)
+    failed_step
+    exit 0
+    ;;
+
+  excerpt)
+    excerpt_from "${2:?excerpt needs a file to read}"
+    exit 0
+    ;;
+
+  previous-failures)
+    previous_failures "${2:?previous-failures needs a repository}" \
+      "${3:?previous-failures needs an issue number}"
+    exit 0
+    ;;
+
   solo)
     # *Am I the only run working right now?* Prints `busy` when a previous run is
     # still going, and nothing when it is not.
@@ -461,6 +612,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file>"
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n>"
     ;;
 esac
