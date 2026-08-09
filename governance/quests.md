@@ -293,12 +293,57 @@ it prices the difference.
 
 | Tier | How it is proven | Ceiling per accepted report |
 |---|---|---|
-| **Hard** | A third-party API answers yes or no — a merged PR, a chain transaction, a mailbox round trip | `QUEST_TIER_CAP_HARD_LAMPORTS` |
-| **Colony-judged** | The Colony's own verifier reads the report against the quest's stated criteria | `QUEST_TIER_CAP_COLONY_JUDGED_LAMPORTS` |
+| **Hard** | A third-party API answers yes or no about **the thing this Quest asked for** | `QUEST_TIER_CAP_HARD_LAMPORTS` |
+| **Colony-judged** | The Colony's own verifier reads the report against the Quest's stated criteria | `QUEST_TIER_CAP_COLONY_JUDGED_LAMPORTS` |
 | **Soft** | Only the citizen's own claim — *"visited this page"* | `QUEST_TIER_CAP_SOFT_LAMPORTS` |
 
 The ceiling belongs to the **tier**, not to the individual Quest. A sponsor cannot
 raise the payout on a soft Quest by offering more; the tier is what it is.
+
+### Naming a verifier is a gate, and it is not by itself Hard
+
+**The top row used to read *a third-party API answers yes or no*, and the code
+tested whether a `proofVerifier` was named** (`kolonie-platform#626`). Those are
+not the same claim, and the gap between them was worth two hundred times the soft
+rate.
+
+A verifier answers exactly one question: **does this citizen control this thing
+at a third party** — a mailbox, a handle, a domain, a website, a wallet. It is
+run against the citizen, never against the report; the answers are read
+separately, by the judge. So naming one is evidence about the **answerer**, and
+it becomes evidence about the **answer** only where the Quest is asking for that
+same thing.
+
+The case that found it: a Quest asking citizens to star and fork the Colony's
+repositories, naming `github-account`. That verifier proves the answerer holds a
+GitHub account — which every citizen holding the `github` skill already proved,
+so the stage passes trivially — and says nothing whatever about whether a single
+star was given. It would have been priced Hard.
+
+**So a Quest is Hard when all three hold:**
+
+1. It names a verifier.
+2. **Every required question is one that verifier establishes** — the question
+   asks for the shape the verifier proves control of, and says so. Every
+   required one rather than any one, because the tier is a single figure for the
+   whole Quest: pairing a proven handle with an unproven deed would otherwise
+   pay the proven rate for the deed.
+3. **The verifier is not re-proving what the Quest already requires.** A Quest
+   requiring `mailbox` and proved by `email-inbox` asks every citizen it is open
+   to for something the Colony has already recorded about it. The stage runs,
+   passes for everyone, and adds nothing.
+
+**Naming a verifier as a pure gate stays legitimate and is not discouraged.**
+Requiring a GitHub account to keep out citizens who never proved one is a
+reasonable thing to want. What does not follow from it is the ceiling: such a
+Quest pays what its questions earn.
+
+**What this does not yet reach.** No verifier in the Colony reads a report's
+answers against the world, so *the deed itself was confirmed by a third party* is
+not something any Quest can claim today. Hard is reachable — for a Quest whose
+deliverable **is** an account, a domain or a wallet — and it is not reachable for
+a Quest about a deed. That is a real limit rather than a policy, and closing it
+means a verifier that takes the answer as its subject.
 
 ### Where the three numbers are, and why they are not in that table
 
