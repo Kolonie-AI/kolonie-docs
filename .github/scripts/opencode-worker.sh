@@ -8,6 +8,8 @@
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
+#   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
+#   opencode-worker.sh exports <file>          # -> the `export NAME=value` lines a prerequisite emitted, made safe
 #
 # **All of it is here rather than in the workflow**, for `board-self-check.sh`'s
 # reason: a workflow's `run:` blocks cannot be tested, and the parts of this that
@@ -138,22 +140,126 @@ board_item_for() {
 # is a defect in that file and the run should say so and stop."* A guessed
 # `npm run check` in a repository with no `package.json` fails somewhere further
 # in, with a message about npm rather than about the missing section.
+#
+# ## One reader, two headings (`#247`)
+#
+# The convention below is now used twice — *The check command* and *The check
+# prerequisite* — so the parsing is a function of the heading rather than two
+# copies of the same awk programme that drift apart. The heading arrives
+# lowercased and is matched against a lowercased line, which is what lets
+# `## 10. The check command` and `## The check command` both work.
+first_fenced_block_under() {
+  local file=$1 heading=$2
+  awk -v heading="$heading" '
+    tolower($0) ~ ("^#+ .*" heading "[[:space:]]*$") { section = 1; next }
+    section && /^#+ / { exit }
+    section && /^```/ { fence = !fence; if (!fence) exit; next }
+    section && fence && NF { print; exit }
+  ' "$file"
+}
+
 check_command_from() {
   local file=$1
   [ -f "$file" ] || die "no AGENTS.md at $file — cannot learn this repository's check command" 5
 
   local command
-  command=$(awk '
-    /^#+ .*[Tt]he check command[[:space:]]*$/ { section = 1; next }
-    section && /^#+ / { exit }
-    section && /^```/ { fence = !fence; if (!fence) exit; next }
-    section && fence && NF { print; exit }
-  ' "$file")
+  command=$(first_fenced_block_under "$file" "the check command")
 
   if [ -z "$command" ]; then
     die "$file names no check command: it needs a 'The check command' heading with the command in a fenced block. Refusing to guess one." 5
   fi
   printf '%s\n' "$command"
+}
+
+# What the check needs in front of it, if the repository says it needs anything.
+#
+# ## Why this is read and not held here (`#247`)
+#
+# The worker re-runs the target's check after the model has finished, because an
+# unattended agent reporting that it ran a check is the claim this workflow
+# exists to stop taking on trust. **It was re-running it in an environment the
+# check is designed to refuse.** `kolonie-platform`'s suite fails hard on an
+# unset `DATABASE_URL` — deliberately, `operations/testing.md`: *"a suite that
+# skips them silently reports green while covering nothing"* — and the worker
+# provided no PostgreSQL. Run `31303638874`, 2026-08-09: the model found
+# `npm run test:db:up` in the repository's own documentation, started the server,
+# passed the whole check against it, and then the worker's re-run failed on the
+# one thing the model had already solved. **The verification step was weaker than
+# the thing it exists to verify.**
+#
+# The fix is the same shape as the check command one heading up, and for the same
+# reason `#231` gives: a `services: postgres:16` block in the workflow would be
+# repository-specific knowledge held in the worker, and the next repository with
+# a prerequisite would discover this again. The repository that has the
+# prerequisite is the repository that states it.
+#
+# ## Absent is an answer, and it is the common one
+#
+# `check-command` fails when a repository names none, because a check that cannot
+# be run means the run cannot be verified. This is the opposite: four of the five
+# repositories need nothing before their check, so **silence prints nothing and
+# exits 0**. A missing section here is not a defect in that file.
+check_prerequisite_from() {
+  local file=$1
+  [ -f "$file" ] || die "no AGENTS.md at $file — cannot learn this repository's check prerequisite" 5
+
+  first_fenced_block_under "$file" "the check prerequisite"
+}
+
+# The environment a prerequisite handed back, and nothing else it printed.
+#
+# ## Why the output is filtered rather than sourced
+#
+# `npm run test:db:up` finishes by printing `export DATABASE_URL=…`, which is the
+# repository's existing interface to a person: run this, then copy that line.
+# Honouring it is what makes the prerequisite worth declaring — a command that
+# starts a server the check then cannot find is not a prerequisite, it is a
+# container.
+#
+# Sourcing the whole output would run every line the command chose to print, in
+# this shell, with this run's credentials. So each line is matched against one
+# shape — `export NAME=value` — and **re-emitted through `printf %q`**, which
+# quotes the value for exactly one round of `eval`. A `$(…)`, a backtick or a
+# `;` in the value therefore arrives as characters and not as a command.
+#
+# ## And a name a prerequisite may not set
+#
+# Setting `PATH` would redirect every command after it, and setting a token would
+# hand the model's step a credential the workflow chose not to give it (`#246`).
+# Neither is what "my check needs a database" means, so both are refused by name
+# and said out loud rather than dropped.
+EXPORTS_REFUSED=${EXPORTS_REFUSED:-PATH LD_PRELOAD LD_LIBRARY_PATH GH_TOKEN GITHUB_TOKEN BASH_ENV IFS}
+
+exports_from() {
+  local file=$1
+  [ -f "$file" ] || die "no such file: $file" 1
+
+  local line name value refused
+  while IFS= read -r line; do
+    [[ $line =~ ^export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+    name=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+
+    # One layer of the quotes an emitter may have added. Anything left inside is
+    # data, and `%q` below is what keeps it that way.
+    if [ "${#value}" -ge 2 ]; then
+      case $value in
+        \"*\") value=${value:1:${#value}-2} ;;
+        \'*\') value=${value:1:${#value}-2} ;;
+      esac
+    fi
+
+    refused=no
+    for banned in $EXPORTS_REFUSED; do
+      if [ "$name" = "$banned" ]; then refused=yes; break; fi
+    done
+    if [ "$refused" = yes ]; then
+      echo "refusing to let the check prerequisite set $name" >&2
+      continue
+    fi
+
+    printf 'export %s=%q\n' "$name" "$value"
+  done <"$file"
 }
 
 set_status() {
@@ -306,6 +412,16 @@ case "${1:-}" in
     exit 0
     ;;
 
+  check-prerequisite)
+    check_prerequisite_from "${2:?check-prerequisite needs a path to an AGENTS.md}"
+    exit 0
+    ;;
+
+  exports)
+    exports_from "${2:?exports needs a file to read}"
+    exit 0
+    ;;
+
   solo)
     # *Am I the only run working right now?* Prints `busy` when a previous run is
     # still going, and nothing when it is not.
@@ -345,6 +461,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path>"
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file>"
     ;;
 esac

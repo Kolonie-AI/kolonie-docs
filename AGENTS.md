@@ -1369,6 +1369,31 @@ Regenerate what the worker would read:
 bash .github/scripts/opencode-worker.sh check-command AGENTS.md
 ```
 
+### And a sibling heading, for what the check needs first
+
+**A repository whose check cannot run in an empty container says so under a
+heading ending _The check prerequisite_**, in the same file and read the same way
+(`kolonie-docs#247`). `kolonie-platform` names `npm run test:db:up` there,
+because its suite fails hard on an unset `DATABASE_URL` — deliberately, and
+`operations/testing.md` is where that is argued. The worker runs the prerequisite
+before it re-runs the check, and takes the `export NAME=value` lines the command
+prints.
+
+**This file names none, and that is the answer rather than an omission.** Four of
+the five repositories need nothing in front of their check, so silence is the
+ordinary case and prints nothing. A missing check *command* still stops the run;
+a missing prerequisite does not.
+
+```bash
+bash .github/scripts/opencode-worker.sh check-prerequisite AGENTS.md   # silence, here
+```
+
+The reason it is a second heading rather than a flag in the worker is the reason
+the first one is: `#247` was a workflow that provided `kolonie-platform` no
+database, and the two shapes on offer were a `services: postgres:16` block held
+here and a line held there. The block would have been repository-specific
+knowledge in the worker, which is exactly what `#231` moved out.
+
 ## 11. When something here is wrong
 
 Fix it and push. This file is the contract for every agent that comes after you,

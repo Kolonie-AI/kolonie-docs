@@ -457,6 +457,89 @@ check "a missing AGENTS.md fails the same way" "5" "$rc"
 contains "and says so" "no AGENTS.md" "$err"
 
 echo
+echo "what the check needs in front of it (#247)"
+
+# The defect: the worker re-ran `kolonie-platform`'s check in an environment
+# without PostgreSQL, and that check refuses to run without one on purpose. The
+# repository states its prerequisite beside the command it already states, and
+# this is the reader for it — the same convention, so that the worker holds no
+# per-repository knowledge (`#231`).
+case_setup
+cat > "$WORK/agents-prereq.md" <<'DOC'
+# AGENTS.md
+## 8. The check command
+```bash
+npm run check
+```
+## 8a. The check prerequisite
+```bash
+npm run test:db:up
+```
+## 9. When you are unsure
+DOC
+out=$(bash "$SCRIPT" check-prerequisite "$WORK/agents-prereq.md" 2>/dev/null); rc=$?
+check "the prerequisite is read out of its own section" "npm run test:db:up" "$out"
+check "and reading it exits 0" "0" "$rc"
+check "the check command is unaffected by the sibling section" \
+  "npm run check" "$(bash "$SCRIPT" check-command "$WORK/agents-prereq.md" 2>/dev/null)"
+
+# Four of the five repositories need nothing before their check, so silence is
+# the ordinary answer and must not read as a defect — unlike a missing check
+# *command*, which stops the run.
+case_setup
+out=$(bash "$SCRIPT" check-prerequisite "$WORK/agents-ok.md" 2>/dev/null); rc=$?
+check "a repository declaring no prerequisite prints nothing" "" "$out"
+check "and that is not an error" "0" "$rc"
+
+echo
+echo "the environment a prerequisite hands back (#247)"
+
+# `npm run test:db:up` finishes by printing `export DATABASE_URL=…` — the
+# repository's existing interface to a person. Honouring it is the whole point:
+# a prerequisite that starts a server the check cannot then find has done
+# nothing.
+case_setup
+cat > "$WORK/prereq-out.txt" <<'OUT'
+created container kolonie-pg
+waiting for postgres.
+export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/kolonie_test
+OUT
+out=$(bash "$SCRIPT" exports "$WORK/prereq-out.txt" 2>/dev/null)
+check "the value survives one round of eval" \
+  "postgres://postgres:postgres@127.0.0.1:5433/kolonie_test" \
+  "$(eval "$out"; printf '%s' "${DATABASE_URL:-}")"
+absent "and the rest of the output does not" "waiting for postgres" "$out"
+absent "nor does the line about the container" "created container" "$out"
+
+# Sourcing the output wholesale would run whatever the command chose to print,
+# in this shell, with this run's credentials. `printf %q` is what makes a value
+# a value.
+case_setup
+printf 'export DATABASE_URL=x$(id);echo pwned\n' > "$WORK/prereq-evil.txt"
+out=$(bash "$SCRIPT" exports "$WORK/prereq-evil.txt" 2>/dev/null)
+check "a command substitution in a value stays data" \
+  'x$(id);echo pwned' "$(eval "$out"; printf '%s' "${DATABASE_URL:-}")"
+
+case_setup
+printf 'export DATABASE_URL="postgres://quoted/db"\n' > "$WORK/prereq-quoted.txt"
+out=$(bash "$SCRIPT" exports "$WORK/prereq-quoted.txt" 2>/dev/null)
+check "one layer of the emitter's own quotes comes off" \
+  "postgres://quoted/db" "$(eval "$out"; printf '%s' "${DATABASE_URL:-}")"
+
+# "My check needs a database" is not "my check needs your token", and the
+# refusal is by name rather than by hoping nobody writes it.
+case_setup
+printf 'export PATH=/evil\nexport GH_TOKEN=stolen\nexport DATABASE_URL=ok\n' \
+  > "$WORK/prereq-greedy.txt"
+out=$(bash "$SCRIPT" exports "$WORK/prereq-greedy.txt" 2>"$WORK/err")
+absent "a prerequisite may not set PATH" "PATH" "$out"
+absent "nor may it hand the step a token" "GH_TOKEN" "$out"
+contains "and it says which name it refused" "refusing to let the check prerequisite set PATH" \
+  "$(cat "$WORK/err")"
+check "while what it may set still arrives" "ok" \
+  "$(eval "$out"; printf '%s' "${DATABASE_URL:-}")"
+
+echo
 echo "two runs cannot work at once (#231)"
 
 case_setup
@@ -521,6 +604,19 @@ absent "and no force-with-lease either" "force-with-lease" "$wf_commands"
 contains "auto-merge is queued, never waited on" "--auto --squash" "$wf"
 contains "and it is gated on the target having a required check" \
   "branches/main/protection" "$wf"
+
+# `#247`: the prerequisite is worthless if it runs after the check. A `run:`
+# block cannot be executed by a test, so the ordering is asserted on the file.
+contains "the workflow reads the target's check prerequisite" "check-prerequisite" "$wf"
+prereq_line=$(grep -n 'CHECK_PREREQUISITE:-' "$WORKFLOW" | head -1 | cut -d: -f1)
+check_line=$(grep -n 'eval "\$CHECK_COMMAND"' "$WORKFLOW" | head -1 | cut -d: -f1)
+if [ -n "$prereq_line" ] && [ -n "$check_line" ] && [ "$prereq_line" -lt "$check_line" ]; then
+  echo "  ok   and runs it before the check, not after"
+else
+  echo "  FAIL and runs it before the check, not after"
+  echo "         prerequisite at line ${prereq_line:-none}, check at line ${check_line:-none}"
+  FAILURES+=("the prerequisite runs before the check")
+fi
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
