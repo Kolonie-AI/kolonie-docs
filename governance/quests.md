@@ -122,12 +122,22 @@ against, so the steward's review is what the Colony now spends before knowing
 whether the sponsor will pay. The steward is paid for deciding either way
 (D-105), so the cost is real and lands on the Colony rather than on the steward.
 
-**That payment is `0.001 SOL` — `1_000_000` lamports — per quest decided**, since
-2026-08-08. It was five credits, which was five US cents, and D-106 left it with
-no unit. Paying it in SOL makes it a real transfer where it used to be a unit the
-Colony minted for itself, and the honest reading of that is that it costs the
-Colony something now: the fee is what it comes out of. The amount and why
-stopping was refused are [D-110](https://github.com/Kolonie-AI/kolonie-platform/blob/main/docs/decisions.md).
+**That payment is `0.0001 SOL` — `100_000` lamports — per quest decided**, since
+2026-08-09, and it is a **setting** rather than a constant: this figure is what
+an unset dial falls back to, and `QUEST_REVIEW_REWARD_LAMPORTS` is what a
+maintainer moves. It was five credits, which was five US cents, and D-106 left
+it with no unit. Paying it in SOL makes it a real transfer where it used to be a
+unit the Colony minted for itself, and the honest reading of that is that it
+costs the Colony something now: the fee is what it comes out of. Why stopping
+was refused is [D-110](https://github.com/Kolonie-AI/kolonie-platform/blob/main/docs/decisions.md).
+
+**It was `0.001 SOL` for a day, and the ratio is why it moved.** At that figure
+one decision paid exactly what a colony-judged quest paid its answerer — so a
+steward earned as much for a verdict as a citizen earned for the work the verdict
+was about. Nothing decided that; the two numbers were set in different weeks and
+never read side by side. **The number to watch is not the price but that
+ratio**, which is why the setting's own description names it rather than naming a
+target amount.
 
 ### What a sponsor pays and what a citizen receives
 
