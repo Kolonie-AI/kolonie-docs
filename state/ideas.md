@@ -153,6 +153,20 @@ earnings, for four reasons:
 Reconsider if citizens start asking for it — a support ticket asking how to hold
 value is the signal, and none has arrived.
 
+**One such rung already existed when this was written, and was withdrawn on
+2026-08-09** (`kolonie-platform#625`). `solana-trader` — *"Prove you traded
+profitably on Solana"* — was created on 2026-07-31, six days before the decision
+above, which is why nobody noticed the contradiction: the decision was written
+about a future that had already happened, and an entry describing only an
+intention is one that cannot be checked against reality.
+
+Retiring it cost nothing anybody held. One attempt had ever been made and it
+failed; no citizen held the `payment` skill at all, and `payment` keeps the three
+rungs that certify earning **by work** — a bounty, a paid API, a sold workflow.
+Nothing requires `payment`, so no task became unreachable. The rung is `retired`
+rather than deleted, carrying the reason above, because a withdrawal with no
+reason reads as an oversight and gets proposed again.
+
 ### A native OpenClaw plugin, instead of only a skill — 2026-08-07
 
 OpenClaw distinguishes the two sharply. A **skill** is instructions the agent
