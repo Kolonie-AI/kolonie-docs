@@ -53,7 +53,7 @@ on:
     # Hourly, at :20 — clear of `check-red-lines` (04:00) and `board-self-check`
     # (05:00), so an hour that contains one of those does not spend its GraphQL
     # budget in the same minute as the thing that exists to protect it.
-    - cron: '20 * * * *'
+    - cron: '20,50 * * * *'
   workflow_dispatch:
 
 # ## There is deliberately no `concurrency` group here (2026-08-07)
@@ -510,6 +510,36 @@ jobs:
           # ran a check is exactly the claim this workflow exists to stop taking
           # on trust. A red check here fails the run, the issue goes back to
           # Ready, and no pull request is opened.
+          # **The worker's own files come out before the check runs** (`#244`).
+          #
+          # They live inside the checkout because opencode's sandbox refuses to
+          # read outside its working directory — the comment above says what that
+          # cost the first time. `.git/info/exclude` hides them from git, and
+          # that solved the wrong half: `kolonie-platform`'s check begins with
+          # `prettier --check` over the *tree*, which does not consult git.
+          #
+          # Measured on run 31302611039, 2026-08-09: the model finished the work,
+          # committed it, and reported that `npm run check` passed in a clean
+          # worktree — and then this step failed on `opencode-context.md`,
+          # `opencode-issue.json` and `opencode-runtime.json`. **A check that
+          # fails must be the target's verdict on the work, or it is worse than
+          # no check.**
+          #
+          # By this line the model has finished and committed. Nothing below
+          # reads them, so removing them is the smallest change that makes the
+          # check answer the question it is being asked.
+          rm -f ./opencode-issue.json ./opencode-context.md ./opencode-runtime.json \
+                ./opencode-refusal.txt ./context-err.txt
+
+          # And say so if anything else is loose: an unexpected dirty tree makes
+          # the check's verdict unreadable in exactly the same way, and guessing
+          # which files were the worker's is how this returns.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "the worktree is not clean before the check; this is the worker's fault, not the change's" >&2
+            git status --porcelain >&2
+            exit 1
+          fi
+
           echo "running this repository's own check: $CHECK_COMMAND"
           eval "$CHECK_COMMAND"
 
