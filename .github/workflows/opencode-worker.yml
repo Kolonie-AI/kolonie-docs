@@ -187,12 +187,19 @@ jobs:
           bash .github/scripts/opencode-worker.sh claim \
             "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
 
-      # Comments are `GITHUB_TOKEN`'s job, deliberately: the stored credential's
-      # only power stays moving a board column, so a leak of it costs a column.
+      # **Comments were `GITHUB_TOKEN`'s job and cannot be** (`#231`). That
+      # reasoning was right while the worker only ever touched its own
+      # repository: the Actions token is scoped to the repository the workflow
+      # runs in, so it costs a column if it leaks. The queue is organisation-wide
+      # now, and this step comments on an issue in whichever repository the
+      # queue named — measured 2026-08-09, that answers
+      # `Resource not accessible by integration (addComment)` and kills the run
+      # one step after the claim. `Say why on the issue` was moved and this one
+      # was missed, so both now read the same secret.
       - name: Say so on the issue
         if: steps.queue.outputs.issue
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
