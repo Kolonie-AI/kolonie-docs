@@ -572,6 +572,46 @@ cmd_decide() {
   return 0
 }
 
+# **What `level=error` means for a service that writes access logs** (`#243`).
+#
+# Not every service on this stack earns the label the same way, and for three of
+# them it is not a level the service wrote at all. `kolonie-infra`'s promtail
+# pipeline, stage 5b, derives it from the HTTP status on a Common Log Format
+# line: **`5xx` is `error`, `4xx` is `info`** — and traefik's own logfmt lines,
+# which do carry a level, are read first.
+#
+# So an error-volume finding about one of these is never a fault of the proxy's.
+# It is *somebody behind it answering 500*, counted a second time at the edge.
+#
+# **`#243` is what this sentence costs when it is missing.** traefik logged 227
+# error lines against a normal of 9.57 and was filed as a finding of its own;
+# 179 of them were `GET /v1/swarm`, and `#241` reports the api logging 180 error
+# lines on the same route in the same window. One event, two issues, and the
+# triage pass then guessed the relationship twice — first linking the two as a
+# chain, then removing the link on the grounds that nothing in one is created by
+# another. Neither guess was available to a reader of the issue, because the
+# issue never said what its own number meant.
+#
+# **It is a second record of a fact promtail owns, and that is accepted rather
+# than solved.** This repository cannot read `kolonie-infra/promtail/promtail.yml`
+# at runtime, and the alternative — saying nothing — is what produced `#243`. So
+# it carries the date it was measured and the file it was measured from, and a
+# service that stops writing CLF drops off this list rather than going wrong
+# quietly: the sentence would simply stop appearing.
+#
+# Measured 2026-08-11 against `kolonie-infra/promtail/promtail.yml` stage 5b.
+STATUS_DERIVED_LEVEL="traefik website pgadmin"
+
+level_note_for() {
+  local service="$1" one
+  for one in $STATUS_DERIVED_LEVEL; do
+    [ "$one" = "$service" ] || continue
+    printf '%s' "**\`$service\` does not write these levels — they are derived from the HTTP status.** \`kolonie-infra\`'s promtail pipeline marks a Common Log Format line \`error\` when the response was **5xx**, and \`info\` for a \`4xx\` (measured 2026-08-11, stage 5b). So this count is not a fault of \`$service\`: it is how many times something behind it answered 500, counted at the edge. **Expect a matching finding for whichever service actually failed**, and read the two as one event rather than as two. \`$service\`'s own errors, when it has any, arrive as logfmt lines carrying a real \`level=\` and are included in the same count."
+    return 0
+  done
+  return 1
+}
+
 FINDING="$(dirname "${BASH_SOURCE[0]}")/watch-finding.sh"
 
 # --- reporting ----------------------------------------------------------------
@@ -622,7 +662,7 @@ await_visible() {
 # unrelated reasons are two problems, and merging them produces an issue nobody
 # can close.
 report_error_findings() {
-  local dir="$1" service count why body_file new_strings
+  local dir="$1" service count why body_file new_strings note
 
   [ -s "$dir/errors-changed.tsv" ] || return 0
 
@@ -635,6 +675,12 @@ report_error_findings() {
     {
       printf '`%s` logged **%s error lines** in the last 24 hours: %s.\n\n' "$service" "$count" "$why"
       printf '%s\n\n' "**This is a change of shape, not a threshold being crossed.** Nothing here holds a number of errors that means *bad* — a fixed threshold would file every day and be ignored within a week. What triggered this is the volume against **its own** recent normal."
+      # What the number means, where that is not obvious (`#243`). Printed second,
+      # directly under the count, because it changes how the count is read and a
+      # reader who reaches the evidence first has already formed a view.
+      if note=$(level_note_for "$service"); then
+        printf '%s\n\n' "$note"
+      fi
       if [ -n "$new_strings" ]; then
         printf '%s\n\n%s\n\n' "**Error strings not seen in the previous 7 days:**" "$new_strings"
       fi
