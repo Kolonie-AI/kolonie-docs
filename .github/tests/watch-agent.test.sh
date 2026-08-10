@@ -469,6 +469,50 @@ expect "and two different failures do not" \
   "$([ "$a" != "$c" ] && echo yes || echo no)"
 
 echo
+echo "an error count says how its level was arrived at, where that is not obvious"
+
+# `#243`. traefik logged 227 error lines against a normal of 9.57 and was read as
+# a fault of the proxy's. It was not: `kolonie-infra`'s promtail derives the
+# level for a Common Log Format line from the HTTP status, so every one of those
+# was something *behind* traefik answering 500 — 179 of them the same route
+# `#241` reports the api failing on, in the same window. One event, two issues,
+# and the triage pass guessed the relationship twice because the issue never said
+# what its own number meant.
+# The constant as well as the function: the list of services is half the
+# behaviour, and sourcing the function alone made every assertion below pass on
+# an unbound-variable error instead of on an answer.
+note() {
+  {
+    sed -n '/^STATUS_DERIVED_LEVEL=/p' "$SCRIPT"
+    sed -n '/^level_note_for()/,/^}/p' "$SCRIPT"
+  } > "$WORK/note.sh"
+  ( . "$WORK/note.sh"; level_note_for "$1" )
+}
+
+for service in traefik website pgadmin; do
+  out=$(note "$service") || out=""
+  expect "$service says its level came from the HTTP status" \
+    "$([[ "$out" == *"derived from the HTTP status"* ]] && echo yes || echo no)" "$out"
+done
+
+expect "and it says which status, because 4xx is the client and 5xx is us" \
+  "$([[ "$(note traefik)" == *"5xx"* && "$(note traefik)" == *"4xx"* ]] && echo yes || echo no)"
+
+# **The point of the sentence, and the reason it is not just background.** A
+# reader who takes this count as traefik's own fault looks in the wrong place;
+# what it must say is to expect the finding for whoever actually failed.
+expect "it sends the reader to the service that actually failed" \
+  "$([[ "$(note traefik)" == *"matching finding"* ]] && echo yes || echo no)" "$(note traefik)"
+
+# A service that writes its own levels must not be told they were derived — that
+# would be the same defect pointing the other way, and worse, because it would be
+# wrong rather than merely absent.
+for service in api postgres verifier-runner; do
+  expect "$service is told nothing, because it writes its own levels" \
+    "$(note "$service" >/dev/null 2>&1 && echo no || echo yes)" "$(note "$service" 2>&1)"
+done
+
+echo
 echo "no threshold exists anywhere in this agent"
 
 # `#133`: "no per-service threshold exists anywhere in the workflow". A grep is a
