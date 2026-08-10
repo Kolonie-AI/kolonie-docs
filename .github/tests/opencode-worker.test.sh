@@ -135,6 +135,33 @@ absent() {
   fi
 }
 
+# ## Extracting one step out of the workflow, without a regex (2026-08-10)
+#
+# These assertions used `awk '/name: …/,/name: …/'` and CI disagreed with a
+# local run about what that range contained — the two `set +e` checks passed
+# here and failed on the runner against the identical commit. Rather than find
+# out which awk was right, `index()` takes the markers as plain strings and
+# there is nothing left to disagree about.
+#
+# **And an empty block is a failure, not a pass.** The version of these checks
+# before this one asserted the *absence* of `set -euo`, which an empty block
+# satisfies trivially — so an extraction that had silently stopped working
+# reported ok. Every caller goes through here and here refuses to return
+# nothing.
+step_block() {
+  local start=$1 stop=$2 file=${3:-$WORKFLOW} out
+  out=$(awk -v s="$start" -v e="$stop" '
+    !on && index($0, s) { on = 1; next }
+    on && index($0, e)  { exit }
+    on                  { print }
+  ' "$file")
+  if [ -z "$out" ]; then
+    echo "  FAIL could not extract the block between '$start' and '$stop'" >&2
+    FAILURES+=("step_block found nothing for '$start'")
+  fi
+  printf '%s\n' "$out"
+}
+
 boarded() {
   # $1.. are `number:Status[:owner/repo]` rows.
   local items=()
@@ -957,7 +984,7 @@ check "and names nothing" "" "$out"
 # of them drifting apart is how the rule stops being applied.
 for path in ".github/workflows/" "opencode.json"; do
   contains "AGENTS.md names \`$path\` as forbidden to the worker" \
-    "$path" "$(awk '/What has to be true before you apply it/,/#### The order it takes them in/' "$ROOT/AGENTS.md")"
+    "$path" "$(step_block 'What has to be true before you apply it' '#### The order it takes them in' "$ROOT/AGENTS.md")"
   contains "and the prompt the model is given names it too" \
     "$path" "$(grep -A 3 'Do not edit' "$ROOT/.github/workflows/opencode-worker.yml")"
 done
@@ -1125,6 +1152,7 @@ echo
 echo "the workflow cannot merge past a failing check (#232)"
 
 WORKFLOW="$ROOT/.github/workflows/opencode-worker.yml"
+
 wf=$(cat "$WORKFLOW")
 # Comments stripped before the forbidden-flag assertions, because the workflow
 # *explains* why it does not use `--admin` and an assertion that cannot tell the
@@ -1304,7 +1332,7 @@ fi
 # block with `bash -e {0}`, so a step that merely declines to set `-e` still has
 # it. Run `31377996406` reported five completions and then died at `exit 141`
 # from a `gh … | head` closing its own pipe, taking the queue work with it.
-if awk '/name: Is a pull request of mine stuck\?/,/name: Put the stuck/' "$WORKFLOW" | grep -q 'set +e'; then
+if grep -q 'set +e' <<<"$(step_block 'name: Is a pull request of mine stuck' 'name: Put the stuck')"; then
   echo "  ok   the sweep step turns off the -e the runner's own shell brings"
 else
   echo "  FAIL the sweep step turns off the -e the runner's own shell brings"
@@ -1331,7 +1359,7 @@ else
   echo "  FAIL the completion sweep runs before the queue, on previous runs' work"
   FAILURES+=("the completion sweep runs before pick")
 fi
-if awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW" | grep -q 'set +e'; then
+if grep -q 'set +e' <<<"$(step_block 'name: Say what landed' 'name: Is there anything to do')"; then
   echo "  ok   reporting a completion cannot cost this run its issue"
 else
   echo "  FAIL reporting a completion cannot cost this run its issue"
@@ -1345,11 +1373,11 @@ absent "and nothing in either sweep closes a pipe on a paginated read" \
 # The whole design refuses to paraphrase the change, so no model may be reached
 # from the reporting path — the summary is derived or it is not written.
 absent "no model is asked to summarise the work it produced" "opencode run" \
-  "$(awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW")"
+  "$(step_block 'name: Say what landed' 'name: Is there anything to do')"
 
 # `#254`: a red check gets an account of what broke, on that ending only, and
 # nothing about producing one may cost the comment that has to be written.
-why_step=$(awk '/name: What failed, and why/,/name: Say why on the issue/' "$WORKFLOW")
+why_step=$(step_block 'name: What failed, and why' 'name: Say why on the issue')
 contains "a red check is read by the model that caused it" "failure-digest" "$why_step"
 contains "and only that ending" '"$kind" = work' "$why_step"
 contains "the call is bounded in time" "timeout 120 opencode run" "$why_step"
