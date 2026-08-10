@@ -258,6 +258,116 @@ jobs:
               echo "::warning::$repo#$issue is commented and relabelled but its card did not move. It needs a person: $RUN_URL"
           done < "$board"
 
+      # ## A successful issue said less than a failed one (`#258`, 2026-08-10)
+      #
+      # The worker announces when it takes an issue and explains every way it can
+      # fail. A **success** ended with neither: the pull request merged, GitHub
+      # closed the issue, and the only worker comment left behind was *"Taken by
+      # the opencode worker"*. On `kolonie-platform#649`, `#657` and `#658` a
+      # reader had to open the pull request and reconstruct the result from its
+      # files.
+      #
+      # Same observation point as the sweep above, for the same reason: the run
+      # that opens a pull request ends before GitHub merges it, so it can never be
+      # the run that reports it landed. **Opening a pull request is not
+      # completion**, and making that difference visible on the timeline is the
+      # whole of this step.
+      #
+      # ## Derived from the merged pull request, and it says which parts it
+      # ## cannot derive
+      #
+      # Everything below is read off the pull request: its title, its files, its
+      # own record of the check that passed, and the required context auto-merge
+      # waited on. **Nothing paraphrases the change and nothing states an
+      # outcome.** A model summarising work it produced has an interest in the
+      # answer — the same reasoning `#254` applies to a failure — and the model
+      # writes a one-line commit message, so there is no completion note to
+      # quote. What a reader gets is what landed, what verified it and where to
+      # look; what the change was *for* stays where it was argued, which is the
+      # issue this comment is written on.
+      - name: Say what landed
+        if: steps.solo.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          landed="$RUNNER_TEMP/opencode-landed"
+          if ! bash .github/scripts/opencode-worker.sh unreported-completions > "$landed"; then
+            echo "::warning::the completion sweep could not read the API; skipping it this run"
+            exit 0
+          fi
+
+          if [ ! -s "$landed" ]; then
+            echo "every merged worker pull request has already been reported on its issue"
+            exit 0
+          fi
+
+          while IFS=$'\t' read -r repo pr issue; do
+            [ -n "${repo:-}" ] || continue
+
+            detail=$(gh api "repos/$repo/pulls/$pr" \
+              --jq '[.title, .head.ref, (.changed_files|tostring), (.additions|tostring), (.deletions|tostring), .merged_at, (.body|gsub("\n"; " "))] | join("\u0001")' \
+              2>/dev/null) || {
+              echo "::warning::could not read $repo#$pr; leaving its issue for the next run"
+              continue
+            }
+            IFS=$'\001' read -r title ref changed added removed merged_at body <<<"$detail"
+
+            # **Two records of one fact, and a disagreement stops the report.**
+            # The branch says which issue this pull request was for and so does
+            # the body; the sweep used the body because the search already
+            # carried it. Where they differ, one of them is describing a
+            # different issue and writing *completed* on either would be a
+            # claim nothing supports.
+            branch_issue=${ref#opencode/issue-}
+            if [ "$branch_issue" != "$issue" ]; then
+              echo "::warning::$repo#$pr: branch says #$branch_issue and body says #$issue. Reporting nothing."
+              continue
+            fi
+
+            files=$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null |
+              head -15 | sed 's/^/- `/;s/$/`/')
+            [ -n "$files" ] || files="- (the file list could not be read)"
+            if [ "${changed:-0}" -gt 15 ]; then
+              files="${files}
+          - …and $(( changed - 15 )) more"
+            fi
+
+            # The pull request body records both of these in the sentences the
+            # worker wrote into it, so they are quoted rather than re-derived:
+            # the target's own check command, and the contexts `main` required
+            # before GitHub would merge.
+            check=$(grep -o '`[^`]*` passed on this branch' <<<"$body" | head -1 | sed 's/ passed on this branch//')
+            required=$(grep -o 'Required here: `[^`]*`' <<<"$body" | head -1 | sed 's/Required here: //')
+
+            verified="It was merged by auto-merge, which cannot land past a red required check."
+            if [ -n "$check" ] && [ -n "$required" ]; then
+              verified="${check} passed on the branch before the pull request was opened, and ${required} reported green before GitHub merged it — auto-merge cannot land past a red required check."
+            elif [ -n "$check" ]; then
+              verified="${check} passed on the branch before the pull request was opened."
+            fi
+
+            gh issue comment "$issue" --repo "$repo" --body \
+              "**Completed by the opencode worker in [\`${repo}#${pr}\`](${GITHUB_SERVER_URL}/${repo}/pull/${pr}), merged ${merged_at}.**
+
+          The change landed under the title the model gave it:
+
+          > ${title}
+
+          ${changed} file(s), +${added} −${removed}:
+
+          ${files}
+
+          **How it was verified.** ${verified}
+
+          **What this comment deliberately does not do is tell you what the change was for.** That is argued above, in this issue, and a worker paraphrasing its own work into a sentence a reader trusts more than the diff would be adding a claim rather than an account. The point of it is the distinction the timeline could not previously make: this issue's work **landed**, rather than merely having been started. Reported by $RUN_URL." \
+              >/dev/null 2>&1 &&
+              echo "reported $repo#$issue as completed in #$pr" ||
+              echo "::warning::could not write the completion comment on $repo#$issue; the merge stands and the next run will try again"
+          done < "$landed"
+
       # Step 2 and 3. A quiet hour must be *visibly* quiet — indistinguishable
       # from a broken job is the failure mode this line exists to prevent.
       - name: Is there anything to do?

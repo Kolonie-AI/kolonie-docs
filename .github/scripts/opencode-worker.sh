@@ -427,7 +427,27 @@ previous_failures() {
 # reworded it would have to edit the line the sweep reads.
 WORKER_PR_MARKER=${WORKER_PR_MARKER:-Opened by the opencode worker for}
 
-# Every pull request the worker has opened, in one state.
+# The sentence that says an issue has already had its completion reported.
+#
+# Same shape and same job as `FAILURE_MARKER`: it is the opening of the comment
+# the workflow writes, and the sweep below refuses to write a second one where it
+# already appears. **Idempotency lives in the marker and not in a list of what
+# has been reported**, because a list is state that has to be stored, and the
+# issue timeline is a record that already exists and cannot drift from itself.
+COMPLETION_MARKER=${COMPLETION_MARKER:-Completed by the opencode worker in}
+
+# How far back the completion sweep looks. A run every ten minutes only ever
+# needs to cover the gap since the last one; a day is two orders of magnitude of
+# slack against that and still bounds the work at *what the worker merged in a
+# day*, which has been about fifteen.
+#
+# **What it gives up, stated rather than discovered:** a completion that goes
+# unreported for a whole day — the worker disabled, the schedule dropped — is
+# never reported. That is a missing comment and not a wrong one, and the
+# alternative is a sweep whose cost grows for as long as the experiment runs.
+REPORT_WINDOW_DAYS=${REPORT_WINDOW_DAYS:-1}
+
+# Every pull request the worker has opened, in one state, newest first.
 #
 # **Over REST search rather than the board or GraphQL**, for AGENTS.md §6's
 # reason: the board is the whole of the GraphQL bill and this runs on a schedule
@@ -438,12 +458,15 @@ WORKER_PR_MARKER=${WORKER_PR_MARKER:-Opened by the opencode worker for}
 # Both callers are sweeps over previous runs' work, so that latency is invisible
 # to them — and it is the reason neither of them belongs at the end of the run
 # that opened the pull request.
+#
+# The body comes back with each hit and is not decoration: it carries the issue
+# number, which saves the caller one API call per pull request.
 worker_pull_requests() {
-  local state=$1
+  local state=$1 extra=${2:-}
   gh api search/issues -X GET \
-    -f q="org:$ORG is:pr is:$state in:body \"$WORKER_PR_MARKER\"" \
-    -f per_page=100 --paginate \
-    --jq '.items[] | "\(.repository_url | sub(".*/repos/"; ""))\t\(.number)"' \
+    -f q="org:$ORG is:pr is:$state in:body \"$WORKER_PR_MARKER\" $extra" \
+    -f sort=updated -f order=desc -f per_page=100 \
+    --jq '.items[] | "\(.repository_url | sub(".*/repos/"; ""))\t\(.number)\t\(.body | gsub("\n"; " "))"' \
     2>/dev/null || true
 }
 
@@ -457,6 +480,20 @@ worker_pull_requests() {
 issue_of_branch() {
   local ref=$1
   [[ "$ref" =~ ^opencode/issue-([0-9]+)$ ]] || return 0
+  echo "${BASH_REMATCH[1]}"
+}
+
+# The same number, read off the pull request body instead.
+#
+# It is here because the search result already carries the body, so the caller
+# that only needs the issue number saves an API call per pull request — which is
+# the difference between a sweep that scales with the experiment and one that
+# does not. The branch is still the authority: the reporting step reads both and
+# refuses to report when they disagree, because two records of one fact that
+# have drifted is a defect worth stopping on rather than picking a winner for.
+issue_of_body() {
+  local body=$1
+  [[ "$body" =~ $WORKER_PR_MARKER\ \#([0-9]+) ]] || return 0
   echo "${BASH_REMATCH[1]}"
 }
 
@@ -486,8 +523,8 @@ issue_of_branch() {
 # requests that merge perfectly well. It is skipped, out loud, and the next run
 # ten minutes later gets a real answer.
 stale_pull_requests() {
-  local repo number state ref issue
-  while IFS=$'\t' read -r repo number; do
+  local repo number body state ref issue
+  while IFS=$'\t' read -r repo number body; do
     [ -n "${repo:-}" ] && [ -n "${number:-}" ] || continue
 
     IFS=$'\t' read -r state ref < <(
@@ -511,6 +548,65 @@ stale_pull_requests() {
 
     printf '%s\t%s\t%s\n' "$repo" "$number" "$issue"
   done < <(worker_pull_requests open)
+}
+
+# Merged worker pull requests whose issue does not yet say so, as
+# `<repo> <pr> <issue>`.
+#
+# ## Why a successful issue needed this at all (`#258`)
+#
+# The worker announces when it takes an issue and explains every failure path. A
+# **success** ended with neither: the pull request merged, GitHub closed the
+# issue, and the only worker comment left behind was *"Taken by the opencode
+# worker"*. Verified on `kolonie-platform#649`, `#657` and `#658` — each has a
+# merged worker pull request and no closing account, so a reader has to open the
+# pull request and reconstruct the result from its files.
+#
+# ## Why it is a sweep, and why it is the same sweep as `#256`'s
+#
+# The run that opens a pull request ends before GitHub merges it, so the run that
+# did the work can never be the one that reports it landing. Both observations —
+# *this one conflicted* and *this one merged* — are about previous runs and both
+# belong at the start of the next one. **Opening a pull request is not
+# completion**, which is the distinction this whole comment exists to make
+# visible on the timeline.
+#
+# ## Exactly once, and nothing stored to make it so
+#
+# The marker is read off the issue's own comments. A reporting step that ran
+# twice, a run that was retried, a sweep window that overlaps the last one — all
+# find the marker and write nothing. There is no list of what has been reported,
+# because a list is state that drifts from the thing it describes.
+unreported_completions() {
+  local since repo number body issue reported
+  since=$(date -u -d "${REPORT_WINDOW_DAYS} days ago" +%Y-%m-%d 2>/dev/null) || since=""
+
+  while IFS=$'\t' read -r repo number body; do
+    [ -n "${repo:-}" ] && [ -n "${number:-}" ] || continue
+
+    issue=$(issue_of_body "${body:-}")
+    if [ -z "$issue" ]; then
+      echo "$repo#$number is merged but its body names no issue; nothing to report on" >&2
+      continue
+    fi
+
+    # The issue must be **closed**, and that is not the same question as *did
+    # the pull request merge*. A merge whose `Closes #N` was edited out, or one
+    # whose issue somebody reopened because the work was not enough, is not a
+    # completion — and writing *completed* on an open issue would be the exact
+    # misrepresentation this issue is about.
+    if [ "$(gh api "repos/$repo/issues/$issue" --jq '.state' 2>/dev/null)" != "closed" ]; then
+      continue
+    fi
+
+    reported=$(gh api "repos/$repo/issues/$issue/comments" --paginate \
+      --jq "[.[] | select(.body | contains(\"$COMPLETION_MARKER\"))] | length" 2>/dev/null) ||
+      continue
+    [ -n "$reported" ] || continue
+    [ "$(awk '{ total += $1 } END { print total + 0 }' <<<"$reported")" -eq 0 ] || continue
+
+    printf '%s\t%s\t%s\n' "$repo" "$number" "$issue"
+  done < <(worker_pull_requests merged "${since:+merged:>=$since}")
 }
 
 # Nothing that is about to be published carries a secret this run holds (`#246`).
@@ -750,6 +846,11 @@ case "${1:-}" in
     exit 0
     ;;
 
+  unreported-completions)
+    unreported_completions
+    exit 0
+    ;;
+
   leak-check)
     shift
     [ "$#" -gt 0 ] || die "leak-check needs at least one file to read" 1
@@ -796,6 +897,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | stale-pull-requests | leak-check <file>..."
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
     ;;
 esac

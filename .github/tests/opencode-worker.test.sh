@@ -69,6 +69,12 @@ case "$1 $2" in
       */pulls/*)
         key=${2#repos/}
         cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
+      # `#258` asks one more question per pull request: is the issue closed.
+      # `*/comments` above already claimed the comments path, so this only ever
+      # sees the issue itself.
+      */issues/*)
+        key=${2#repos/}
+        cat "$GH_FIXTURES/issue_${key//\//_}" 2>/dev/null ;;
       *) ;;
     esac ;;
   *) ;;
@@ -459,6 +465,12 @@ case "$1 $2" in
       */pulls/*)
         key=${2#repos/}
         cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
+      # `#258` asks one more question per pull request: is the issue closed.
+      # `*/comments` above already claimed the comments path, so this only ever
+      # sees the issue itself.
+      */issues/*)
+        key=${2#repos/}
+        cat "$GH_FIXTURES/issue_${key//\//_}" 2>/dev/null ;;
       *) ;;
     esac ;;
   *) ;;
@@ -899,6 +911,63 @@ absent "the sweep itself never closes anything — that is the workflow's, on th
 absent "and never moves a card" "item-edit" "$log"
 
 echo
+echo "the completions nobody was told about (#258)"
+
+# `<repo>|<pr>|<issue named in the body>|<issue state>|<completion comments>`.
+# The body is what the search returns, so it carries the sentence the sweep
+# matches on and the issue number it reads out of it.
+merged() {
+  : > "$GH_FIXTURES/prs"
+  for row in "$@"; do
+    IFS='|' read -r repo pr issue state reported <<<"$row"
+    printf '%s\t%s\tOpened by the opencode worker for #%s, unattended. Closes #%s\n' \
+      "$repo" "$pr" "$issue" "$issue" >> "$GH_FIXTURES/prs"
+    printf '%s\n' "$state" > "$GH_FIXTURES/issue_${repo//\//_}_issues_$issue"
+    printf '%s\n' "$reported" > "$GH_FIXTURES/comments"
+  done
+}
+
+case_setup
+merged "Kolonie-AI/kolonie-platform|667|658|closed|0"
+check "a merged pull request whose issue says nothing is reported" \
+  "$(printf 'Kolonie-AI/kolonie-platform\t667\t658')" \
+  "$(bash "$SCRIPT" unreported-completions 2>/dev/null)"
+
+case_setup
+merged "Kolonie-AI/kolonie-platform|667|658|closed|1"
+check "one that has already been reported is not reported twice" "" \
+  "$(bash "$SCRIPT" unreported-completions 2>/dev/null)"
+
+# Opening a pull request is not completion, and neither is merging one whose
+# issue somebody reopened because the work was not enough.
+case_setup
+merged "Kolonie-AI/kolonie-platform|667|658|open|0"
+check "an issue that is still open gets no success summary" "" \
+  "$(bash "$SCRIPT" unreported-completions 2>/dev/null)"
+
+case_setup
+: > "$GH_FIXTURES/prs"
+printf 'Kolonie-AI/kolonie-platform\t667\tSomebody else opened this one by hand\n' > "$GH_FIXTURES/prs"
+out=$(bash "$SCRIPT" unreported-completions 2>"$WORK/err")
+check "a body that names no issue is reported on nothing" "" "$out"
+contains "and says so rather than passing silently" "names no issue" "$(cat "$WORK/err")"
+
+case_setup
+echo yes > "$GH_FIXTURES/search_fails"
+out=$(bash "$SCRIPT" unreported-completions 2>/dev/null); rc=$?
+check "a search that fails reports no completions" "" "$out"
+check "and does not fail the run" "0" "$rc"
+
+case_setup
+merged "Kolonie-AI/kolonie-platform|667|658|closed|0"
+bash "$SCRIPT" unreported-completions >/dev/null 2>&1
+log=$(cat "$GH_LOG")
+contains "the sweep bounds itself by when the pull request merged" "merged:>=" "$log"
+contains "and reads the issue's own comments for the marker" \
+  "issues/658/comments" "$log"
+absent "the sweep itself never comments — that is the workflow's job" "issue comment" "$log"
+
+echo
 echo "what it never does"
 
 case_setup
@@ -1102,6 +1171,37 @@ if awk '/name: Is a pull request of mine stuck\?/,/name: Put the stuck/' "$WORKF
 else
   echo "  ok   the sweep step does not exit on the first thing that fails"
 fi
+
+# `#258`: a merged pull request tells its issue so, exactly once, and only after
+# the merge.
+contains "the workflow reports what landed" "unreported-completions" "$wf_commands"
+contains "and the comment opens with the marker that makes it idempotent" \
+  "Completed by the opencode worker in" "$wf"
+contains "it says which pull request delivered it" "pull/" "$wf"
+contains "and how the result was verified" "passed on the branch before the pull request was opened" "$wf"
+contains "and distinguishes landed from merely started" \
+  "landed" "$wf"
+contains "the branch and the body are cross-checked before anything is written" \
+  "branch says" "$wf_commands"
+contains "a comment that could not be written does not misrepresent the merge" \
+  "the merge stands and the next run will try again" "$wf"
+landed_line=$(grep -n 'opencode-worker.sh unreported-completions' "$WORKFLOW" | head -1 | cut -d: -f1)
+if [ -n "$landed_line" ] && [ -n "$pick_line" ] && [ "$landed_line" -lt "$pick_line" ]; then
+  echo "  ok   the completion sweep runs before the queue, on previous runs' work"
+else
+  echo "  FAIL the completion sweep runs before the queue, on previous runs' work"
+  FAILURES+=("the completion sweep runs before pick")
+fi
+if awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW" | grep -q 'set -euo'; then
+  echo "  FAIL reporting a completion cannot cost this run its issue"
+  FAILURES+=("the completion step uses set -e")
+else
+  echo "  ok   reporting a completion cannot cost this run its issue"
+fi
+# The whole design refuses to paraphrase the change, so no model may be reached
+# from the reporting path — the summary is derived or it is not written.
+absent "no model is asked to summarise the work it produced" "opencode run" \
+  "$(awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW")"
 contains "and says what actually happens to the pull request" \
   "merges itself when the target's required check goes green" "$wf"
 
