@@ -17,6 +17,7 @@
 #   opencode-worker.sh failed-step             # -> the name of this run's failed step
 #   opencode-worker.sh excerpt <file>          # -> its last lines, bounded and with every secret taken out
 #   opencode-worker.sh previous-failures <repo> <number>  # -> how many times the worker has already failed here
+#   opencode-worker.sh unarmed-pull-requests   # -> open pull requests nothing will merge, and the check each waits on
 #   opencode-worker.sh leak-check <file>...    # -> refuses if a secret this run holds is in what is about to be published
 #
 # **All of it is here rather than in the workflow**, for `board-self-check.sh`'s
@@ -1028,6 +1029,118 @@ unreported_completions() {
   done < <(worker_pull_requests merged "${since:+merged:>=$since}")
 }
 
+# The contexts `main` requires in one repository, comma-joined, or nothing.
+#
+# **Nothing is the answer that matters.** A branch with no required status check
+# merges the instant auto-merge is enabled, so the callers read an empty string
+# as *do not arm this* rather than as *could not tell* — and an API call that
+# failed produces the same empty string. That conflation is deliberate and it is
+# the safe direction: an unreadable protection setting stops the arming, and the
+# pull request waits for a person rather than landing unverified.
+required_contexts_of() {
+  local repo=$1
+  gh api "repos/$repo/branches/main/protection" \
+    --jq '[.required_status_checks.contexts // []] | flatten | join(", ")' 2>/dev/null || true
+}
+
+# Open pull requests in the organisation that nothing will ever merge, as
+# `<repo> <pr> <required contexts>` (`#275`).
+#
+# ## The gap this closes
+#
+# The worker arms auto-merge on the pull requests **it** opens, in the step that
+# opens them. Nothing arms the ones it does not. On 2026-08-10 `claude002` opened
+# `kolonie-docs#274` and `kolonie-email#5`; both stood green, mergeable and
+# untouched until the maintainer found them by hand. Nothing was wrong with
+# either and nothing was going to merge either — which is `#256`'s failure
+# (finished work, and a queue that does not know it) wearing a different hat.
+#
+# **A sweep and not a step where the pull request is opened**, because the thing
+# that opens one is not always a workflow. An instruction to remember a flag is
+# not a mechanism: this covers the agent that was never told, the agent that was
+# told and forgot, and the person.
+#
+# ## The four filters, and which one the whole thing hangs on
+#
+# 1. **Not a fork.** A stranger's branch must never arm itself. This is the rule
+#    everything else is a refinement of — the repositories are public, anybody
+#    may open a pull request, and a sweep that armed those would be a supply
+#    chain with a schedule. Read off `head.repo.full_name` against the base,
+#    which is `null` for a deleted fork and therefore also excluded.
+# 2. **Not a draft.** A draft is how an author says *not yet*, and it stays the
+#    way to say it.
+# 3. **Auto-merge not already on**, so a run costs nothing where the worker's own
+#    step already did the work.
+# 4. **`main` requires a status check.** Same refusal the worker already makes
+#    where it opens its own pull requests, for the same reason.
+#
+# ## What it does not filter on, stated because the omission looks like a bug
+#
+# Not on the author, not on a label and not on a branch prefix. Every open pull
+# request in the organisation that survives the four above is armed, including a
+# person's. That is the intent rather than an oversight: **arming is not
+# merging.** `--auto --squash` with no `--admin` lands nothing that the required
+# check has not passed, so the worst case is that a green pull request somebody
+# was sitting on merges — which is what a green pull request in this
+# organisation means. The way to say *not yet* is the draft flag, and it is
+# filter 2.
+#
+# ## `dirty` is skipped, and `unknown` is not an answer
+#
+# GitHub refuses to arm a conflicting pull request outright, so a run that tried
+# would spend a call to be told so and warn about it again ten minutes later,
+# forever. `blocked` and `unstable` are **not** skipped — a check that has not
+# reported yet is precisely what auto-merge is for. `unknown` means GitHub has
+# not computed mergeability, and reading it either way would be a guess:
+# `stale_pull_requests` above states this at length and the same rule applies.
+unarmed_pull_requests() {
+  local repo repos number required state
+
+  repos=$(gh api "orgs/$ORG/repos" -X GET -f per_page=100 -f type=all \
+    --jq '.[] | select(.archived | not) | .full_name' 2>/dev/null) || return 1
+  [ -n "$repos" ] || return 1
+
+  while read -r repo; do
+    [ -n "${repo:-}" ] || continue
+
+    # One list call answers filters 1 to 3 for the whole repository. The
+    # per-pull-request call below is paid only for what survives them, which on
+    # a quiet day is nothing at all.
+    local candidates
+    candidates=$(gh api "repos/$repo/pulls" -X GET -f state=open -f per_page=100 \
+      --jq '.[] | select(.draft | not)
+                | select(.auto_merge == null)
+                | select((.head.repo.full_name // "") == .base.repo.full_name)
+                | .number' 2>/dev/null) || {
+      echo "could not list open pull requests in $repo; leaving it for the next run" >&2
+      continue
+    }
+    [ -n "$candidates" ] || continue
+
+    required=$(required_contexts_of "$repo")
+    if [ -z "$required" ]; then
+      echo "$repo has no required status check on main; nothing there is armed" >&2
+      continue
+    fi
+
+    while read -r number; do
+      [ -n "${number:-}" ] || continue
+
+      state=$(gh api "repos/$repo/pulls/$number" --jq '.mergeable_state' 2>/dev/null) || continue
+      case "${state:-}" in
+        dirty)
+          echo "$repo#$number conflicts with main; auto-merge cannot be enabled on it" >&2
+          continue ;;
+        unknown|"")
+          echo "$repo#$number: GitHub has not computed mergeability yet; leaving it for the next run" >&2
+          continue ;;
+      esac
+
+      printf '%s\t%s\t%s\n' "$repo" "$number" "$required"
+    done <<<"$candidates"
+  done <<<"$repos"
+}
+
 # Nothing that is about to be published carries a secret this run holds (`#246`).
 #
 # ## Why this exists next to a sandbox that was already there
@@ -1567,6 +1680,15 @@ case "${1:-}" in
     exit 0
     ;;
 
+  unarmed-pull-requests)
+    # The exit code is propagated rather than swallowed, unlike the two sweeps
+    # above: this one cannot tell *nothing to arm* from *the organisation could
+    # not be listed* in its output, since both are no lines. The workflow reads
+    # the code to say which of the two happened.
+    unarmed_pull_requests
+    exit $?
+    ;;
+
   leak-check)
     shift
     [ "$#" -gt 0 ] || die "leak-check needs at least one file to read" 1
@@ -1584,6 +1706,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

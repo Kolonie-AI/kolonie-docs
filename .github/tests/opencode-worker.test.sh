@@ -199,6 +199,43 @@ case "$1 $2" in
       */pulls/*)
         key=${2#repos/}
         cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
+      # `#275` sweeps every repository rather than one search result, so it asks
+      # three more questions: which repositories exist, which pull requests are
+      # open in each, and what `main` requires there.
+      orgs/*/repos)
+        if [ -s "$GH_FIXTURES/repos_fail" ]; then
+          echo "HTTP 502: the organisation could not be listed" >&2
+          exit 1
+        fi
+        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
+      */branches/main/protection)
+        key=${2#repos/}
+        key=${key%/branches/main/protection}
+        # **An absent fixture is an unprotected branch**, which is the case the
+        # sweep must refuse on, and a missing file makes `cat` exit 1 exactly as
+        # the live API 404s on a branch with no protection.
+        cat "$GH_FIXTURES/protection_${key//\//_}" 2>/dev/null ;;
+      # The second path that runs the real `--jq`, for `*/dependencies/blocked_by`'s
+      # reason: fork, draft and already-armed are what the filter *is*, so a
+      # fixture of pre-filtered numbers would assert nothing about them. These
+      # fixtures are API-shaped JSON and the script's own filter decides.
+      */pulls)
+        key=${2#repos/}
+        key=${key%/pulls}
+        fixture="$GH_FIXTURES/pulls_${key//\//_}"
+        if [ -s "$GH_FIXTURES/pulls_fail_${key//\//_}" ]; then
+          echo "HTTP 502: the pull requests could not be listed" >&2
+          exit 1
+        fi
+        [ -f "$fixture" ] || exit 0
+        expression=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --jq) expression=$2; shift 2 ;;
+            *)    shift ;;
+          esac
+        done
+        if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
       # `#258` asks one more question per pull request: is the issue closed.
       # `*/comments` above already claimed the comments path, so this only ever
       # sees the issue itself.
@@ -1541,6 +1578,159 @@ contains "and reads the issue's own comments for the marker" \
 absent "the sweep itself never comments — that is the workflow's job" "issue comment" "$log"
 
 echo
+echo "the pull requests nobody armed (#275)"
+
+# One organisation, written from `<repo>|<protection>` rows. An empty protection
+# is a `main` that requires nothing, which is a 404 from the live API and a
+# missing fixture here.
+org() {
+  : > "$GH_FIXTURES/repos"
+  for row in "$@"; do
+    IFS='|' read -r repo required <<<"$row"
+    printf '%s\n' "$repo" >> "$GH_FIXTURES/repos"
+    [ -n "${required:-}" ] &&
+      printf '%s\n' "$required" > "$GH_FIXTURES/protection_${repo//\//_}"
+  done
+}
+
+# The open pull requests of one repository, as the API returns them, because the
+# filter is what is under test. `<number>|<draft>|<head repo>|<auto_merge>`.
+opened() {
+  local repo=$1; shift
+  local rows=()
+  for row in "$@"; do
+    IFS='|' read -r number draft head auto <<<"$row"
+    rows+=("{\"number\":${number},\"draft\":${draft},\"auto_merge\":${auto},\"head\":{\"repo\":${head}},\"base\":{\"repo\":{\"full_name\":\"${repo}\"}}}")
+  done
+  local joined
+  joined=$(IFS=,; echo "${rows[*]}")
+  printf '[%s]\n' "$joined" > "$GH_FIXTURES/pulls_${repo//\//_}"
+}
+
+# `mergeable_state` per pull request, one fixture each, as the sweep reads it.
+mergeability() {
+  local repo=$1 number=$2 state=$3
+  printf '%s\n' "$state" > "$GH_FIXTURES/pull_${repo//\//_}_pulls_$number"
+}
+
+mine='{"full_name":"Kolonie-AI/kolonie-docs"}'
+theirs='{"full_name":"somebody/kolonie-docs"}'
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+check "a green pull request nobody armed is reported with the check it waits on" \
+  "$(printf 'Kolonie-AI/kolonie-docs\t274\tcheck')" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# The rule the whole thing hangs on. The repositories are public and anybody may
+# open a pull request; a sweep that armed those would be a supply chain with a
+# schedule.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$theirs|null"
+check "a fork's pull request is never armed" "" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|null|null"
+check "and neither is one whose fork has been deleted" "" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|true|$mine|null"
+check "a draft is how an author says not yet, and it still is" "" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" '274|false|'"$mine"'|{"enabled_by":{"login":"colette"}}'
+check "one the worker already armed costs the sweep nothing" "" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# The refusal `#232` already makes where the worker opens its own pull requests.
+# Arming here would land the branch the instant it was enabled.
+case_setup
+org "Kolonie-AI/kolonie-email|"
+opened "Kolonie-AI/kolonie-email" "5|false|{\"full_name\":\"Kolonie-AI/kolonie-email\"}|null"
+mergeability "Kolonie-AI/kolonie-email" 5 clean
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "a repository whose main requires nothing arms nothing" "" "$out"
+contains "and says why it was left alone" "no required status check" "$(cat "$WORK/err")"
+
+# `blocked` is a required check that has not reported, which is precisely what
+# auto-merge is for. Skipping it would make the sweep arm only what needs it
+# least.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 blocked
+contains "a check that has not reported yet is exactly the case for arming" \
+  "274" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "GitHub refuses to arm a conflicting one, so the sweep does not ask" "" "$out"
+contains "and says that is what it is" "conflicts with main" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 unknown
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "an uncomputed mergeability is not an answer here either" "" "$out"
+contains "and the run waits rather than deciding" \
+  "has not computed mergeability yet" "$(cat "$WORK/err")"
+
+# Not the worker's own pull requests: every open one in the organisation that
+# survives the four filters, in every repository.
+case_setup
+org "Kolonie-AI/kolonie-docs|check" "Kolonie-AI/kolonie-platform|build, test"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+opened "Kolonie-AI/kolonie-platform" \
+  '700|false|{"full_name":"Kolonie-AI/kolonie-platform"}|null' \
+  '701|true|{"full_name":"Kolonie-AI/kolonie-platform"}|null'
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+mergeability "Kolonie-AI/kolonie-platform" 700 blocked
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)
+check "the sweep is organisation-wide" "2" "$(grep -c . <<<"$out")"
+contains "and carries each repository's own required contexts" \
+  "kolonie-platform	700	build, test" "$out"
+
+case_setup
+echo yes > "$GH_FIXTURES/repos_fail"
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null); rc=$?
+check "an organisation that cannot be listed arms nothing" "" "$out"
+check "and the caller is told, so the run can carry on" "1" "$rc"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check" "Kolonie-AI/kolonie-platform|check"
+opened "Kolonie-AI/kolonie-platform" '700|false|{"full_name":"Kolonie-AI/kolonie-platform"}|null'
+mergeability "Kolonie-AI/kolonie-platform" 700 clean
+echo yes > "$GH_FIXTURES/pulls_fail_Kolonie-AI_kolonie-docs"
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+contains "one unreadable repository does not stop the others" "700" "$out"
+contains "and it says which one it could not read" "kolonie-docs" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+bash "$SCRIPT" unarmed-pull-requests >/dev/null 2>&1
+log=$(cat "$GH_LOG")
+contains "the sweep asks what main requires before it reports anything" \
+  "branches/main/protection" "$log"
+absent "the script never arms anything itself — that is the workflow's, on the repo token" \
+  "pr merge" "$log"
+absent "and it never merges past the check with --admin" "--admin" "$log"
+
+echo
 echo "what it never does"
 
 case_setup
@@ -1586,6 +1776,14 @@ contains "and it is gated on the target having a required check" \
 # it again should start.
 absent "no diff is held back from auto-merge" "merge-gate" "$wf_commands"
 absent "and nothing branches on a gated path" 'if [ -n "$gated" ]' "$wf_commands"
+
+# `#275`: the arming the workflow does for pull requests it did not open. The
+# sweep itself is tested against the stub above; what only the file can carry is
+# that the workflow runs it, and on which credential.
+contains "the workflow sweeps the pull requests it did not open" \
+  "opencode-worker.sh unarmed-pull-requests" "$wf_commands"
+contains "and arms them on the token that reaches another repository" \
+  "gh pr merge \"\$pr\" --repo \"\$repo\" --auto --squash" "$wf_commands"
 
 # `#245`: the two places a failure is announced both have to carry the reason.
 # Neither can be executed by a test, so both are asserted on the file.

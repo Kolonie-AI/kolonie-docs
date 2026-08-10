@@ -442,6 +442,57 @@ jobs:
               echo "::warning::could not write the completion comment on $repo#$issue; the merge stands and the next run will try again"
           done < "$landed"
 
+      # ## A pull request nobody armed waits forever (`#275`, 2026-08-11)
+      #
+      # The step far below arms auto-merge on the pull requests **this workflow**
+      # opens. Nothing armed the others. On 2026-08-10 `claude002` opened
+      # `kolonie-docs#274` and `kolonie-email#5` and both stood green, mergeable
+      # and untouched until the maintainer found them by hand.
+      #
+      # Third sweep in the same place as the other two and for the same reason:
+      # the observation is about pull requests that already exist, so it belongs
+      # at the start of a run rather than at the end of the one that made them.
+      #
+      # **It arms, it does not merge.** `--auto --squash` with no `--admin`, so a
+      # red required check still stops it — and the sweep declines outright in a
+      # repository whose `main` requires nothing, which is the same refusal made
+      # below for the worker's own pull requests. `unarmed_pull_requests` carries
+      # the fork and draft rules and why they are the ones everything hangs on.
+      - name: Is a pull request waiting for nobody?
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # `bash -e {0}` is the shell GitHub gives this. See the sweep above:
+          # nothing here may cost this run its issue.
+          set +e
+          set -uo pipefail
+
+          unarmed="$RUNNER_TEMP/opencode-unarmed"
+          if ! bash .github/scripts/opencode-worker.sh unarmed-pull-requests > "$unarmed"; then
+            echo "::warning::the auto-merge sweep could not read the API; skipping it this run"
+            exit 0
+          fi
+
+          if [ ! -s "$unarmed" ]; then
+            echo "every open pull request that can be armed already is"
+            exit 0
+          fi
+
+          while IFS=$'\t' read -r repo pr required; do
+            [ -n "${repo:-}" ] || continue
+
+            if gh pr merge "$pr" --repo "$repo" --auto --squash >/dev/null 2>&1; then
+              echo "armed $repo#$pr; it lands when ${required} reports green"
+            else
+              # Not a `::warning::`. The commonest cause is a pull request that
+              # went `dirty` between the sweep reading it and this line, and a
+              # warning on every run for a conflict a person has to resolve
+              # anyway is noise that trains a reader to skip warnings.
+              echo "could not enable auto-merge on $repo#$pr; leaving it for the next run"
+            fi
+          done < "$unarmed"
+
       # Step 2 and 3. A quiet hour must be *visibly* quiet — indistinguishable
       # from a broken job is the failure mode this line exists to prevent.
       - name: Is there anything to do?
