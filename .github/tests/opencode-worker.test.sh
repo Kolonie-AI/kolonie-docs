@@ -220,7 +220,22 @@ check "at the same priority the oldest goes first" "$(q 10)" "$(bash "$SCRIPT" p
 case_setup
 issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
 boarded "10:In Progress" "11:Ready"
-check "an issue already claimed is not in the queue" "$(q 11)" "$(bash "$SCRIPT" pick 2>/dev/null)"
+check "a repository with work in flight yields nothing, siblings included" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# The other half of the same rule, and the reason for it: a second repository is
+# not blocked by the first. Two runs in one repository is what every conflict was
+# made of; two runs in different ones share no history, no check and no merge.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" \
+       "11|2026-08-02T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website"
+boarded "10:In Progress" "11:Ready:Kolonie-AI/kolonie-website"
+check "and another repository is still open for work" \
+  "$(q 11 Kolonie-AI/kolonie-website)" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+boarded "10:Done" "11:Ready"
+check "a finished issue does not hold its repository" "$(q 11)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
 issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
