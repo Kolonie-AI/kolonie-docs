@@ -350,9 +350,20 @@ apply_one() {
   done
 
   route=$(sane_route "$route" "$labels" "$current_route" "$depends")
+  local -a remove=()
   if [ "$route" != "$current_route" ]; then
     add+=("$route")
     said+=("\`$route\`")
+    # **The old route comes off in the same call, and this is the one place
+    # anything is removed.** `#259` says exactly one of the three, always — a
+    # route *added* beside another is two routes, which is the state that rule
+    # exists to prevent. Measured the expensive way: the first live pass put
+    # `agent:human` on nine issues that already carried `agent:claude` and left
+    # both on, so the pass that enforces the invariant was the thing breaking it.
+    if [ -n "$current_route" ]; then
+      remove+=("$current_route")
+      said+=("instead of \`$current_route\`")
+    fi
   fi
 
   # ## Readiness — added, never removed, and never in place of a route
@@ -396,12 +407,13 @@ apply_one() {
   blockers=$(bash "$HERE/opencode-worker.sh" blockers "$repo" "$number" 2>/dev/null | tr '\n' ' ')
 
   # ## The labels, in one call
-  if [ ${#add[@]} -gt 0 ]; then
+  if [ ${#add[@]} -gt 0 ] || [ ${#remove[@]} -gt 0 ]; then
     local -a args=()
     local label
-    for label in "${add[@]}"; do args+=(--add-label "$label"); done
+    for label in ${add[@]+"${add[@]}"}; do args+=(--add-label "$label"); done
+    for label in ${remove[@]+"${remove[@]}"}; do args+=(--remove-label "$label"); done
     if ! gh issue edit "$number" --repo "$repo" "${args[@]}" >/dev/null 2>&1; then
-      note "the labels on $repo#$number could not be written: ${add[*]}"
+      note "the labels on $repo#$number could not be written: ${add[*]:-} ${remove[*]:+(-${remove[*]})}"
       return 1
     fi
   fi
@@ -506,6 +518,16 @@ link_blocker() {
   # dependency to learn something the write says by itself. Either way nothing
   # changed, so neither is reported: an hourly comment saying a link that was
   # already there is still there is the noise `#262` refuses.
+  # **A mutual dependency is a deadlock, not a relation.** Two issues each waiting
+  # for the other are both permanently out of the queue, and nothing on the board
+  # would say why. The model has proposed a pair once already, on 2026-08-10, in a
+  # run whose answer was thrown away for another reason.
+  if bash "$HERE/opencode-worker.sh" blockers "$blocker_repo" "$blocker_number" 2>/dev/null |
+    grep -qxF "$repo#$number"; then
+    note "$blocker_repo#$blocker_number already waits for $repo#$number, so linking it back would deadlock both — not linked"
+    return 1
+  fi
+
   local failure
   failure=$(gh api --method POST "repos/$repo/issues/$number/dependencies/blocked_by" \
     -F issue_id="$blocker_id" 2>&1 >/dev/null) && return 0

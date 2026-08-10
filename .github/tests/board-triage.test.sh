@@ -447,6 +447,43 @@ log=$(cat "$GH_LOG")
 contains "the card is moved as the board app" "as=board project item-edit" "$log"
 contains "and the label is written as the repository token" "as=issues issue edit" "$log"
 
+# Measured the expensive way: the first live pass put `agent:human` on nine issues
+# that already carried `agent:claude` and left both on — so the pass enforcing
+# *exactly one of the three* was the thing breaking it.
+case_setup
+searched "$(issue 900 'routed once already' 'agent:claude p2')"
+boarded "900|Ready|agent:claude p2"
+run_apply "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "a changed route removes the old one in the same call" \
+  "--add-label agent:human --remove-label agent:claude" "$log"
+contains "and the comment says what it replaced" "instead of" "$log"
+
+# The other direction: a route that did not change removes nothing, because the
+# only label this pass ever removes is a route it has just replaced.
+case_setup
+searched "$(issue 900 'unchanged' 'agent:claude')"
+boarded "900|Inbox|agent:claude"
+run_apply "$(decided 900 "agent:claude" "" "idea" "" false)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "an unchanged route adds the readiness label" "--add-label idea" "$log"
+absent "and removes nothing" "--remove-label" "$log"
+
+case_setup
+searched "$(issue 900 'would deadlock' '')"
+boarded "900|Inbox|"
+cat > "$GH_FIXTURES/issue_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
+{"id": 55500, "state": "open"}
+JSON
+# 800 already waits for 900, so 900 waiting for 800 would leave both out of the
+# queue for ever.
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 900, "state": "open"}]
+JSON
+run_apply "$(decided 900 "agent:claude" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
+absent "a mutual dependency is refused rather than written" "--method POST" "$(cat "$GH_LOG")"
+contains "and the run says it would deadlock both" "deadlock" "$(cat "$WORK/stderr")"
+
 echo
 echo "the answer the model did not give"
 
