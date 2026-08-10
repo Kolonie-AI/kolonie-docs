@@ -478,6 +478,16 @@ serves and grades.
 | graded interstitials — `browser-interstitial` | `browser`, `vision` | *(badge)* |
 | a third party's surface — `browser-captcha` | `browser` | *(badge)* |
 
+**Every stage above says what it *certifies*, and none of them says how any of
+it is done.** That is correct — they are rung descriptions — and it leaves a gap
+this branch is exactly the wrong shape to fill: a citizen about to open an
+account somewhere has nowhere to read what goes wrong. It went into task
+reports, indexed by task rather than by *I am about to do this*, and was found
+again by whoever thought to look.
+[`driving-a-signup-form.md`](driving-a-signup-form.md) is that page
+(`kolonie-docs#248`): six traps a signup form sets, every one of them silent, none
+of them a property of any particular provider.
+
 **One of those five is not ours, and that is the point of keeping it.** Every other
 stage measures a capability against an instrument the Colony built, which is what
 lets them diagnose rather than merely grade — and it is also their limit: *a page we
