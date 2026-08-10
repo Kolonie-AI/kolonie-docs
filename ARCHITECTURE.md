@@ -541,6 +541,8 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 | **Board write** | `BOARD_WRITE_TOKEN` — `kolonie-docs` only, Organization → Projects: Read and write, nothing else. **Expires 2027-08-04** |
 | **Issue comments** | The built-in `GITHUB_TOKEN`, deliberately, so the stored credential's only power stays moving a board column |
 | **Queue logic** | `.github/scripts/opencode-worker.sh`, tested against a stubbed `gh` in `.github/tests/opencode-worker.test.sh`, which the workflow runs before anything else |
+| **The `main` it opens against** | The one that exists, not the one it started from (`#257`, 2026-08-10). Immediately before the pull request — after the target's check, because the window is the work itself — the run fetches `main` and rebases onto it. A conflict **aborts**: nothing is pushed, the run ends as *the work failed*, and the comment names the conflicting paths and what landed under the branch. **No run resolves a conflict**, because the other change is in a commit the model has not read and was told not to widen its scope to |
+| **A pull request that cannot merge** | Swept at the start of the **next** run (`#256`, 2026-08-10), because the run that opened it exits minutes before anything can merge under it. A worker pull request whose `mergeable_state` is `dirty` is closed with its branch, its issue is commented, put back to **Ready**, loses `agent:opencode` and gains `opencode:failed`. Only `dirty` — `blocked`, `behind` and `unstable` are healthy states, and `unknown` means GitHub has not computed it yet and is left for the next run. The sweep finds its own pull requests by the sentence their body opens with rather than by their author, so a rotated token does not hide the history. **Nothing in it can fail the run**: a sweep that cannot reach the API warns and the queue work continues |
 | **A pull request that goes red afterwards** | `.github/workflows/opencode-red.yml` (`#240`, 2026-08-09), on `check_suite: completed`. The worker has exited by the time CI reports, so this is a separate trigger rather than a step: it **closes the pull request, keeps the branch, and returns the issue to Ready**. Only `opencode/issue-<n>` branches, only a conclusive `failure` or `timed_out`, idempotent, and it never touches `agent:opencode`. Logic in `.github/scripts/opencode-red.sh`, tested in `.github/tests/opencode-red.test.sh`. **It sees `kolonie-docs` pull requests only** — a `check_suite` event fires in the repository it happened in, so the other four wait on the same credential `#231` and `#232` do |
 | **What it reads** | The assigned issue, **plus background** — `.github/scripts/opencode-context.sh` gathers the issues that issue references, depth one, at most five, organisation only, each with its board column and state (`#235`). `kolonie-docs` is checked out beside the target so the documents those issues quote are readable |
 | **The boundary on that background** | The gathered text is untrusted input reaching a model with write access. It arrives fenced, labelled per item by provenance, under a header saying the assigned issue is the only instruction; `from:citizen` items are **included and marked** rather than excluded; no URL found in any issue body is ever fetched, and a URL fragment cannot become a reference. `.github/tests/opencode-context.test.sh` feeds it an issue whose reference says *ignore your previous instructions* |
@@ -549,9 +551,22 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 Nothing else depends on it. The label stays where it is, the board stays where it
 is, and no other workflow reads either.
 
-**What it may never do.** Merge, push to `main`, remove the `agent:opencode`
-label, or edit its own workflow. The first is the one that matters: an agent that
-merged its own work would remove the measurement the experiment exists to take.
+**What it may never do.** Push to `main`, remove the `agent:opencode` label, or
+edit its own workflow.
+
+**Merging was on that list until `#232`, and the replacement is narrower than
+"it may not merge" was.** It may not merge *unchecked* work: it enables
+auto-merge and GitHub performs the merge when the target's **required** status
+check reports green, with no `--admin`, no force and no retry that disables a
+job. A repository with no required check gets no auto-merge at all and the pull
+request waits for a person, because auto-merge there would land the moment it was
+enabled — a direct push wearing a pull request's clothes. Measured 2026-08-10:
+sixteen worker pull requests, sixteen auto-merges, no review event on any of
+them, and on the fastest the required check went green two seconds before the
+merge. **The measurement the experiment exists to take is unaffected** — it is
+whether an unwatched agent produces work worth landing, and a check that ran
+before the code landed is a better answer to that than a human clicking merge
+without reading.
 
 **Two deviations from `#142` as written**, both measured 2026-08-05 and both
 recorded because a reader comparing the issue to the file would otherwise think

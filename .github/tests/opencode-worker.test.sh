@@ -56,6 +56,19 @@ case "$1 $2" in
     case "$2" in
       */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
       */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
+      # `#256` sweeps the worker's own pull requests: one search for the set,
+      # then one read per pull request. The per-pull-request fixture is keyed by
+      # `<repo>#<number>` so one case can hold several and give each a different
+      # `mergeable_state`, which is the whole thing the sweep decides on.
+      search/issues)
+        if [ -s "$GH_FIXTURES/search_fails" ]; then
+          echo "HTTP 422: the search index said no" >&2
+          exit 1
+        fi
+        cat "$GH_FIXTURES/prs" 2>/dev/null ;;
+      */pulls/*)
+        key=${2#repos/}
+        cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
       *) ;;
     esac ;;
   *) ;;
@@ -433,6 +446,19 @@ case "$1 $2" in
     case "$2" in
       */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
       */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
+      # `#256` sweeps the worker's own pull requests: one search for the set,
+      # then one read per pull request. The per-pull-request fixture is keyed by
+      # `<repo>#<number>` so one case can hold several and give each a different
+      # `mergeable_state`, which is the whole thing the sweep decides on.
+      search/issues)
+        if [ -s "$GH_FIXTURES/search_fails" ]; then
+          echo "HTTP 422: the search index said no" >&2
+          exit 1
+        fi
+        cat "$GH_FIXTURES/prs" 2>/dev/null ;;
+      */pulls/*)
+        key=${2#repos/}
+        cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
       *) ;;
     esac ;;
   *) ;;
@@ -791,6 +817,88 @@ check "and exits 0" "0" "$rc"
 contains "and says why it continued" "the claim is the real lock" "$(cat "$WORK/err")"
 
 echo
+echo "the pull requests that cannot merge (#256)"
+
+# The fixtures are the *output* of the `--jq` the stub ignores, as everywhere
+# else in this file: one `<repo>\t<number>` line per pull request the search
+# found, and one `<state>\t<branch>` line per pull request read.
+searched() {
+  : > "$GH_FIXTURES/prs"
+  for row in "$@"; do
+    IFS='|' read -r repo number state ref <<<"$row"
+    printf '%s\t%s\n' "$repo" "$number" >> "$GH_FIXTURES/prs"
+    printf '%s\t%s\n' "$state" "$ref" > "$GH_FIXTURES/pull_${repo//\//_}_pulls_$number"
+  done
+}
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|dirty|opencode/issue-659"
+out=$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)
+check "a conflicting pull request is reported with its issue" \
+  "$(printf 'Kolonie-AI/kolonie-platform\t668\t659')" "$out"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|clean|opencode/issue-659"
+check "one that merges cleanly is left alone" "" "$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)"
+
+# The three states that are not this issue, and each would take a healthy pull
+# request out of In Review if it were read as a conflict.
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|blocked|opencode/issue-659"
+check "a required check that has not reported is not a conflict" "" \
+  "$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|behind|opencode/issue-659"
+check "a branch that is merely out of date is not a conflict" "" \
+  "$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|unstable|opencode/issue-659"
+check "a failing non-required check is not a conflict" "" \
+  "$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)"
+
+# GitHub computes mergeability lazily, so the first read after `main` moves is
+# `unknown`. Reading that either way round is wrong, and it must say so.
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|unknown|opencode/issue-659"
+out=$(bash "$SCRIPT" stale-pull-requests 2>"$WORK/err")
+check "an uncomputed mergeability is not an answer" "" "$out"
+contains "and the run says it is waiting rather than deciding" \
+  "has not computed mergeability yet" "$(cat "$WORK/err")"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|dirty|feature/somebody-elses-branch"
+out=$(bash "$SCRIPT" stale-pull-requests 2>"$WORK/err")
+check "a branch that names no issue is left for a person" "" "$out"
+contains "and says why it was left" "names no issue" "$(cat "$WORK/err")"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|dirty|opencode/issue-659" \
+         "Kolonie-AI/kolonie-docs|215|clean|opencode/issue-212" \
+         "Kolonie-AI/kolonie-infra|116|dirty|opencode/issue-99"
+out=$(bash "$SCRIPT" stale-pull-requests 2>/dev/null)
+check "the sweep is organisation-wide and reports every conflicting one" "2" "$(grep -c . <<<"$out")"
+contains "including the one in another repository" "kolonie-infra	116	99" "$out"
+
+case_setup
+echo yes > "$GH_FIXTURES/search_fails"
+out=$(bash "$SCRIPT" stale-pull-requests 2>/dev/null); rc=$?
+check "a search that fails reports nothing rather than guessing" "" "$out"
+check "and does not fail the run that has queue work to do" "0" "$rc"
+
+case_setup
+searched "Kolonie-AI/kolonie-platform|668|dirty|opencode/issue-659"
+bash "$SCRIPT" stale-pull-requests >/dev/null 2>&1
+log=$(cat "$GH_LOG")
+contains "the sweep identifies its pull requests by the body sentence" \
+  "Opened by the opencode worker for" "$log"
+absent "and not by whoever the token authenticates as" "author:" "$log"
+absent "the sweep itself never closes anything — that is the workflow's, on the repo token" \
+  "pr close" "$log"
+absent "and never moves a card" "item-edit" "$log"
+
+echo
 echo "what it never does"
 
 case_setup
@@ -968,6 +1076,32 @@ fi
 # then. A sentence a citizen reads on fifteen issues a day is worth an assertion.
 absent "the claim comment no longer promises a review that does not happen" \
   "a person reviews and merges" "$wf"
+
+# `#256`: the sweep runs before the queue is read, on the two credentials, and
+# nothing about it may cost this run its issue.
+contains "the workflow sweeps its own stuck pull requests" "stale-pull-requests" "$wf_commands"
+contains "and gives the issue back to Ready with the failure mark" \
+  "--remove-label agent:opencode --add-label opencode:failed" "$wf_commands"
+contains "the branch answer is one and it is stated" "--delete-branch" "$wf_commands"
+contains "a sweep that cannot reach the API warns rather than failing" \
+  "the stale-pull-request sweep could not read the API" "$wf"
+sweep_line=$(grep -n 'opencode-worker.sh stale-pull-requests' "$WORKFLOW" | head -1 | cut -d: -f1)
+pick_line=$(grep -n 'opencode-worker.sh pick' "$WORKFLOW" | head -1 | cut -d: -f1)
+if [ -n "$sweep_line" ] && [ -n "$pick_line" ] && [ "$sweep_line" -lt "$pick_line" ]; then
+  echo "  ok   the sweep runs before the queue is read, so a stuck issue can be picked again"
+else
+  echo "  FAIL the sweep runs before the queue is read, so a stuck issue can be picked again"
+  echo "         sweep at line ${sweep_line:-none}, pick at line ${pick_line:-none}"
+  FAILURES+=("the sweep runs before pick")
+fi
+# `set -e` in the sweep step would make a single unreachable pull request cost
+# this run the issue it was going to work, which is the trade `#256` refuses.
+if awk '/name: Is a pull request of mine stuck\?/,/name: Put the stuck/' "$WORKFLOW" | grep -q 'set -euo'; then
+  echo "  FAIL the sweep step does not exit on the first thing that fails"
+  FAILURES+=("the sweep step uses set -e")
+else
+  echo "  ok   the sweep step does not exit on the first thing that fails"
+fi
 contains "and says what actually happens to the pull request" \
   "merges itself when the target's required check goes green" "$wf"
 

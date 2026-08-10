@@ -141,6 +141,123 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # ## The one ending that was silent (`#256`, 2026-08-10)
+      #
+      # Every other way a run can end is announced. A refusal, an empty commit, a
+      # red check and a worker fault each write a comment, move the board and
+      # leave `opencode:failed` for the board to be filtered on. **A conflict was
+      # the exception**, and it is the ending where the issue looks *finished*:
+      # the board says In Review, the pull request is open, auto-merge is waiting
+      # for a merge GitHub can never perform, and nothing is moving.
+      # `kolonie-platform#668` sat that way from 05:44 on 2026-08-10 and was found
+      # by accident, while answering an unrelated question.
+      #
+      # **It has to run here and not at the end of the run that opened the pull
+      # request**, which is the whole reason this is a step of its own: that run
+      # ends minutes before anything can merge under it, so nothing inside it can
+      # observe a conflict that appears later. A sweep at the start of the *next*
+      # run is the cheaper of the two options `#256` names and needs no new
+      # trigger.
+      #
+      # **Nothing here may fail the run.** The queue work below is what this
+      # workflow is for, and a sweep over previous runs' pull requests that
+      # cannot reach the API must not cost this run its issue. Every call is
+      # guarded and a failure is a `::warning::`, which is visible without being
+      # fatal. `set -e` is deliberately absent for the same reason.
+      - name: Is a pull request of mine stuck?
+        id: stale
+        if: steps.solo.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          stuck="$RUNNER_TEMP/opencode-stale"
+          : > "$stuck"
+
+          if ! bash .github/scripts/opencode-worker.sh stale-pull-requests > "$stuck.raw"; then
+            echo "::warning::the stale-pull-request sweep could not read the API; skipping it this run"
+            exit 0
+          fi
+          mv "$stuck.raw" "$stuck"
+
+          if [ ! -s "$stuck" ]; then
+            echo "no worker pull request is conflicting"
+            exit 0
+          fi
+
+          while IFS=$'\t' read -r repo pr issue; do
+            [ -n "${repo:-}" ] || continue
+            echo "::warning::$repo#$pr cannot merge into main; giving $repo#$issue back"
+
+            # **The files, because the reason is the useful half.** A comment
+            # saying *it conflicts* sends the reader to the pull request to find
+            # out with what; naming the paths lets them decide whether it is
+            # worth redoing without opening anything.
+            files=$(gh api "repos/$repo/pulls/$pr/files" --paginate \
+              --jq '.[].filename' 2>/dev/null | sed 's/^/- `/;s/$/`/' | head -20)
+            [ -n "$files" ] || files="- (the file list could not be read)"
+
+            # ## The branch is closed rather than left, and `#256` asks for one
+            # ## answer stated rather than for this one in particular
+            #
+            # A stale branch that a later run re-creates is its own defect: the
+            # next attempt at this issue starts `git switch -c opencode/issue-N`
+            # and finds the name taken. Nothing is lost by closing — a closed
+            # pull request keeps its diff, its commits and its branch, and it is
+            # the state a person can read the history of the attempt out of.
+            gh pr close "$pr" --repo "$repo" --delete-branch \
+              --comment "Closed by the worker: this cannot merge into \`main\` and no run resolves a conflict. ${repo}#${issue} is back in Ready. $RUN_URL" \
+              >/dev/null 2>&1 ||
+              echo "::warning::could not close $repo#$pr; it stays open and the issue still goes back"
+
+            gh issue comment "$issue" --repo "$repo" --body \
+              "**The opencode worker's pull request for this issue cannot merge, so the issue is not done.**
+
+          [\`${repo}#${pr}\`](${GITHUB_SERVER_URL}/${repo}/pull/${pr}) went \`CONFLICTING\`: something merged into \`main\` while it was open and the two meet in the same lines. Auto-merge was enabled on it, so GitHub was waiting for a merge it can never perform — which is why this needed a sweep rather than an ending of its own.
+
+          Where they meet:
+
+          ${files}
+
+          **The pull request has been closed and its branch deleted.** Nothing is lost: a closed pull request keeps its diff and its commits, and leaving the branch would mean the next attempt at this issue finds its own name taken. This issue is back in **Ready**, without \`agent:opencode\` and with \`opencode:failed\`, so a person decides whether it is worth another run rather than the worker deciding it by retrying.
+
+          No run resolves a conflict, and that is deliberate (\`kolonie-docs#257\`): the other change is in a commit the model has not read and was told not to widen its scope to. Found by $RUN_URL." \
+              >/dev/null 2>&1 ||
+              echo "::warning::could not comment on $repo#$issue"
+
+            # Both edits in one call, so no window shows neither (`#255`).
+            gh issue edit "$issue" --repo "$repo" \
+              --remove-label agent:opencode --add-label opencode:failed \
+              >/dev/null 2>&1 ||
+              echo "::warning::could not relabel $repo#$issue"
+
+            printf '%s\t%s\n' "$repo" "$issue" >> "$stuck.board"
+          done < "$stuck"
+
+          [ -f "$stuck.board" ] || : > "$stuck.board"
+
+      # The board write is a second step because it is a second credential.
+      # `BOARD_WRITE_TOKEN` is Projects-only and cannot read a line of code;
+      # `WORKER_REPO_TOKEN` above cannot move a column. Same split as `Claim it`
+      # and `Say so on the issue`, and for the same reason.
+      - name: Put the stuck ones back on the board
+        if: steps.solo.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          board="$RUNNER_TEMP/opencode-stale.board"
+          [ -s "$board" ] || { echo "nothing to move"; exit 0; }
+
+          while IFS=$'\t' read -r repo issue; do
+            [ -n "${repo:-}" ] || continue
+            bash .github/scripts/opencode-worker.sh release "$repo" "$issue" ||
+              echo "::warning::$repo#$issue is commented and relabelled but its card did not move. It needs a person: $RUN_URL"
+          done < "$board"
+
       # Step 2 and 3. A quiet hour must be *visibly* quiet — indistinguishable
       # from a broken job is the failure mode this line exists to prevent.
       - name: Is there anything to do?

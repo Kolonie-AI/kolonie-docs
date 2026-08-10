@@ -415,6 +415,104 @@ previous_failures() {
   awk '{ total += $1 } END { print total + 0 }' <<<"$count"
 }
 
+# The sentence every pull request the worker opens carries in its body.
+#
+# **Durable evidence, and deliberately not the author** (`#256`, `#258`). The
+# obvious identifier is *whoever the token authenticates as*, and it is the one
+# that goes wrong silently: the credential is a setting, it has already changed
+# once, and a rotated token would make every pull request opened before it
+# invisible to both sweeps below. The branch name is the second candidate and it
+# is not enough on its own — anybody can push `opencode/issue-12`. The body
+# sentence is written by this workflow and by nothing else, and a run that
+# reworded it would have to edit the line the sweep reads.
+WORKER_PR_MARKER=${WORKER_PR_MARKER:-Opened by the opencode worker for}
+
+# Every pull request the worker has opened, in one state.
+#
+# **Over REST search rather than the board or GraphQL**, for AGENTS.md §6's
+# reason: the board is the whole of the GraphQL bill and this runs on a schedule
+# every ten minutes. `search/issues` costs nothing from that pool.
+#
+# **The index is a minute or two behind**, which is the one property worth
+# stating: a pull request opened by *this* run cannot be found by *this* run.
+# Both callers are sweeps over previous runs' work, so that latency is invisible
+# to them — and it is the reason neither of them belongs at the end of the run
+# that opened the pull request.
+worker_pull_requests() {
+  local state=$1
+  gh api search/issues -X GET \
+    -f q="org:$ORG is:pr is:$state in:body \"$WORKER_PR_MARKER\"" \
+    -f per_page=100 --paginate \
+    --jq '.items[] | "\(.repository_url | sub(".*/repos/"; ""))\t\(.number)"' \
+    2>/dev/null || true
+}
+
+# The issue a worker pull request was opened for, off its branch name.
+#
+# `Closes #N` in the body says the same thing and is what GitHub acts on; the
+# branch is used here because it survives a body somebody has edited, and
+# because the two disagreeing is a defect worth having the sweep notice rather
+# than paper over. A ref that does not match the convention prints nothing and
+# the caller skips it.
+issue_of_branch() {
+  local ref=$1
+  [[ "$ref" =~ ^opencode/issue-([0-9]+)$ ]] || return 0
+  echo "${BASH_REMATCH[1]}"
+}
+
+# Open worker pull requests that git cannot merge, as `<repo> <pr> <issue>`.
+#
+# ## Why this is a sweep and not a step at the end of the run
+#
+# The run that opens a pull request ends minutes before anything can merge under
+# it. `kolonie-platform#668` opened at 05:44 on 2026-08-10 and went `CONFLICTING`
+# when `#670` merged later — nothing in `#668`'s own run could have observed
+# that, so the observation has to happen in a *subsequent* run. `#257` closes
+# most of the window before the pull request is opened; this is the net under
+# what still gets through.
+#
+# ## `dirty`, and nothing else
+#
+# GitHub's `mergeable_state` has six values and only one of them is this issue.
+# `blocked` is a required check that has not reported, `unstable` is a
+# non-required one that failed, `behind` is a branch that is simply out of date
+# and merges fine — treating any of those as a conflict would put a healthy
+# pull request back in Ready.
+#
+# **`unknown` is not an answer and must not be read as one.** GitHub computes
+# mergeability lazily: the first request after a change to `main` returns
+# `unknown` and starts the computation. A sweep that read that as *not dirty*
+# would be correct by luck, and one that read it as *dirty* would close pull
+# requests that merge perfectly well. It is skipped, out loud, and the next run
+# ten minutes later gets a real answer.
+stale_pull_requests() {
+  local repo number state ref issue
+  while IFS=$'\t' read -r repo number; do
+    [ -n "${repo:-}" ] && [ -n "${number:-}" ] || continue
+
+    IFS=$'\t' read -r state ref < <(
+      gh api "repos/$repo/pulls/$number" \
+        --jq '"\(.mergeable_state)\t\(.head.ref)"' 2>/dev/null
+    ) || continue
+
+    case "${state:-}" in
+      dirty) ;;
+      unknown|"")
+        echo "$repo#$number: GitHub has not computed mergeability yet; leaving it for the next run" >&2
+        continue ;;
+      *) continue ;;
+    esac
+
+    issue=$(issue_of_branch "${ref:-}")
+    if [ -z "$issue" ]; then
+      echo "$repo#$number conflicts but its branch (${ref:-none}) names no issue; leaving it for a person" >&2
+      continue
+    fi
+
+    printf '%s\t%s\t%s\n' "$repo" "$number" "$issue"
+  done < <(worker_pull_requests open)
+}
+
 # Nothing that is about to be published carries a secret this run holds (`#246`).
 #
 # ## Why this exists next to a sandbox that was already there
@@ -647,6 +745,11 @@ case "${1:-}" in
     exit 0
     ;;
 
+  stale-pull-requests)
+    stale_pull_requests
+    exit 0
+    ;;
+
   leak-check)
     shift
     [ "$#" -gt 0 ] || die "leak-check needs at least one file to read" 1
@@ -693,6 +796,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | leak-check <file>..."
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | stale-pull-requests | leak-check <file>..."
     ;;
 esac
