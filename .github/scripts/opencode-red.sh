@@ -80,11 +80,15 @@
 # blocker and not a second one.
 set -uo pipefail
 
-ORG=${ORG:-Kolonie-AI}
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# No `ORG`. The organisation arrives inside `$GITHUB_REPOSITORY`, which the
+# workflow passes as `handle`'s first argument, and after `#271` nothing here
+# needs it separately — the one lookup takes the repository name off that.
 PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
 STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
 STATUS_READY=${STATUS_READY:-ee5ea42c}
-BOARD_LIMIT=${BOARD_LIMIT:-1000}
+# No `BOARD_LIMIT`. Nothing here reads the board any more (`#271`); the one item
+# this script wants is asked for by repository and number.
 
 # The mark this script leaves, and the reason it can be idempotent without
 # storing anything: a comment carrying it is one of its own.
@@ -112,13 +116,20 @@ issue_from_branch() {
 # Repository *and* number: the board spans five repositories whose issue numbers
 # all start at 1, so a number alone is a coin flip — `AGENTS.md` §4 says so and
 # `opencode-worker.sh` already enforces it.
+#
+# **This read the whole board until `#271`** (2026-08-10), to find one item.
+# That is the exact call §4 says is never worth making for a single issue: 203
+# points against 1, and it was the last one left in this repository after `#271`
+# had moved the three the issue named. Asking the issue what it is on is both
+# cheaper and fresher, because it answers from the board now rather than from a
+# listing assembled a page at a time.
+#
+# `board-item-id.sh` prints `id<TAB>column<TAB>issue is STATE`. The third field
+# is dropped here rather than in the caller, which wants the two values it has
+# always wanted.
 board_item_for() {
   local repo=$1 number=$2
-  gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json |
-    jq -r --argjson n "$number" --arg repo "$repo" \
-      '.items[] | select(.content.number == $n and .content.repository == $repo)
-       | "\(.id)\t\(.status // "")"' |
-    head -1
+  bash "$HERE/board-item-id.sh" "${repo#*/}" "$number" 2>/dev/null | head -1 | cut -f1,2
 }
 
 case "${1:-}" in

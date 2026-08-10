@@ -37,12 +37,31 @@ case "$1 $2" in
       esac
     done
     cat "$GH_FIXTURES/search_${label//:/_}" 2>/dev/null || echo '[]' ;;
-  "project item-list")
+  # **The board arrives as GraphQL now** (`#271`): `waiting-list.sh` asks
+  # `opencode-worker.sh board-read` rather than `gh project item-list`, so this
+  # is where a board fixture is served from.
+  #
+  # The fixtures stay in `item-list` shape. That is deliberate and it is the
+  # same argument `board_read` itself makes: the shape is what every assertion
+  # below was written against, and re-shaping thirty fixtures to prove a change
+  # of transport would be re-testing `jq`. They are wrapped back into the
+  # document `board_read` parses, here, once.
+  "api graphql")
     if [ -s "$GH_FIXTURES/board_fails" ]; then
       echo "HTTP 502" >&2
       exit 1
     fi
-    cat "$GH_FIXTURES/board" 2>/dev/null ;;
+    jq '{data:{organization:{projectV2:{items:{
+          pageInfo:{hasNextPage:false,endCursor:null},
+          nodes:[ .items[]
+            | {id:.id,
+               fieldValueByName:{name:.status},
+               content:{number:.content.number,
+                        title:(.content.title // "untitled"),
+                        url:(.content.url // ""),
+                        repository:{nameWithOwner:.content.repository, url:""},
+                        labels:{nodes:[]}}} ]}}}}}' \
+      "$GH_FIXTURES/board" 2>/dev/null ;;
   "api "*)
     case "$2" in
       */dependencies/blocked_by)

@@ -53,7 +53,9 @@ WAITING_LABELS=${WAITING_LABELS:-agent:claude agent:human}
 # environment and every other setting in this file can.
 HELD_STATUSES=${HELD_STATUSES:-In Progress|In Review|Done}
 
-BOARD_LIMIT=${BOARD_LIMIT:-1000}
+# No `BOARD_LIMIT`. `board-read` follows `pageInfo` to the end, so there is no
+# number here to be sized wrongly — which was the whole point of `#269`: a limit
+# that is too small drops issues off the queue silently.
 SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 
 # The issue this list is published on. It is excluded from its own list, which
@@ -117,7 +119,10 @@ entries() {
 
   board=$(mktemp)
   trap 'rm -f "$board"' RETURN
-  gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json \
+  # `board-read` and not `gh project item-list`: the same document for 2 points
+  # against 203 (`#269`, measured 2026-08-10 on a 129-item board). Same
+  # `.items[]`, same `.status`, same `.content` — so the `jq` below is unchanged.
+  bash "$HERE/opencode-worker.sh" board-read \
     >"$board" || die "the board could not be read, so no column can be trusted"
 
   # `--slurpfile` and not `--argjson`: the board is one document of every item in
