@@ -68,6 +68,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # The board as the `kolonie-opencode` app rather than as a person
+      # (`#270`): its own hourly GraphQL budget, and its own name on anything it
+      # touches. The token expires in an hour and is minted per run.
+      - name: Become the board app
+        id: board_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOARD_APP_ID }}
+          private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - uses: actions/checkout@v4
 
       # First, because a check nobody has verified is a check nobody should
@@ -89,7 +100,7 @@ jobs:
           # The issue this workflow files is written by GITHUB_TOKEN in the steps
           # below, deliberately: the stored credential stays read-only for its
           # whole life, so a leak of it costs nothing that is not already public.
-          GH_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           BREAK_IT: ${{ inputs.break_it }}
         run: |
           # No pipeline, and the status is captured rather than allowed to

@@ -127,6 +127,37 @@ jobs:
       - name: Test the queue logic
         run: bash .github/tests/opencode-worker.test.sh
 
+      # ## The board is read and written as an app, not as a person (`#270`)
+      #
+      # `BOARD_READ_TOKEN` and `BOARD_WRITE_TOKEN` were personal access tokens on
+      # the maintainer's account, so every board read this workflow made was
+      # charged to a human's 5,000 GraphQL points an hour and every card move was
+      # signed with their name. On 2026-08-10 that budget ran out and runs died at
+      # `pick` with `API rate limit exceeded for user ID 2418106` — a number that
+      # names a person and explains nothing.
+      #
+      # An installation token has **its own** hourly budget, so the worker cannot
+      # starve a person and a person cannot starve the worker. Measured when this
+      # shipped: the app at 4,999/5,000 while the maintainer's account sat at
+      # 4,660/5,000, on the same board at the same minute.
+      #
+      # **The app can do one thing.** `kolonie-opencode` holds Organization
+      # projects: read and write, and Metadata: read. It cannot read a line of
+      # code, cannot push, cannot comment and has no webhook — the same
+      # narrowness `BOARD_WRITE_TOKEN` had, now enforced by what the app *is*
+      # rather than by what a token was scoped to when somebody minted it.
+      #
+      # The token it mints expires in an hour and is thrown away when the job
+      # ends, which is the other half of why this is better than a token that
+      # sits in a secret until somebody remembers to rotate it.
+      - name: Become the board app
+        id: board_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOARD_APP_ID }}
+          private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       # ## An In Progress item nobody is behind (`#266`, 2026-08-10)
       #
       # `pick` skips a repository that has anything In Progress, which is the
@@ -280,13 +311,13 @@ jobs:
 
           [ -f "$stuck.board" ] || : > "$stuck.board"
 
-      # The board write is a second step because it is a second credential.
-      # `BOARD_WRITE_TOKEN` is Projects-only and cannot read a line of code;
+      # The board write is a second step because it is a second credential. The
+      # app token is Projects-only and cannot read a line of code;
       # `WORKER_REPO_TOKEN` above cannot move a column. Same split as `Claim it`
       # and `Say so on the issue`, and for the same reason.
       - name: Put the stuck ones back on the board
         env:
-          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
@@ -418,7 +449,7 @@ jobs:
         env:
           # Read-only, and it is the token that can see the board. The write
           # below uses a different one on purpose.
-          GH_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
         run: |
           # The exit code is read separately from the output, because the two
           # answer different questions and this step used to conflate them.
@@ -464,14 +495,17 @@ jobs:
       #
       # **A board write that fails stops the run here**, before any work, while
       # nothing needs undoing. `#142` names an issue parked in In Progress by an
-      # expired token as the one failure this design cannot recover from alone —
-      # `BOARD_WRITE_TOKEN` expires 2027-08-04 and that is a certainty, not a
-      # hypothesis.
+      # expired token as the one failure this design cannot recover from alone.
+      # That was a dated certainty while the board was written with a personal
+      # token — `BOARD_WRITE_TOKEN` would have expired 2027-08-04 — and `#270`
+      # replaced it with a token minted per run. The failure it guards against
+      # is now a revoked installation rather than a forgotten renewal, which is
+      # rarer and louder, and the guard stays either way.
       - name: Claim it
         id: claim
         if: steps.queue.outputs.issue
         env:
-          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
@@ -593,9 +627,11 @@ jobs:
       # - `github.token` is minted per run and scoped to the repository hosting
       #   the workflow. It cannot check out or push to the other four. That is
       #   the platform's rule, not a setting.
-      # - `BOARD_WRITE_TOKEN` is `kolonie-docs` only, Organization → Projects:
-      #   Read and write, **nothing else** — `ARCHITECTURE.md` says so and the
-      #   scope is deliberate. It cannot read a line of code anywhere.
+      # - The board token is Organization → Projects: read and write, **nothing
+      #   else**. Since `#270` it is minted from the `kolonie-opencode` app,
+      #   which holds no other permission at all, so this is now a property of
+      #   the app rather than a scope somebody chose. It cannot read a line of
+      #   code anywhere.
       #
       # So an organisation-wide worker needs one credential the organisation
       # does not yet hold: `WORKER_REPO_TOKEN`, contents and pull-requests write
@@ -619,7 +655,7 @@ jobs:
             exit 0
           fi
           if [ -z "${WORKER_REPO_TOKEN:-}" ]; then
-            echo "::error::${{ steps.queue.outputs.repo }}#${{ steps.queue.outputs.issue }} is outside $GITHUB_REPOSITORY, and WORKER_REPO_TOKEN is not set. github.token cannot reach another repository and BOARD_WRITE_TOKEN is Projects-only by design. Taking nothing; the issue goes back to Ready."
+            echo "::error::${{ steps.queue.outputs.repo }}#${{ steps.queue.outputs.issue }} is outside $GITHUB_REPOSITORY, and WORKER_REPO_TOKEN is not set. github.token cannot reach another repository and the board token is Projects-only by design. Taking nothing; the issue goes back to Ready."
             exit 1
           fi
           echo "WORKER_REPO_TOKEN is set; the target is reachable"
@@ -1311,7 +1347,7 @@ jobs:
       - name: Move it to In Review
         if: success() && steps.held.outputs.mine
         env:
-          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           bash .github/scripts/opencode-worker.sh review \
@@ -1325,7 +1361,7 @@ jobs:
       - name: Put it back
         if: (failure() || cancelled()) && steps.held.outputs.mine
         env:
-          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           bash .github/scripts/opencode-worker.sh release \
@@ -1362,8 +1398,7 @@ jobs:
           OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
           OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
           WORKER_REPO_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
-          BOARD_READ_TOKEN: ${{ secrets.BOARD_READ_TOKEN }}
-          BOARD_WRITE_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
           REPO: ${{ steps.queue.outputs.repo }}
           ISSUE: ${{ steps.queue.outputs.issue }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

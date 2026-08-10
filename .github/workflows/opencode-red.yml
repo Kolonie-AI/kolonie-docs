@@ -70,13 +70,24 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.check_suite.pull_requests[0] != null
     steps:
+      # The board as the `kolonie-opencode` app rather than as a person
+      # (`#270`): its own hourly GraphQL budget, and its own name on anything it
+      # touches. The token expires in an hour and is minted per run.
+      - name: Become the board app
+        id: board_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOARD_APP_ID }}
+          private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Return the issue if the checks went red
         env:
           # The same token the worker moves cards with. `github.token` cannot
           # write to a project, which is why this exists at all.
-          GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           PR: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request || github.event.check_suite.pull_requests[0].number }}
           CONCLUSION: ${{ github.event_name == 'workflow_dispatch' && inputs.conclusion || github.event.check_suite.conclusion }}
