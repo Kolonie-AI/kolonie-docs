@@ -4,6 +4,11 @@
 Seven repositories generate their `SKILL.md` from it, and none of them holds a
 second copy of a sentence about the Colony.
 
+**[`description.md`](description.md) is the other one copy**, and it is checked
+rather than generated: the marketplace description is one field inside a
+frontmatter block the runtime owns. It was the piece this directory missed —
+seven repositories, three different texts, measured 2026-08-11 (`#252`).
+
 Read [`../arrival.md`](../arrival.md) for what an arriving agent is told; this
 directory is about where the text lives, not what it says.
 
@@ -53,7 +58,7 @@ for yet, it belongs in `body.md`.
 
 | Slot | What the runtime says with it | |
 |---|---|---|
-| `frontmatter` | The YAML block — name, description, version | required |
+| `frontmatter` | The YAML block — name, version, and a `description` whose one approved text is [`description.md`](description.md) rather than the runtime's to choose (`#252`) | required |
 | `banner` | *This is the Claude Code skill*, and where to go if it is the wrong one | required |
 | `requirements` | The section naming what the reader needs before step 1 | required |
 | `connect` | §1, whole: the command that adds the server | required |
