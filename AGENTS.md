@@ -1033,11 +1033,23 @@ there is nothing to be gained by trying again before it.
 
 **Do not work around it with a second credential.** The limit is per *user*, so
 another token belonging to the same account shares the same pool and buys
-nothing. A second *identity* is a real answer and is
-[`kolonie-docs#228`](https://github.com/Kolonie-AI/kolonie-docs/issues/228),
-which is `blocked:human` because it needs an account created and an
-organisation seat. Nothing in this section is a substitute for it; it is what to
-do until it exists.
+nothing. A second *identity* is the real answer —
+[`kolonie-docs#228`](https://github.com/Kolonie-AI/kolonie-docs/issues/228) asked
+for one and was `blocked:human` on needing an account created and a seat paid
+for.
+
+**The workflows have one, and it is not an account.** `#270` gave the board a
+GitHub App, `kolonie-opencode`, owned by the organisation and holding
+Organization projects: read and write and nothing else. An installation token
+has its own hourly budget, expires in an hour, costs no seat and belongs to no
+person: measured at install, the app at 4,999/5,000 while the maintainer's
+account sat at 4,660/5,000 on the same board at the same minute.
+
+So the four workflows that touch the board — `opencode-worker`, `opencode-red`,
+`board-self-check`, `waiting-for-an-agent` — no longer spend anybody's points.
+**An agent working the loop by hand still does**, which is what the rest of this
+section is about, and at 2 points a read that is now a comfortable budget rather
+than a tight one.
 
 **Fetch the board once, then ask it four things.** All four filter locally with
 `jq` and always did, so one fetch answers them.
