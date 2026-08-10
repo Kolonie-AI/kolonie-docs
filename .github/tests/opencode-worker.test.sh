@@ -906,6 +906,21 @@ contains "a removal that failed is reported rather than swallowed" \
 contains "and the counter now finds a second failure worth naming" \
   '"$failures" -ge 2' "$wf"
 
+# `#253`: four failure endings, four sentences. Three of these shared one verdict
+# and it was true of exactly one of them.
+contains "a refusal is announced as a refusal" \
+  "The model declined this issue and committed nothing" "$wf"
+contains "and says explicitly that nothing failed a check" \
+  "nothing was built, so nothing failed a check" "$wf"
+contains "an empty run is its own case" \
+  "The model committed nothing and did not say why" "$wf"
+contains "a red check keeps the sentence that was always true of it" \
+  "The change did not pass" "$wf"
+contains "the model's refusal is recorded under its own kind" \
+  "fail refused" "$wf"
+contains "and a commitless run under its own" \
+  "fail empty" "$wf"
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"

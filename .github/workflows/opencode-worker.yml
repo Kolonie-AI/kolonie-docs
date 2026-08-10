@@ -378,12 +378,19 @@ jobs:
           FAILURE_DIR="$RUNNER_TEMP/opencode-failure"
           mkdir -p "$FAILURE_DIR"
 
-          # The distinction the comment could not make and now can. **`work`**
-          # means the change did not pass the target's own check: the issue
-          # genuinely is not done and requeueing is right. **`worker`** means the
-          # issue was never the problem — a token, a checkout, the environment,
-          # the worker's own scratch files — and that one will fail the same way
-          # every ten minutes until somebody looks.
+          # The distinction the comment could not make and now can, in the four
+          # kinds `#253` separated out of two:
+          #
+          # **`refused`** — the model read the issue, concluded it cannot be done
+          # as specified, and said why. Nothing was built. **`empty`** — nothing
+          # was committed and nothing explained it, which is a defect in the run.
+          # **`work`** — a commit exists and the target's own check went red: the
+          # issue genuinely is not done. **`worker`** — the issue was never the
+          # problem, and that one fails the same way every ten minutes until
+          # somebody looks.
+          #
+          # The first two were `work` until `#253`, so a refusal was announced as
+          # a failed check on the comments whose reasoning most deserved reading.
           fail() {
             printf '%s\n' "$1" > "$FAILURE_DIR/kind"
             printf '%s\n' "$2" > "$FAILURE_DIR/reason"
@@ -608,7 +615,7 @@ jobs:
           if [ -s "$SCRATCH/refusal.txt" ]; then
             echo "the agent declined the issue:"
             cat "$SCRATCH/refusal.txt"
-            fail work "the model declined the issue as specified and committed nothing. Its reason is below, and it is about the issue rather than about this run" \
+            fail refused "the model declined the issue as specified and committed nothing" \
               "$SCRATCH/refusal.txt"
           fi
 
@@ -627,7 +634,7 @@ jobs:
           if [ "$(git rev-list --count origin/main..HEAD)" -eq 0 ]; then
             echo "no commits on $branch — nothing to open a pull request for"
             git status --porcelain | tee "$RUNNER_TEMP/opencode-nocommits.log"
-            fail work "the model committed nothing to \`$branch\`, so there was nothing to open a pull request for" \
+            fail empty "the model committed nothing to \`$branch\`, so there was nothing to open a pull request for" \
               "$RUNNER_TEMP/opencode-nocommits.log"
           fi
 
@@ -891,11 +898,32 @@ jobs:
 
           excerpt=$(bash .github/scripts/opencode-worker.sh excerpt "$FAILURE_DIR/output")
 
-          if [ "$kind" = work ]; then
-            verdict="**The work failed.** The change did not pass ${REPO:-the target}'s own check, so the issue genuinely is not done and putting it back in Ready is right."
-          else
-            verdict="**The worker failed, not the change.** The issue was never the problem here, so the next scheduled hour will very likely fail the same way — this one is worth a person's minute rather than another retry."
-          fi
+          # **Four endings and four sentences, since `#253`.** Three of these
+          # used to be `work` and share its verdict — *the change did not pass
+          # the check* — which was true of exactly one of them. The other two had
+          # nothing to check: no commit existed. Measured on
+          # `kolonie-platform#533`, where the headline said a check had failed and
+          # the model's own words four lines below said *no repository change was
+          # made and no commit was created*.
+          #
+          # It mattered because of which comments carried it. `kolonie-infra#107`,
+          # `#103` and `#533` were all **correct refusals worth reading**, and a
+          # reader who stopped at the headline went looking for a broken test that
+          # never existed.
+          case "$kind" in
+            refused)
+              verdict="**The model declined this issue and committed nothing.** Its reason is below, and it is about the issue rather than about this run — nothing was built, so nothing failed a check."
+              ;;
+            empty)
+              verdict="**The model committed nothing and did not say why.** That is a defect in the run rather than a verdict on the issue: a model that cannot do something is asked to write down what stopped it, and this one did not."
+              ;;
+            work)
+              verdict="**The work failed.** The change did not pass ${REPO:-the target}'s own check, so the issue genuinely is not done and putting it back in Ready is right."
+              ;;
+            *)
+              verdict="**The worker failed, not the change.** The issue was never the problem here, so the next run will very likely fail the same way — this one is worth a person's minute rather than another retry."
+              ;;
+          esac
 
           # The delimiter carries a random component because the excerpt is
           # arbitrary build output: a fixed one appearing in a log line would end
