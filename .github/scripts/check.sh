@@ -79,6 +79,14 @@ step "README.md carries the current Colony header" \
   python3 .github/scripts/build-readme.py \
     onboarding/readme/header.md README.md --first --check
 
+# `#252`. Runs in both states: while publication is blocked it asserts the record
+# is intact and the blocker is real, and it needs neither a token nor the sibling
+# repositories to do that. When the flag flips it asserts all seven carry the
+# sentence, and skips the ones that are not checked out — which is why it is
+# here rather than behind the token guard below.
+step "the marketplace description has one copy" \
+  python3 .github/scripts/check-skill-description.py
+
 # Named rather than dropped. `no-gateway-leak.sh` decides for itself whether it
 # can run — it greps for the *values* of two secrets and skips when they are
 # absent, which is deliberate and is its own comment's reasoning — so it is
