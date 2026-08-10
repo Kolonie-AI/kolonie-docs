@@ -842,14 +842,26 @@ coming.
 
 #### Who applies it, and who never does
 
-**The maintainer says which issues go to the worker. The orchestrating agent
-proposes candidates and applies the label after confirmation. The worker never
-labels anything** — it reads the queue, takes the oldest, and puts it back if it
-fails.
+**Triage applies it, hourly, against the table above** (`kolonie-docs#262`,
+2026-08-10). `.github/workflows/board-triage.yml` reads Inbox and Ready, routes
+each issue against §5 and
+[`operations/worker-prohibitions.md`](operations/worker-prohibitions.md), and
+moves what it routed to Ready. **The maintainer and any agent may still apply the
+label by hand and triage will not overrule it** — a route already on an issue is
+never widened by a later pass, which is the same asymmetry the rest of this section
+has: narrowing is somebody noticing something, widening is a guess with the
+unattended worker at the end of it.
 
-Recorded because it is an operating agreement rather than a deduction, and
-because the previous version of this paragraph said *"Anyone — the maintainer, an
-agent, the human"*, which is not what is actually done.
+**The worker still never labels anything** — it reads the queue, takes the oldest,
+and puts it back if it fails.
+
+Recorded because it is an operating agreement rather than a deduction. **It changed
+on 2026-08-10 and this is what changed**: the previous version said the maintainer
+decided which issues went to the worker and an agent proposed candidates for
+confirmation. Measured that day, that arrangement left fifteen issues unread in
+Inbox while the worker exited idle on two runs in three, because the only thing
+that could fill the queue was a conversation. The decision is now taken hourly
+against a written rule, and the rule is the thing to argue with.
 
 **What makes a good candidate**, because the maintainer will ask for suggestions
 and an agent should have a basis for answering rather than a feeling:

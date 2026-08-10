@@ -1335,6 +1335,32 @@ check "no refusal file is not an error" "0" "$rc"
 check "and names nothing" "" "$out"
 
 echo
+echo "the board write triage is allowed to make (#262)"
+
+# `move` exists so that the triage pass does not carry a second copy of the
+# mutation. What makes it safe is that it writes two columns and refuses the rest:
+# In Progress and In Review belong to whoever holds them, and a triage pass that
+# could write them could take work off an agent that has it.
+case_setup
+boarded "77:Inbox"
+check "an issue in Inbox can be moved to Ready" "moved Kolonie-AI/kolonie-docs#77 to Ready" \
+  "$(bash "$SCRIPT" move Kolonie-AI/kolonie-docs 77 Ready 2>/dev/null)"
+check "and the board says so" "Ready" \
+  "$(jq -r '.items[0].status' "$GH_FIXTURES/board")"
+
+case_setup
+boarded "77:Ready"
+out=$(bash "$SCRIPT" move Kolonie-AI/kolonie-docs 77 "In Progress" 2>&1); rc=$?
+check "In Progress is not a column triage may write" "1" "$rc"
+contains "and it says which columns belong to somebody" "belong to whoever holds them" "$out"
+absent "and nothing was written" "item-edit" "$(cat "$GH_LOG")"
+
+case_setup
+boarded "77:Ready"
+out=$(bash "$SCRIPT" move Kolonie-AI/kolonie-docs 77 Done 2>&1); rc=$?
+check "nor Done" "1" "$rc"
+
+echo
 echo "the prohibitions live in one file and everything else reads it (#260)"
 
 # The rule used to live in three places — the model's prompt, this script and

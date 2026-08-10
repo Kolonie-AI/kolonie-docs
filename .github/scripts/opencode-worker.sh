@@ -9,6 +9,7 @@
 #   opencode-worker.sh merge-gate <file>       # -> the changed paths that stop a pull request merging itself
 #   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
+#   opencode-worker.sh move <repo> <number> Ready|Inbox  # -> the only board write triage may make (#262)
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
 #   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
@@ -108,6 +109,7 @@ set -uo pipefail
 PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
 STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
 STATUS_READY=${STATUS_READY:-ee5ea42c}
+STATUS_INBOX=${STATUS_INBOX:-b14e3c08}
 STATUS_IN_PROGRESS=${STATUS_IN_PROGRESS:-39185de7}
 STATUS_IN_REVIEW=${STATUS_IN_REVIEW:-d66d01e2}
 
@@ -1513,6 +1515,31 @@ case "${1:-}" in
     exit 0
     ;;
 
+  # The board write nothing but triage does (`#262`). `release` is the same
+  # mutation with the recovery path's wording around it, and a second copy of a
+  # GraphQL mutation is the thing §4 refuses about a second record of status.
+  #
+  # **Only the two columns triage is allowed to write.** It reads Inbox and Ready
+  # and moves what it routed to Ready; In Progress and In Review belong to
+  # whoever holds them, and Done is Done. A `move` that could write them would be
+  # a triage pass able to take work off an agent that has it.
+  move)
+    repo=${2:?move needs a repository}
+    number=${3:?move needs an issue number}
+    column=${4:?move needs a column: Ready or Inbox}
+    case "$column" in
+      Ready) option=$STATUS_READY ;;
+      Inbox) option=$STATUS_INBOX ;;
+      *) die "move writes Ready or Inbox and nothing else: $column is not one of them. In Progress, In Review and Done belong to whoever holds them." 1 ;;
+    esac
+    item=$(board_item_for "$repo" "$number")
+    [ -n "$item" ] || die "$repo#$number is not on the board" 3
+    set_status "$item" "$option" >/dev/null ||
+      die "could not move $repo#$number to $column" 4
+    echo "moved $repo#$number to $column"
+    exit 0
+    ;;
+
   check-command)
     check_command_from "${2:?check-command needs a path to an AGENTS.md}"
     exit 0
@@ -1595,6 +1622,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

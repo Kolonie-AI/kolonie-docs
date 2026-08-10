@@ -532,6 +532,35 @@ triage records a reason. Logic in `.github/scripts/waiting-list.sh`, tested
 against a stubbed `gh` in `.github/tests/waiting-list.test.sh`, which the
 workflow runs before it publishes anything.
 
+## What triages
+
+`.github/workflows/board-triage.yml`, hourly at **:20** (`kolonie-docs#262`,
+2026-08-10). Measured that day: 49 issues created in 24 hours, 46 closed, 21 of
+those by the opencode worker — and **fifteen sitting unread in Inbox while every
+issue the worker was given had been queued by hand.** The worker exited idle on two
+runs in three. The bottleneck was not execution; nothing decided.
+
+One pass over **Inbox and Ready** and nothing else. For each issue: provenance,
+route, readiness, dependencies, priority — then what it routed moves to Ready and
+the rest stays in Inbox with a reason. One comment when it changed something,
+silence otherwise.
+
+| | |
+|---|---|
+| **The model** | `gpt-5.6-sol`, the strongest on the gateway, and the reason is the dependency step: noticing that a new issue reads something one of forty-odd open ones creates is a judgement over the whole board at once. It is also what decides whether a citizen's words reach code. A setting (`TRIAGE_LLM_MODEL`), so the strongest model in six months is one variable away |
+| **What the model is given** | The board, the routing table quoted out of `AGENTS.md` §5, and `operations/worker-prohibitions.md`. **No copy of either rule lives in the prompt** — a third copy is the one that goes stale |
+| **Chunked, six at a time** | Measured 2026-08-10: 38 candidates and 47 open issues is a 154 KB brief and the gateway answers **524**, a proxy timeout. Six candidates against the *same whole-board index* is 54 KB and answers in about fifty seconds. Only the candidates are chunked; the dependency judgement always sees every open issue |
+| **What it may write** | Labels, GitHub dependency relations, one comment, and the Status field for **Ready and Inbox only**. `opencode-worker.sh move` refuses the other columns: In Progress and In Review belong to whoever holds them, and a triage pass that could write them could take work off an agent that has it |
+| **What overrules the model** | Every rule with a cost, in `board-triage.sh` and not in the prompt: a candidate comes from Inbox or Ready or is skipped; an unrecognised or absent route becomes `agent:claude`; `agent:opencode` is refused on `blocked:human`, `opencode:forbidden` or an open blocker; a route is never widened; a priority is never set on an issue that arrived from outside (`blocked:human` class 6); nothing is ever removed |
+| **`from:external`** | From organisation membership, which the opener cannot supply and the model is not asked about (`kolonie-platform#686`). Membership rather than `authorAssociation`, which reads `NONE` for a colleague who has never touched that repository |
+| **When it cannot ask** | It writes no decisions and exits 0, per chunk. Twenty-four passes a day means a provider hiccup that turned red would produce red runs nobody believes — `watch-judge.py`'s policy, one workflow along. A pass that decided nothing says so in the log |
+| **Credentials** | `BOARD_READ_TOKEN` to read, `BOARD_WRITE_TOKEN` to move cards and write labels and comments across the five board repositories. `github.token` can do neither |
+| **Logic** | `.github/scripts/board-triage.sh` and `.github/scripts/board-triage-decide.py`, tested against a stubbed `gh` in `.github/tests/board-triage.test.sh` — which asserts what happens when the model answers *wrongly*, since its judgement cannot be tested and every place the script overrules it can |
+
+**To switch it off: disable the workflow in the Actions tab, or delete the file.**
+The board keeps every label it has; nothing else reads the schedule. What returns
+is the state `#262` measured: a queue that only a conversation fills.
+
 ## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of
