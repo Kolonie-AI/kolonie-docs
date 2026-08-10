@@ -6,7 +6,6 @@
 #   opencode-worker.sh claim <repo> <number>   # -> "held", or "lost" if another run got there first
 #   opencode-worker.sh verify-claim <repo> <number>  # -> "held", or "lost <run url>" if an earlier run claimed it too
 #   opencode-worker.sh blockers <repo> <number>  # -> the open issues it waits for, one per line
-#   opencode-worker.sh merge-gate <file>       # -> the changed paths that stop a pull request merging itself
 #   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh move <repo> <number> Ready|Inbox  # -> the only board write triage may make (#262)
@@ -174,19 +173,6 @@ CLAIM_RACE_WINDOW_MINUTES=${CLAIM_RACE_WINDOW_MINUTES:-10}
 # out of `pick` while it does.
 FORGOTTEN_CLAIM_HOURS=${FORGOTTEN_CLAIM_HOURS:-4}
 
-# The paths whose pull requests do **not** merge themselves (`#263`).
-#
-# Auto-merge stays on — the maintainer, 2026-08-10: *kein Mensch guckt sich den
-# Pull Request an, das können wir vergessen* — and this is one named exception,
-# not the review process coming back. The reason is asymmetry rather than
-# distrust: a bad renderer ships and is fixed in the next run, and a migration
-# that drops a column has already run against production by the time anybody
-# looks, because `deploy.sh` applies it before the new image is healthy. Being
-# wrong costs a restore here and a follow-up commit everywhere else.
-#
-# **A prefix, matched at the start of the path.** Space separated if there is
-# ever more than one, and there should be as few as the argument above justifies.
-MERGE_GATE_PATHS=${MERGE_GATE_PATHS:-packages/db/drizzle/}
 
 # What a claim comment starts with. Written once here because two things now
 # depend on the exact wording — the workflow that writes it and `verify-claim`,
@@ -1139,25 +1125,6 @@ blockers_of() {
           | "\(.repository_url | sub("^.*/repos/"; ""))#\(.number)"'
 }
 
-# The changed paths that hold this pull request back, one per line (`#263`).
-#
-# It takes the list of files rather than the diff, and it is a subcommand rather
-# than a `grep` in the workflow, for the reason the whole of this file exists: a
-# `run:` block cannot be tested, and *which changes merge themselves* is not a
-# question anybody should have to answer by reading a shell fragment.
-#
-# The worker cannot touch `.github/workflows/` and cannot reach the host. It
-# **can** write `packages/db/drizzle/`, which is why that is the one prefix here.
-merge_gated_files() {
-  local list=$1
-  [ -f "$list" ] || die "merge-gate needs a file listing the changed paths, and $list is not one" 1
-
-  local prefix
-  for prefix in $MERGE_GATE_PATHS; do
-    awk -v prefix="$prefix" 'index($0, prefix) == 1' "$list"
-  done
-}
-
 set_status() {
   local item=$1 option=$2
   gh project item-edit --id "$item" --project-id "$PROJECT_ID" \
@@ -1436,11 +1403,6 @@ case "${1:-}" in
     exit 0
     ;;
 
-  merge-gate)
-    merge_gated_files "${2:?merge-gate needs a file listing the changed paths}"
-    exit 0
-    ;;
-
   forgotten-claims)
     # The other half of `#266`: `pick` skips a repository that has anything In
     # Progress, so an item left there holds its whole repository out of the
@@ -1622,6 +1584,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

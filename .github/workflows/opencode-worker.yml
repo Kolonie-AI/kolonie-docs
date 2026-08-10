@@ -1231,29 +1231,23 @@ jobs:
           required=$(gh api "repos/$TARGET_REPO/branches/main/protection" \
             --jq '[.required_status_checks.contexts // []] | flatten | join(", ")' 2>/dev/null || true)
 
-          # ## The one diff worth a person's glance (`#263`, 2026-08-10)
+          # ## There is no diff that waits for a person (`#276` withdrew `#263`)
           #
-          # Auto-merge stays on and this does not reopen that — the maintainer
-          # decided it, and everything below is unchanged for every other change
-          # the worker makes. **A schema migration is the exception**, because it
-          # is the only thing the worker can write where being wrong costs a
-          # restore rather than a follow-up commit: `deploy.sh` applies it before
-          # the new image is healthy, so by the time anybody reads the diff it
-          # has already run against production.
+          # `#263` held one class back — a diff touching `packages/db/drizzle/` —
+          # because `deploy.sh` applies a migration before the new image is
+          # healthy, so a wrong one has run against production by the time
+          # anybody reads it. The argument was about migrations and it still is;
+          # what withdrew it was the price, measured over its first day live.
           #
-          # The prefix lives in the script with the argument for it, and so does
-          # the matching, because a `run:` block cannot be tested.
-          git diff --name-only origin/main...HEAD > "$RUNNER_TEMP/changed"
-          gated=$(bash ../.github/scripts/opencode-worker.sh merge-gate "$RUNNER_TEMP/changed")
-
-          if [ -n "$gated" ]; then
-            gated_list=$(sed 's/^/- `/;s/$/`/' <<<"$gated")
-            merge_note="**This will NOT merge itself, and that is the only exception to auto-merge there is** (\`kolonie-docs#263\`). It changes a schema migration:
-
-          ${gated_list}
-
-          A bad renderer ships and is fixed in the next run. A migration has already run against production by the time anybody looks — \`deploy.sh\` applies it before the new image is healthy — so this one class of change waits for a person. **Nothing else is required of you**: the branch is fine, \`${CHECK_COMMAND}\` passed on it, and merging is one click."
-          elif [ -n "$required" ]; then
+          # Three pull requests were gated against 14 that merged themselves, and
+          # all three wrote migration `0204`. Merging the first turned the other
+          # two `CONFLICTING`, which the stale sweep then closes — so the gate
+          # manufactured the conflicts it went on to pay to redo. A queue of one
+          # would have been a glance; a queue of three is a rebase per item.
+          #
+          # The maintainer withdrew it the same evening. If it comes back, it
+          # comes back with a queue that cannot exceed one.
+          if [ -n "$required" ]; then
             merge_note="**This will merge itself** when the checks pass — nobody needs to press anything. Required here: \`${required}\`. If a check goes red it stays open and waits for a person, which is the whole point of it being a pull request at all."
           else
             merge_note="**This will NOT merge itself, and that is deliberate.** \`${TARGET_REPO}\` has no required status check on \`main\`, so auto-merge would land this the moment it was enabled, with nothing having verified it — a direct push wearing a pull request's clothes. It waits for a person until that repository has a check to wait for."
@@ -1320,24 +1314,12 @@ jobs:
           # merge past a red check would be a worker that merges its own unchecked
           # work, which is the state `#142` exists to measure rather than create.
           #
-          # **A gated diff is not a failure and not a block on the issue**
-          # (`#263`). The work is done, the check passed and the branch is fine;
-          # what waits is the merge. So the issue is told, in as many words and
-          # with the files named — a pull request sitting with auto-merge off and
-          # nothing said is `#256`'s failure with a different cause.
-          if [ -n "$gated" ]; then
-            echo "::notice::auto-merge NOT enabled — this pull request changes a migration and waits for a person: $url"
-            gh issue comment "$ISSUE" --repo "$TARGET_REPO" --body \
-              "**[\`${TARGET_REPO}#$(basename "$url")\`](${url}) is open and waiting for one click.** It does not merge itself, because it changes a schema migration (\`kolonie-docs#263\`):
-
-          ${gated_list}
-
-          Everything else the worker opens merges itself when the required check goes green, and that has not changed. This one class is the exception: a migration has already run against production by the time anybody reads it, because \`deploy.sh\` applies it before the new image is healthy.
-
-          **Nothing is wrong and nothing else is needed.** \`${CHECK_COMMAND}\` passed on the branch before the pull request was opened. Merging it is the whole of what is left." \
-              >/dev/null 2>&1 ||
-              echo "::warning::could not say on $TARGET_REPO#$ISSUE that its pull request is waiting; the notice above is the only record"
-          elif [ -n "$required" ]; then
+          # **The repository without a required check is the only one that
+          # waits**, and it waits loudly. Arming auto-merge there would land the
+          # branch the instant it was enabled with nothing having verified it —
+          # a direct push wearing a pull request's clothes. `#275`'s sweep makes
+          # the same refusal for the pull requests this workflow did not open.
+          if [ -n "$required" ]; then
             gh pr merge "$url" --repo "$TARGET_REPO" --auto --squash
             echo "auto-merge enabled; it lands when ${required} reports green"
           else
