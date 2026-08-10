@@ -119,11 +119,14 @@ REFUSAL_LIMIT=${REFUSAL_LIMIT:-20}
 REFUSAL_COMMENTS=${REFUSAL_COMMENTS:-4}
 REFUSAL_CHARS=${REFUSAL_CHARS:-1200}
 
-# The generated list is not work (`#265`). It sits in Inbox by design, carries no
-# route, and a triage pass that routed it would be labelling its own report.
-# Matched by title, which is the handle `waiting-for-an-agent.yml` uses as well —
-# a number here would be a second record of something GitHub holds.
-NOT_WORK_TITLES=${NOT_WORK_TITLES:-What is waiting for an agent}
+# The pass's own output is not work. `#265`'s waiting list sits in Inbox by design
+# and carries no route, and the collecting issue for proposed prohibitions is a
+# report addressed to a person — the third live pass put `decision` on that one,
+# which is triage triaging its own paperwork. Matched by title, which is the handle
+# `waiting-for-an-agent.yml` uses as well: a number here would be a second record
+# of something GitHub holds. Pipe separated, because an array cannot arrive from the
+# environment.
+NOT_WORK_TITLES=${NOT_WORK_TITLES:-What is waiting for an agent|Proposed additions to the worker prohibitions}
 
 # How much of a body the model is given. A candidate is read; everything else is
 # an index entry, there so a dependency can be noticed. Both are bounded because
@@ -213,7 +216,7 @@ candidates() {
         | $issue + { status: $status } ]
     | { candidates: [ .[]
           | select(.status as $s | $triage | index($s))
-          | select(.title != $notwork)
+          | select(.title as $t | ($notwork | split("|") | index($t)) | not)
           | { repo, number, title, status, labels, author, bot, createdAt, url,
               body: (.body[0:$candidate_chars]) } ],
         index: [ .[]
@@ -481,7 +484,13 @@ apply_one() {
     note "$repo#$number could not be moved to Ready"
   fi
 
-  if [ ${#said[@]} -eq 0 ] && [ -z "$why_not" ]; then
+  # **Silence unless something was written.** `#262`: one comment when it changes
+  # something, and silence otherwise, *because a triage that comments on everything
+  # is a triage nobody reads.* The third live pass wrote eleven comments that said
+  # nothing but *left in Inbox, it waits for #693* — true, unchanged since the pass
+  # before, and on its way to being hourly. A reason for not moving something is
+  # news exactly once, which is the pass that discovered it.
+  if [ ${#said[@]} -eq 0 ]; then
     return 1
   fi
 

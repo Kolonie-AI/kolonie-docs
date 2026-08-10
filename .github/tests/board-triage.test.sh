@@ -119,26 +119,43 @@ case "$1 $2" in
         "$GH_FIXTURES/board" > "$GH_FIXTURES/board.next" &&
         mv "$GH_FIXTURES/board.next" "$GH_FIXTURES/board"
     fi ;;
-  "api "*)
-    case "$2" in
+  # `gh api` is called two ways: `gh api <path>` and `gh api --method POST <path>`,
+  # so `$2` is the path only half the time. The path and the method are extracted
+  # before anything dispatches on them — a stub that read `$2` matched every POST
+  # against its catch-all and answered success to writes it was meant to refuse.
+  "api"*)
+    path=""; method="GET"; expression=""; next=""
+    shift   # the literal `api`
+    for arg in "$@"; do
+      case "$arg" in
+        --method) next=method ;;
+        --jq)     next=jq ;;
+        -*)       next="" ;;
+        *)
+          case "$next" in
+            method) method=$arg ;;
+            jq)     expression=$arg ;;
+            *)      [ -n "$path" ] || path=$arg ;;
+          esac
+          next="" ;;
+      esac
+    done
+    case "$path" in
       # Membership: 204 for a member, 404 for anybody else. `--silent` is what
       # the script passes and the exit status is the whole answer.
       orgs/*/members/*)
-        login=${2##*/}
+        login=${path##*/}
         grep -qxF "$login" "$GH_FIXTURES/members" 2>/dev/null || { echo "HTTP 404" >&2; exit 1; } ;;
       */dependencies/blocked_by)
-        key=${2#repos/}; key=${key%/dependencies/blocked_by}
+        key=${path#repos/}; key=${key%/dependencies/blocked_by}
         fixture="$GH_FIXTURES/blocked_${key//\//_}"
-        method="GET"; expression=""
-        while [ "$#" -gt 0 ]; do
-          case "$1" in
-            --method) method=$2; shift 2 ;;
-            --jq) expression=$2; shift 2 ;;
-            *) shift ;;
-          esac
-        done
         if [ "$method" = "POST" ]; then
-          [ -s "$GH_FIXTURES/link_fails" ] && { echo "HTTP 422" >&2; exit 1; }
+          # **422 is what GitHub answers for a relation that is already there**, and
+          # for one that would close a cycle. `link_exists` is the case where this
+          # dependency has been recorded on an earlier pass, which is the ordinary
+          # state of a blocked issue and the one that must produce no comment.
+          [ -s "$GH_FIXTURES/link_exists" ] && { echo "HTTP 422: already exists" >&2; exit 1; }
+          [ -s "$GH_FIXTURES/link_fails" ] && { echo "HTTP 500" >&2; exit 1; }
           exit 0
         fi
         [ -f "$fixture" ] || exit 0
@@ -147,16 +164,9 @@ case "$1 $2" in
       # `--jq` is applied here because the script's filter is what turns the
       # answer into the two words it uses.
       */issues/*)
-        key=${2#repos/}
+        key=${path#repos/}
         fixture="$GH_FIXTURES/issue_${key//\//_}"
         [ -f "$fixture" ] || { echo "HTTP 404" >&2; exit 1; }
-        expression=""
-        while [ "$#" -gt 0 ]; do
-          case "$1" in
-            --jq) expression=$2; shift 2 ;;
-            *) shift ;;
-          esac
-        done
         if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
       *) ;;
     esac ;;
@@ -267,13 +277,14 @@ searched "$(issue 900 'in inbox' '')" \
   "$(issue 901 'in ready' 'agent:claude p1')" \
   "$(issue 902 'in progress' 'agent:claude')" \
   "$(issue 903 'not on the board' '')" \
-  "$(issue 904 'What is waiting for an agent' '')"
-boarded "900|Inbox|" "901|Ready|agent:claude p1" "902|In Progress|agent:claude" "904|Inbox|"
+  "$(issue 904 'What is waiting for an agent' '')" \
+  "$(issue 905 'Proposed additions to the worker prohibitions' '')"
+boarded "900|Inbox|" "901|Ready|agent:claude p1" "902|In Progress|agent:claude" "904|Inbox|" "905|Inbox|"
 found=$(bash "$SCRIPT" candidates 2>/dev/null)
 
 check "the issues in Inbox and Ready are the candidates" "900 901" \
   "$(jq -r '[.candidates[].number] | join(" ")' <<<"$found")"
-check "and every open issue is in the index, so a dependency can be noticed" "5" \
+check "and every open issue is in the index, so a dependency can be noticed" "6" \
   "$(jq '.index | length' <<<"$found")"
 absent "an issue In Progress is not a candidate, whatever the model is asked" \
   '"number":902' "$(jq -c '.candidates' <<<"$found")"
@@ -281,6 +292,8 @@ absent "an issue that is not on the board is not a candidate either" \
   '"number":903' "$(jq -c '.candidates' <<<"$found")"
 absent "and the generated waiting list is not work" \
   '"number":904' "$(jq -c '.candidates' <<<"$found")"
+absent "nor is the pass's own collecting issue for proposed prohibitions" \
+  '"number":905' "$(jq -c '.candidates' <<<"$found")"
 
 echo
 echo "the brief carries the rules rather than a copy of them"
@@ -528,6 +541,26 @@ JSON
 run_apply "$(decided 900 "agent:claude" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
 absent "a mutual dependency is refused rather than written" "--method POST" "$(cat "$GH_LOG")"
 contains "and the run says it would deadlock both" "deadlock" "$(cat "$WORK/stderr")"
+
+# The third live pass wrote eleven comments that said nothing but *left in Inbox, it
+# waits for #693* — true, unchanged since the pass before, and on its way to being
+# hourly. `#262`: silence otherwise, because a triage that comments on everything is
+# a triage nobody reads.
+case_setup
+searched "$(issue 900 'blocked and already labelled' 'agent:claude p1 idea')"
+boarded "900|Inbox|agent:claude p1 idea"
+cat > "$GH_FIXTURES/issue_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
+{"id": 55500, "state": "open"}
+JSON
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "open"}]
+JSON
+: > "$GH_FIXTURES/link_exists"
+printf 'x\n' > "$GH_FIXTURES/link_exists"
+run_apply "$(decided 900 "agent:claude" "p1" "idea" "Kolonie-AI/kolonie-docs#800" false)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a reason for not moving something is not news twice" "issue comment" "$log"
+absent "and nothing is written" "issue edit" "$log"
 
 echo
 echo "the answer the model did not give"
