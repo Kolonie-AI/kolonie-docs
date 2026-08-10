@@ -814,8 +814,13 @@ jobs:
           - Change only what the issue asks for. An adjacent improvement is out of
             scope even when it is obviously right; another agent may be in that file.
           - Do not push and do not merge. Commit to the current branch and stop.
-          - Do not edit .github/workflows/ or opencode.json. This workflow may not
-            rewrite itself.
+          - Do not edit .github/workflows/, .github/scripts/opencode-worker.sh,
+            .github/scripts/opencode-context.sh or opencode.json. This worker may
+            not rewrite itself, and the script is as much itself as the workflow
+            is: `pick` chooses which issue it takes, `claim` is the lock that
+            stops two runs holding one, and `release` is what puts a failure
+            back. A run that could edit those could select differently and stop
+            locking.
           - If you conclude the issue cannot be done as specified, do not guess.
             Commit nothing, and write why to /tmp/opencode/refusal.txt.
           PROMPT

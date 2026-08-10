@@ -1423,6 +1423,11 @@ fi
 contains "and says what actually happens to the pull request" \
   "merges itself when the target's required check goes green" "$wf"
 
+# The prohibition named the workflow and not the script that holds `pick`,
+# `claim` and `release` — the selection and the lock.
+contains "the worker may not rewrite its own queue script" \
+  ".github/scripts/opencode-worker.sh" "$wf_commands"
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"
