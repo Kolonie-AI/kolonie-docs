@@ -454,13 +454,21 @@ apply_one() {
   fi
 
   # ## The move, and the three reasons it does not happen
-  local why_not=""
+  #
+  # **Two of the three are facts and one is an opinion**, and the difference decides
+  # which direction each may move a card. An open blocker and `blocked:human` are
+  # things that are either true or not; *not specified well enough to act on* is a
+  # judgement, and two passes judged `kolonie-platform#702` differently within an
+  # hour — so it went to Ready, then back to Inbox, and would have kept going.
+  local why_not="" fact=""
   if [ -n "$blockers" ]; then
     why_not="it waits for $(echo "$blockers" | sed 's/ *$//')"
-  elif [ "$ready" != "true" ]; then
-    why_not="it is not specified well enough to act on"
+    fact=yes
   elif has_any "$labels" "blocked:human"; then
     why_not="it is \`blocked:human\`, which is a person's decision and not a queue position"
+    fact=yes
+  elif [ "$ready" != "true" ]; then
+    why_not="it is not specified well enough to act on"
   fi
 
   # **Ready is read as well as written, so the queue can be left as well as
@@ -469,7 +477,12 @@ apply_one() {
   # the queue* is a move for that one, not an omission. The other direction is the
   # ordinary case: routed, unblocked, specified, so it joins.
   if [ -n "$why_not" ]; then
-    if [ "$status" = "Ready" ]; then
+    # **An opinion keeps an issue out of the queue and never takes it out.** A pass
+    # that thinks an issue in Ready is underspecified is disagreeing with the pass
+    # or the person that put it there, and disagreement is a comment's job. A fact
+    # is different: a blocker that exists means the queue is holding work that
+    # cannot be finished from it.
+    if [ "$status" = "Ready" ] && [ -n "$fact" ]; then
       if move_card "$repo" "$number" Inbox >/dev/null 2>&1; then
         said+=("taken out of Ready")
       else

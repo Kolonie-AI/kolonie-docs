@@ -463,6 +463,17 @@ contains "an issue already in Ready that turns out to be blocked leaves the queu
   "single-select-option-id b14e3c08" "$log"
 contains "and the comment says it is out of it" "Out of the queue" "$log"
 
+# Two passes judged `kolonie-platform#702` differently within an hour, so it went to
+# Ready and then back to Inbox. A judgement keeps an issue out of the queue; only a
+# fact takes it out.
+case_setup
+searched "$(issue 900 'in the queue, and one pass disagrees' 'agent:claude p1')"
+boarded "900|Ready|agent:claude p1"
+run_apply "$(decided 900 "agent:claude" "" "" "" false)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "an opinion does not take a card out of Ready" "single-select-option-id b14e3c08" "$log"
+absent "and says nothing, because nothing changed" "issue comment" "$log"
+
 echo
 echo "what stays in Inbox"
 
