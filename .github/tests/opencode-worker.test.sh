@@ -935,6 +935,42 @@ contains "and clearing it cannot cost the claim" \
 contains "the comment says what the board now shows" \
   "goes back to **Ready**, loses" "$wf"
 
+# `#257`: the branch is rebased onto the `main` that exists, and a conflict ends
+# the run rather than opening a pull request that cannot merge.
+contains "the run fetches main again before it publishes anything" \
+  "+refs/heads/main:refs/remotes/origin/main" "$wf_commands"
+contains "and rebases onto it" "git rebase origin/main" "$wf_commands"
+contains "a conflict aborts" "git rebase --abort" "$wf_commands"
+contains "and is reported as work rather than as a worker fault" \
+  "the change no longer applies to" "$wf"
+contains "naming the paths that conflicted" \
+  "--diff-filter=U" "$wf_commands"
+absent "no run resolves a conflict" "rebase --continue" "$wf_commands"
+absent "and none takes theirs or ours to get past one" "-X ours" "$wf_commands"
+rebase_line=$(grep -n 'git rebase origin/main' "$WORKFLOW" | head -1 | cut -d: -f1)
+if [ -n "$rebase_line" ] && [ -n "$push_line" ] && [ "$rebase_line" -lt "$push_line" ]; then
+  echo "  ok   the rebase happens before the push, so the pull request opens against current main"
+else
+  echo "  FAIL the rebase happens before the push, so the pull request opens against current main"
+  echo "         rebase at line ${rebase_line:-none}, push at line ${push_line:-none}"
+  FAILURES+=("the rebase runs before the push")
+fi
+if [ -n "$rebase_line" ] && [ -n "$check_line" ] && [ "$check_line" -lt "$rebase_line" ]; then
+  echo "  ok   and after the target's check, which is the window it exists to close"
+else
+  echo "  FAIL and after the target's check, which is the window it exists to close"
+  echo "         check at line ${check_line:-none}, rebase at line ${rebase_line:-none}"
+  FAILURES+=("the rebase runs after the check")
+fi
+
+# `#232` closed on the measurement that auto-merge runs unattended, and the
+# comment the worker writes on every issue it takes said the opposite until
+# then. A sentence a citizen reads on fifteen issues a day is worth an assertion.
+absent "the claim comment no longer promises a review that does not happen" \
+  "a person reviews and merges" "$wf"
+contains "and says what actually happens to the pull request" \
+  "merges itself when the target's required check goes green" "$wf"
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"

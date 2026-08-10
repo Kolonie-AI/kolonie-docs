@@ -238,7 +238,7 @@ jobs:
           gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
             "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
 
-          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, a person reviews and merges — it never merges its own work. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
+          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, that pull request merges itself when the target's required check goes green and nobody has to press anything (\`kolonie-docs#232\`) — a red check leaves it open for a person. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
 
       # ## Which credential reaches the target repository (`#231`, 2026-08-08)
       #
@@ -724,6 +724,74 @@ jobs:
           check_log="$RUNNER_TEMP/opencode-check.log"
           if ! eval "$CHECK_COMMAND" 2>&1 | tee "$check_log"; then
             fail work "\`$CHECK_COMMAND\` did not pass on this branch, so the change is not done" "$check_log"
+          fi
+
+          # ## The branch is rebased onto the `main` that exists (`#257`)
+          #
+          # This run branched from whatever `main` was when it started, then
+          # worked for ten to thirty minutes. **Until now it never looked at
+          # `main` again**, so anything that merged in the meantime became a
+          # conflict discovered later by nobody: `kolonie-platform#668` opened at
+          # 05:44 on 2026-08-10 and `#670` merged under it, and the pull request
+          # sat `CONFLICTING` with auto-merge waiting for a merge it could never
+          # perform.
+          #
+          # **After the check and not before it.** Rebasing at the start of the
+          # run buys nothing — the branch is fresh — and the window this closes
+          # is the work itself, so the check belongs at its end. What the rebase
+          # then costs is that the local check ran on the tree from *before* it;
+          # that is deliberate and it is not the gate. The gate is the target's
+          # own CI on the pushed head, which runs after the rebase and is what
+          # auto-merge waits for (`#232`).
+          #
+          # **The explicit refspec is load-bearing.** `actions/checkout` leaves a
+          # narrow `remote.origin.fetch`, so a bare `git fetch origin main` can
+          # update `FETCH_HEAD` and leave `refs/remotes/origin/main` where it was
+          # — and three things below still read `origin/main` by name. Naming the
+          # destination moves the ref every reader here already assumes has
+          # moved.
+          git fetch origin '+refs/heads/main:refs/remotes/origin/main'
+
+          # `--is-ancestor` is the question in one call: is everything on
+          # `origin/main` already under this branch. When it is, the rebase is a
+          # no-op and saying so in the log is worth more than running it.
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "main has not moved since this branch left it; nothing to rebase"
+          else
+            echo "main has moved since this run started; rebasing onto it"
+
+            # ## No run resolves a conflict, and that is the whole rule
+            #
+            # A rebase conflict is two intentions meeting, and the second one is
+            # in a commit the model has not read and was told not to widen its
+            # scope to. A model resolving it unattended is a model guessing what
+            # somebody else meant, in a diff a person will skim because the rest
+            # of the run looked normal. `--abort` and say so.
+            #
+            # The conflicting paths are read **before** the abort, because the
+            # abort is what destroys them — and they are the whole value of the
+            # comment this failure writes. `kind=work` because the change
+            # genuinely no longer applies: the issue goes back to Ready, loses
+            # `agent:opencode`, gains `opencode:failed`, and a person decides
+            # whether it is still worth doing.
+            if ! git rebase origin/main; then
+              conflicts=$(git diff --name-only --diff-filter=U | sed 's/^/  /')
+              rebase_log="$RUNNER_TEMP/opencode-rebase.log"
+              {
+                echo "the branch no longer applies to main; these paths conflict:"
+                echo "$conflicts"
+                echo
+                echo "landed on main since this run branched:"
+                git log --oneline HEAD..origin/main
+              } > "$rebase_log"
+              cat "$rebase_log"
+              git rebase --abort
+
+              fail work "the change no longer applies to \`main\` — something merged while this ran and the two meet in the same lines. Nothing was pushed and no pull request was opened, because a conflict resolved by a model that has not read the other change is a guess. The conflicting paths and what landed under this branch are below" \
+                "$rebase_log"
+            fi
+
+            echo "rebased onto $(git rev-parse --short origin/main)"
           fi
 
           # ## Auto-merge, and the one thing it must never become (`#232`)
