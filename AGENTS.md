@@ -626,9 +626,20 @@ nothing on that list is assigned to anybody.
 
 > **The label says two things, not one: this issue is specified well enough to be
 > done unattended, *and* its implementation is something the worker is permitted
-> to do.** The worker may not edit **`.github/workflows/`** or
-> **`opencode.json`**. An issue whose only possible implementation touches either
-> is not a candidate, however well specified it is.
+> to do.** The worker may not edit **`.github/workflows/`**, **`opencode.json`**,
+> or the two scripts that are the worker itself. An issue whose only possible
+> implementation touches one of them is not a candidate, however well specified it
+> is.
+
+**The paths are listed in
+[`operations/worker-prohibitions.md`](operations/worker-prohibitions.md) and
+nowhere else** (`kolonie-docs#260`). Not repeated here on purpose: they were in
+three places until 2026-08-10 — the model's prompt, the queue script and this
+paragraph — and two of them had already fallen behind. The prompt gained
+`.github/scripts/opencode-worker.sh` and the script's own comparison did not hear,
+so a refusal naming the queue script was read as a refusal about the *issue* and
+invited a retry that could not work. **The prompt and the script now both read
+that file**, and adding a fifth path is one edit in it.
 
 **The second half was missing until `kolonie-docs#250`, and the cost of leaving it
 unwritten was measured.** `kolonie-infra#107` asks for something that reacts to
@@ -771,9 +782,10 @@ and an agent should have a basis for answering rather than a feeling:
 - with a check that fails clearly when the change is wrong
 - **not** a decision, not money, keys or governance, and not anything carrying
   `blocked:human`
-- **and implementable without touching `.github/workflows/` or `opencode.json`**
-  — the entry condition above, and the one of these that is checked against the
-  worker's rules rather than against the issue's quality
+- **and implementable without touching any path in
+  [`operations/worker-prohibitions.md`](operations/worker-prohibitions.md)** — the
+  entry condition above, and the one of these that is checked against the worker's
+  rules rather than against the issue's quality
 
 **That last line is not a new rule.** It is the seven classes above, applied to a
 queue nobody supervises in real time. An issue in any of them is out of scope by

@@ -1334,15 +1334,96 @@ out=$(bash "$SCRIPT" worker-rule-refusal "$WORK/there-is-no-refusal" 2>/dev/null
 check "no refusal file is not an error" "0" "$rc"
 check "and names nothing" "" "$out"
 
-# The rule lives in three places — the model's prompt, this script and AGENTS.md
-# §5 — and the whole point of `#250` is that the labeller reads the third. Two
-# of them drifting apart is how the rule stops being applied.
-for path in ".github/workflows/" "opencode.json"; do
-  contains "AGENTS.md names \`$path\` as forbidden to the worker" \
-    "$path" "$(step_block 'What has to be true before you apply it' '#### The order it takes them in' "$ROOT/AGENTS.md")"
-  contains "and the prompt the model is given names it too" \
-    "$path" "$(grep -A 3 'Do not edit' "$ROOT/.github/workflows/opencode-worker.yml")"
+echo
+echo "the prohibitions live in one file and everything else reads it (#260)"
+
+# The rule used to live in three places — the model's prompt, this script and
+# `AGENTS.md` §5 — and two of them had already drifted: the prompt forbade
+# `.github/scripts/opencode-worker.sh` from 2026-08-10 and the script's own
+# comparison did not, so a refusal naming the queue script was read as a refusal
+# about the issue and invited a retry that could not work. These cases assert the
+# direction of the fix rather than the contents of the list: a fifth path added to
+# the document must reach the prompt and the comparison without a second edit.
+
+case_setup
+mkdir -p "$WORK/prohibitions"
+cat > "$WORK/prohibitions/one.md" <<'DOC'
+# What no worker can do
+
+## The paths no worker may write
+
+```
+.github/workflows/
+somewhere/else.sh
+```
+
+## Conditions no repository check can satisfy
+
+Not paths, and this heading must not be read as though it were.
+
+```
+not/a/path
+```
+DOC
+
+check "every line of the fenced block is a path, not only the first" \
+  ".github/workflows/
+somewhere/else.sh" \
+  "$(bash "$SCRIPT" prohibited-paths "$WORK/prohibitions/one.md")"
+
+# The heading's own block and nothing after it: `first_fenced_block_under` stops
+# at the next heading for the two check headings, and this has to as well or the
+# conditions table becomes a list of paths.
+absent "and nothing from the next section" "not/a/path" \
+  "$(bash "$SCRIPT" prohibited-paths "$WORK/prohibitions/one.md")"
+
+case_setup
+printf 'This wants a change under somewhere/else.sh, which I may not write.\n' \
+  > "$WORK/refusal-from-file.txt"
+check "a refusal is matched against the file's list, not a constant in the script" \
+  "somewhere/else.sh" \
+  "$(PROHIBITIONS_FILE="$WORK/prohibitions/one.md" bash "$SCRIPT" worker-rule-refusal "$WORK/refusal-from-file.txt" 2>/dev/null)"
+
+case_setup
+out=$(PROHIBITIONS_FILE="$WORK/prohibitions/absent.md" bash "$SCRIPT" prohibited-paths 2>&1); rc=$?
+check "a list that cannot be read stops the run rather than running with none" "5" "$rc"
+contains "and says which file it wanted" "absent.md" "$out"
+
+case_setup
+cat > "$WORK/prohibitions/empty.md" <<'DOC'
+# What no worker can do
+
+## The paths no worker may write
+
+Prose where the block should be.
+DOC
+out=$(PROHIBITIONS_FILE="$WORK/prohibitions/empty.md" bash "$SCRIPT" prohibited-paths 2>&1); rc=$?
+check "a heading with no fenced block is the same failure" "5" "$rc"
+contains "and names the heading it needs" "The paths no worker may write" "$out"
+
+# Now the live document, which is the one the worker will actually read. The
+# assertion is that the historical two are still in it — the pair `#250` was
+# written for — and that the two readers derive from it rather than repeating it.
+case_setup
+live=$(bash "$SCRIPT" prohibited-paths)
+contains "the live list still names the workflows directory" ".github/workflows/" "$live"
+contains "and the runtime configuration" "opencode.json" "$live"
+contains "and the queue script, which the prompt forbade before the script did" \
+  ".github/scripts/opencode-worker.sh" "$live"
+
+workflow_text=$(cat "$ROOT/.github/workflows/opencode-worker.yml")
+contains "the workflow reads the list rather than carrying a copy" \
+  "opencode-worker.sh prohibited-paths" "$workflow_text"
+contains "and the prompt the model is given is built from what it read" \
+  'Do not edit ${prohibited_list}' "$workflow_text"
+for path in ".github/workflows/" "opencode.json" ".github/scripts/opencode-worker.sh"; do
+  absent "the prompt does not name $path itself" \
+    "Do not edit $path" "$workflow_text"
 done
+
+contains "AGENTS.md §5 sends the labeller to the document" \
+  "operations/worker-prohibitions.md" \
+  "$(step_block '## 5. Labels' '## 6. The orchestration loop' "$ROOT/AGENTS.md")"
 
 echo
 echo "the pull requests that cannot merge (#256)"

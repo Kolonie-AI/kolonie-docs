@@ -12,6 +12,7 @@
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
 #   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
+#   opencode-worker.sh prohibited-paths [file]  # -> the paths no worker may write, from operations/worker-prohibitions.md
 #   opencode-worker.sh exports <file>          # -> the `export NAME=value` lines a prerequisite emitted, made safe
 #   opencode-worker.sh failed-step             # -> the name of this run's failed step
 #   opencode-worker.sh excerpt <file>          # -> its last lines, bounded and with every secret taken out
@@ -131,11 +132,20 @@ QUEUE_LABEL=${QUEUE_LABEL:-agent:opencode}
 # off when a person changes something about the issue, which is the point.
 FORBIDDEN_LABEL=${FORBIDDEN_LABEL:-opencode:forbidden}
 
-# The two paths the worker's prompt forbids it to touch. Named here so that a
-# refusal quoting one is machine-distinguishable from a refusal about the issue,
-# and so that AGENTS.md §5 and this file cannot drift apart silently — the test
-# asserts both carry both.
-FORBIDDEN_PATHS=${FORBIDDEN_PATHS:-.github/workflows/ opencode.json}
+# The paths the worker may not write. **They are not listed here** (`#260`):
+# `operations/worker-prohibitions.md` holds them once, this script reads them from
+# there, and the prompt the model is given is built from the same block. There
+# were three copies before — the prompt, this line and `AGENTS.md` §5 — and two of
+# them had already fallen behind: the prompt had forbidden
+# `.github/scripts/opencode-worker.sh` since 2026-08-10 and this line had not
+# heard, so a refusal naming the queue script was not recognised as a rule
+# refusal and invited a retry that could not work.
+#
+# Set it in the environment to override, which is what the tests do. Empty means
+# *read the file*, and a file that cannot be read stops the run — a worker whose
+# constraints are unreadable is a worker with none.
+FORBIDDEN_PATHS=${FORBIDDEN_PATHS:-}
+PROHIBITIONS_FILE=${PROHIBITIONS_FILE:-}
 RUN_URL=${RUN_URL:-}
 
 # How many labelled issues the search returns before the ordering runs. The
@@ -406,14 +416,21 @@ board_item_status_for() {
 # copies of the same awk programme that drift apart. The heading arrives
 # lowercased and is matched against a lowercased line, which is what lets
 # `## 10. The check command` and `## The check command` both work.
-first_fenced_block_under() {
+fenced_lines_under() {
   local file=$1 heading=$2
   awk -v heading="$heading" '
     tolower($0) ~ ("^#+ .*" heading "[[:space:]]*$") { section = 1; next }
     section && /^#+ / { exit }
     section && /^```/ { fence = !fence; if (!fence) exit; next }
-    section && fence && NF { print; exit }
+    section && fence && NF { print }
   ' "$file"
+}
+
+# The one-line case, which is both check headings: a command is a line, and a
+# block carrying two of them would be a repository asking for something this
+# convention cannot express.
+first_fenced_block_under() {
+  fenced_lines_under "$1" "$2" | head -n 1
 }
 
 check_command_from() {
@@ -715,6 +732,52 @@ redact_from() {
   printf '%s\n' "$out"
 }
 
+# The paths no worker may write, read from the file that holds them (`#260`).
+#
+# ## Why a file in `operations/` and not a constant here
+#
+# Three issues were queued on 2026-08-09 and 10 that no run could finish, and the
+# reason each was refused reached a comment and nothing else. The list has to be
+# somewhere a *decision* meets it — a person choosing a route, and the triage pass
+# in `#262` — which a shell constant is not. So the document is the source and this
+# is a reader, the same relation `check-command` has to the target's `AGENTS.md`.
+#
+# ## Read from this repository, whatever the working directory is
+#
+# The worker runs with the *target* repository's checkout as `cwd` and
+# `kolonie-docs` one level up. Resolving the path from `BASH_SOURCE` rather than
+# from `cwd` means the same call works in both places, and means a target
+# repository cannot supply its own prohibitions file — which would be the worker
+# reading its constraints from the thing it is about to change.
+prohibitions_file() {
+  if [ -n "$PROHIBITIONS_FILE" ]; then
+    printf '%s\n' "$PROHIBITIONS_FILE"
+    return 0
+  fi
+  printf '%s\n' "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/operations/worker-prohibitions.md"
+}
+
+prohibited_paths() {
+  local file
+  file=$(prohibitions_file)
+  [ -f "$file" ] || die "no prohibitions file at $file — refusing to run a worker whose own constraints cannot be read" 5
+
+  local paths
+  paths=$(fenced_lines_under "$file" "the paths no worker may write")
+  [ -n "$paths" ] || die "$file names no forbidden paths: it needs a 'The paths no worker may write' heading with one path per line in a fenced block. Refusing to run with no constraints rather than with none found." 5
+  printf '%s\n' "$paths"
+}
+
+# What the rest of this script compares against. `FORBIDDEN_PATHS` set in the
+# environment wins, so a test can pin the list without a fixture document.
+forbidden_paths() {
+  if [ -n "$FORBIDDEN_PATHS" ]; then
+    printf '%s\n' $FORBIDDEN_PATHS
+    return 0
+  fi
+  prohibited_paths
+}
+
 # Which forbidden path a refusal named, or nothing (`#250`).
 #
 # ## Why this reads the refusal and not the issue
@@ -729,12 +792,13 @@ redact_from() {
 worker_rule_refusal() {
   local file=$1 path
   [ -f "$file" ] || return 0
-  for path in $FORBIDDEN_PATHS; do
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
     if grep -qF -- "$path" "$file"; then
       printf '%s\n' "$path"
       return 0
     fi
-  done
+  done < <(forbidden_paths)
 }
 
 failed_step() {
@@ -1453,6 +1517,15 @@ case "${1:-}" in
     exit 0
     ;;
 
+  # The optional argument is for the test, which pins a fixture document rather
+  # than asserting against the live list — a test that reads the real file passes
+  # by agreeing with whatever is in it.
+  prohibited-paths)
+    PROHIBITIONS_FILE=${2:-$PROHIBITIONS_FILE}
+    prohibited_paths
+    exit 0
+    ;;
+
   exports)
     exports_from "${2:?exports needs a file to read}"
     exit 0
@@ -1516,6 +1589,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

@@ -882,6 +882,26 @@ jobs:
           # is no committed default to fall back to.
           echo "model: gateway/${OPENCODE_LLM_MODEL}"
 
+          # ## The prohibitions are read, not written here (`#260`)
+          #
+          # This list used to be four path names typed into the prompt below, and
+          # the same four typed into `opencode-worker.sh`, and two of them in
+          # `AGENTS.md` §5. They had already drifted: the prompt gained
+          # `.github/scripts/opencode-worker.sh` on 2026-08-10 and the script's
+          # own comparison did not hear about it, so a refusal naming the queue
+          # script was read as a refusal about the issue and invited a retry that
+          # could not work.
+          #
+          # `operations/worker-prohibitions.md` now holds them once, with the run
+          # that established each. `..` because this step has already `cd`ed into
+          # the target's checkout and `kolonie-docs` stays at the workspace root.
+          # A list that cannot be read stops the run: an unattended worker with
+          # unreadable constraints is an unattended worker with none.
+          prohibited=$(bash ../.github/scripts/opencode-worker.sh prohibited-paths) \
+            || fail worker "the worker's own prohibitions could not be read, so this run stopped before the model saw the issue" ""
+          prohibited_list=$(printf '%s\n' "$prohibited" | paste -sd, - | sed 's/,/, /g')
+          echo "the paths this run may not write: $prohibited_list"
+
           prompt=$(cat <<PROMPT
           You are working issue #${ISSUE} in this repository, unattended. Nobody is
           watching and nobody will answer a question, so if the issue is ambiguous,
@@ -920,13 +940,13 @@ jobs:
           - Change only what the issue asks for. An adjacent improvement is out of
             scope even when it is obviously right; another agent may be in that file.
           - Do not push and do not merge. Commit to the current branch and stop.
-          - Do not edit .github/workflows/, .github/scripts/opencode-worker.sh,
-            .github/scripts/opencode-context.sh or opencode.json. This worker may
-            not rewrite itself, and the script is as much itself as the workflow
-            is: `pick` chooses which issue it takes, `claim` is the lock that
-            stops two runs holding one, and `release` is what puts a failure
-            back. A run that could edit those could select differently and stop
-            locking.
+          - Do not edit ${prohibited_list}. This worker may not rewrite itself,
+            and the queue script is as much itself as the workflow is: \`pick\`
+            chooses which issue it takes, \`claim\` is the lock that stops two runs
+            holding one, and \`release\` is what puts a failure back. A run that
+            could edit those could select differently and stop locking. The list
+            with a reason and a run against each entry is
+            kolonie-docs/operations/worker-prohibitions.md, checked out at ../.
           - If you conclude the issue cannot be done as specified, do not guess.
             Commit nothing, and write why to /tmp/opencode/refusal.txt.
           PROMPT
