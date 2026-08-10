@@ -1038,7 +1038,7 @@ searched "Kolonie-AI/kolonie-platform|668|dirty|opencode/issue-659"
 bash "$SCRIPT" stale-pull-requests >/dev/null 2>&1
 log=$(cat "$GH_LOG")
 contains "the sweep identifies its pull requests by the body sentence" \
-  "Opened by the opencode worker for" "$log"
+  "opencode worker for" "$log"
 absent "and not by whoever the token authenticates as" "author:" "$log"
 absent "the sweep itself never closes anything — that is the workflow's, on the repo token" \
   "pr close" "$log"
@@ -1299,11 +1299,16 @@ else
 fi
 # `set -e` in the sweep step would make a single unreachable pull request cost
 # this run the issue it was going to work, which is the trade `#256` refuses.
-if awk '/name: Is a pull request of mine stuck\?/,/name: Put the stuck/' "$WORKFLOW" | grep -q 'set -euo'; then
-  echo "  FAIL the sweep step does not exit on the first thing that fails"
-  FAILURES+=("the sweep step uses set -e")
+# **`set +e`, asserted positively.** This used to assert the *absence* of
+# `set -euo`, which was necessary and not sufficient: GitHub invokes a `run:`
+# block with `bash -e {0}`, so a step that merely declines to set `-e` still has
+# it. Run `31377996406` reported five completions and then died at `exit 141`
+# from a `gh … | head` closing its own pipe, taking the queue work with it.
+if awk '/name: Is a pull request of mine stuck\?/,/name: Put the stuck/' "$WORKFLOW" | grep -q 'set +e'; then
+  echo "  ok   the sweep step turns off the -e the runner's own shell brings"
 else
-  echo "  ok   the sweep step does not exit on the first thing that fails"
+  echo "  FAIL the sweep step turns off the -e the runner's own shell brings"
+  FAILURES+=("the sweep step does not set +e")
 fi
 
 # `#258`: a merged pull request tells its issue so, exactly once, and only after
@@ -1326,12 +1331,17 @@ else
   echo "  FAIL the completion sweep runs before the queue, on previous runs' work"
   FAILURES+=("the completion sweep runs before pick")
 fi
-if awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW" | grep -q 'set -euo'; then
-  echo "  FAIL reporting a completion cannot cost this run its issue"
-  FAILURES+=("the completion step uses set -e")
-else
+if awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW" | grep -q 'set +e'; then
   echo "  ok   reporting a completion cannot cost this run its issue"
+else
+  echo "  FAIL reporting a completion cannot cost this run its issue"
+  FAILURES+=("the completion step does not set +e")
 fi
+# The `exit 141` in run `31377996406` came from a paginated read whose reader
+# closed the pipe. Asking the API for the number of rows wanted has no pipe to
+# close, and the bound stays where it was.
+absent "and nothing in either sweep closes a pipe on a paginated read" \
+  "--paginate --jq '.[].filename'" "$wf_commands"
 # The whole design refuses to paraphrase the change, so no model may be reached
 # from the reporting path — the summary is derived or it is not written.
 absent "no model is asked to summarise the work it produced" "opencode run" \

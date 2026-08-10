@@ -553,7 +553,18 @@ previous_failures() {
 # is not enough on its own — anybody can push `opencode/issue-12`. The body
 # sentence is written by this workflow and by nothing else, and a run that
 # reworded it would have to edit the line the sweep reads.
-WORKER_PR_MARKER=${WORKER_PR_MARKER:-Opened by the opencode worker for}
+# **Deliberately shorter than the sentence it matches**, and this repository has
+# already paid for that lesson once: `FAILURE_MARKER` was `The hourly opencode
+# worker failed…` until the schedule stopped being hourly, the wording changed,
+# the marker did not follow, and every failure before that commit went uncounted.
+#
+# The same word did it again here. Measured on run `31377996406`, 2026-08-10:
+# five merged pull requests — `kolonie-platform#655`, `#650`, `#645`, `#639` and
+# `kolonie-infra#109` — open with *"Opened by the **hourly** opencode worker for
+# #623"*, and an exact match on the current wording found none of them. Matching
+# from `opencode worker for` is true of both and survives the next cadence
+# change.
+WORKER_PR_MARKER=${WORKER_PR_MARKER:-opencode worker for}
 
 # The sentence that says an issue has already had its completion reported.
 #

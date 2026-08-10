@@ -171,6 +171,13 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # **`set +e` and not merely the absence of `set -e`** (2026-08-10).
+          # GitHub invokes this with `bash -e {0}`, so a step that leaves `-e`
+          # alone still exits on the first non-zero command — which is what run
+          # `31377996406` did, at `exit 141` from a `gh … | head` that closed its
+          # own pipe. The comment below about nothing here failing the run is the
+          # requirement; this line is what makes it true.
+          set +e
           set -uo pipefail
 
           stuck="$RUNNER_TEMP/opencode-stale"
@@ -195,8 +202,8 @@ jobs:
             # saying *it conflicts* sends the reader to the pull request to find
             # out with what; naming the paths lets them decide whether it is
             # worth redoing without opening anything.
-            files=$(gh api "repos/$repo/pulls/$pr/files" --paginate \
-              --jq '.[].filename' 2>/dev/null | sed 's/^/- `/;s/$/`/' | head -20)
+            files=$(gh api "repos/$repo/pulls/$pr/files" -X GET -f per_page=20 \
+              --jq '.[].filename' 2>/dev/null | sed 's/^/- `/;s/$/`/')
             [ -n "$files" ] || files="- (the file list could not be read)"
 
             # ## The branch is closed rather than left, and `#256` asks for one
@@ -248,6 +255,7 @@ jobs:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          set +e
           set -uo pipefail
           board="$RUNNER_TEMP/opencode-stale.board"
           [ -s "$board" ] || { echo "nothing to move"; exit 0; }
@@ -291,6 +299,8 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # `bash -e {0}` is the shell GitHub gives this. See the sweep above.
+          set +e
           set -uo pipefail
 
           landed="$RUNNER_TEMP/opencode-landed"
@@ -327,8 +337,8 @@ jobs:
               continue
             fi
 
-            files=$(gh api "repos/$repo/pulls/$pr/files" --paginate --jq '.[].filename' 2>/dev/null |
-              head -15 | sed 's/^/- `/;s/$/`/')
+            files=$(gh api "repos/$repo/pulls/$pr/files" -X GET -f per_page=15 \
+              --jq '.[].filename' 2>/dev/null | sed 's/^/- `/;s/$/`/')
             [ -n "$files" ] || files="- (the file list could not be read)"
             if [ "${changed:-0}" -gt 15 ]; then
               files="${files}
