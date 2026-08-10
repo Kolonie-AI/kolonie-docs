@@ -5,6 +5,7 @@
 #   opencode-worker.sh pick                    # -> prints "<owner/repo>\t<number>", or nothing
 #   opencode-worker.sh claim <repo> <number>   # -> "held", or "lost" if another run got there first
 #   opencode-worker.sh verify-claim <repo> <number>  # -> "held", or "lost <run url>" if an earlier run claimed it too
+#   opencode-worker.sh blockers <repo> <number>  # -> the open issues it waits for, one per line
 #   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
@@ -864,6 +865,47 @@ leak_check() {
   return 0
 }
 
+# What an issue is waiting for, one `owner/repo#number` per line, empty if
+# nothing (`#261`).
+#
+# ## Why this is a relation and not a line in the body
+#
+# `kolonie-platform#660` reads a contract field `kolonie-platform#659` creates.
+# The dependency was written in prose in both bodies, twice, and on 2026-08-10
+# the worker took `#660` anyway and failed — correctly, and for a run. `pick`
+# read labels and a column, and neither of those can say *this one waits*.
+#
+# ## Why the dependency relation and not a sub-issue
+#
+# `#261` proposes GitHub's sub-issue relationship, on the grounds that it is
+# native, survives a close and renders. All three are true, and there is a
+# better fit that was not available when the issue was written: **GitHub's issue
+# *dependencies*** — `blocked_by` and `blocking` — which say the thing itself
+# rather than approximating it with containment. `#659` is not a *part* of
+# `#660`; it is what `#660` waits for, and a parent/child link would have had to
+# be read as a dependency by convention, which is prose again with a nicer
+# renderer. Confirmed present on this organisation's repositories 2026-08-10:
+# `GET /repos/{owner}/{repo}/issues/{n}/dependencies/blocked_by` answers.
+#
+# ## Open blocks; closed does not
+#
+# `#261`'s case worth getting right. `#659`'s pull request was closed without
+# merging and the issue went back to Ready — and an issue whose blocker is
+# *closed* may still proceed, because the field either exists on `main` or it
+# does not and the target's own check is what says so. Blocked or not blocked;
+# no degrees, nothing to interpret.
+blockers_of() {
+  local repo=$1 number=$2
+  # The repository comes out of `repository_url`, which every issue object
+  # carries, rather than out of `repository`, which only the search endpoints
+  # add. A blocker in another repository is the case this has to get right —
+  # `#660` and `#659` are both in `kolonie-platform`, but nothing says they must
+  # be — and printing a bare number for it would name nothing (§4).
+  gh api "repos/$repo/issues/$number/dependencies/blocked_by" --paginate \
+    --jq '.[] | select(.state == "open")
+          | "\(.repository_url | sub("^.*/repos/"; ""))#\(.number)"'
+}
+
 set_status() {
   local item=$1 option=$2
   gh project item-edit --id "$item" --project-id "$PROJECT_ID" \
@@ -983,7 +1025,32 @@ case "${1:-}" in
            | "note: \(.repo)#\(.number) carries neither p1 nor p2, so it sorts last"' \
       <<<"$selection" >&2
 
-    jq -r '.[0] | select(. != null) | "\(.repo)\t\(.number)"' <<<"$selection"
+    # **Then the dependencies, and only now** (`#261`). The ordering above is
+    # local and free; this asks GitHub one question per candidate, so it is asked
+    # of the candidates in the order they would be taken and stops at the first
+    # issue that is free to run. The ordinary hour costs one call.
+    total=$(jq 'length' <<<"$selection")
+    index=0
+    while [ "$index" -lt "$total" ]; do
+      candidate=$(jq -r --argjson i "$index" '.[$i] | "\(.repo)\t\(.number)"' <<<"$selection")
+      candidate_repo=${candidate%%$'\t'*}
+      candidate_number=${candidate##*$'\t'}
+
+      waiting=$(blockers_of "$candidate_repo" "$candidate_number") || die \
+        "could not read what $candidate_repo#$candidate_number is blocked by, so the queue is unknown. Taking nothing rather than taking blocked work."
+
+      if [ -n "$waiting" ]; then
+        echo "note: $candidate_repo#$candidate_number waits for $(tr '\n' ' ' <<<"$waiting")— skipping it" >&2
+        index=$((index + 1))
+        continue
+      fi
+
+      printf '%s\t%s\n' "$candidate_repo" "$candidate_number"
+      exit 0
+    done
+
+    [ "$total" -eq 0 ] ||
+      echo "every queued issue is waiting for another one. Taking nothing." >&2
 
     exit 0
     ;;
@@ -1103,6 +1170,17 @@ case "${1:-}" in
     other=$(grep -o 'https://[^ )]*/actions/runs/[0-9]*' <<<"$winner" | head -1)
     echo "$repo#$number was claimed first by ${other:-another run}. Retiring, and leaving the issue exactly as it was found." >&2
     printf 'lost %s\n' "${other:-another run}"
+    exit 0
+    ;;
+
+  blockers)
+    # The queue reads this itself; it is a subcommand so that a person can ask
+    # the same question, and so that the answer is one testable place rather
+    # than a `--jq` buried in the selection.
+    repo=${2:?blockers needs a repository}
+    number=${3:?blockers needs an issue number}
+    blockers_of "$repo" "$number" ||
+      die "could not read what $repo#$number is blocked by" 1
     exit 0
     ;;
 
@@ -1244,6 +1322,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | leak-check <file>..."
     ;;
 esac

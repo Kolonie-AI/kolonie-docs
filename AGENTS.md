@@ -225,6 +225,47 @@ on a third party's merge decision, which no agent can pick up. So after removing
 startable. Ready means *any agent can take this without asking*; it is a promise
 to the next reader, not a synonym for *not blocked by us*.
 
+### A dependency is a link, not a sentence
+
+**If this issue cannot start until another one is finished, record it as a
+relation and not as a line of prose.** GitHub's issue dependencies, on the issue
+page under *Relationships*, or:
+
+```bash
+# What <n> waits for. The id is the blocker's, and it is not its issue number:
+#   gh api repos/<owner>/<repo>/issues/<blocker> --jq .id
+gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by \
+  -X POST -F issue_id=<the blocker's numeric id>
+
+# And to read it back — this is what the queue asks:
+bash .github/scripts/opencode-worker.sh blockers <owner>/<repo> <n>
+```
+
+**`-F` and not `-f`**: `issue_id` is a number, and `-f` sends it as a string.
+Verified end to end on 2026-08-10 against `kolonie-platform#660`, which is the
+issue this came from.
+
+**The queue reads this and nothing else** (`#261`, 2026-08-10). `pick` skips any
+issue with an open blocker, so a recorded dependency keeps the worker off it
+without anybody moving a column. Prose does not: `kolonie-platform#660` reads a
+contract field `kolonie-platform#659` creates, it was written in both bodies
+twice, and the worker took `#660` anyway and failed — because labels and columns
+were all the queue could read, and neither says *this one waits*.
+
+**Open blocks; closed does not.** No degrees of blocking, nothing to interpret.
+A blocker that closed without its pull request merging still unblocks, and that
+is correct: the thing either exists on `main` or it does not, and the target's
+own check is what says which.
+
+**This is not the Blocked column, and both stay.** The column is for waiting on a
+person, a decision or a third party — something no issue on this board will
+close. The relation is for waiting on work that is *on* the board. An issue whose
+only blocker is another issue can sit in Ready: the queue already knows.
+
+**A package is what falls out of it.** `#259` says a package is what
+`agent:claude` is for, and a set of issues linked by dependency already is one —
+no second label and no second record.
+
 ### Five repositories are covered, and eight are not
 
 Measured 2026-08-05. Auto-add workflows exist for `kolonie-docs`,

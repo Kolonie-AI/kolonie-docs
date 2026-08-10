@@ -89,6 +89,35 @@ case "$1 $2" in
     case "$2" in
       */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
       */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
+      # `#261` asks what an issue waits for, once per candidate. Keyed by
+      # `<repo>#<number>` because the point of the case is that one candidate is
+      # blocked and the next one is not — one fixture could not say that. Before
+      # `*/issues/*`, which this path would otherwise match.
+      */dependencies/blocked_by)
+        if [ -s "$GH_FIXTURES/dependencies_fail" ]; then
+          echo "HTTP 502" >&2
+          exit 1
+        fi
+        key=${2#repos/}
+        key=${key%/dependencies/blocked_by}
+        fixture="$GH_FIXTURES/blocked_${key//\//_}"
+        # An absent fixture is *nothing blocks it*, not a failed read: a missing
+        # file would make `cat` exit 1, and every case written before `#261`
+        # would then die on an unreadable queue.
+        [ -f "$fixture" ] || exit 0
+        # **This one path runs the real `--jq`**, against a fixture that is real
+        # API JSON. Everywhere else the fixture holds what `--jq` would have
+        # printed, which is fine while the filter is a projection — here the
+        # filter is the behaviour under test (`select(.state == "open")`), and a
+        # fixture of pre-filtered lines would assert nothing about it.
+        expression=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --jq) expression=$2; shift 2 ;;
+            *)    shift ;;
+          esac
+        done
+        if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
       # `#256` sweeps the worker's own pull requests: one search for the set,
       # then one read per pull request. The per-pull-request fixture is keyed by
       # `<repo>#<number>` so one case can hold several and give each a different
@@ -921,6 +950,92 @@ echo yes > "$GH_FIXTURES/api_fails"
 check "a count that cannot be read is zero, not a failure" \
   "0" "$(bash "$SCRIPT" previous-failures Kolonie-AI/kolonie-docs 10 2>/dev/null)"
 unset GITHUB_RUN_ID
+
+echo
+echo "an issue that waits for another one (#261)"
+
+# `kolonie-platform#660` reads a contract field `#659` creates. It was written in
+# prose in both bodies, twice, and the worker took `#660` anyway on 2026-08-10
+# because `pick` read labels and a column and neither of those can say *waits*.
+blocked_by() {
+  # $1 is `owner/repo|number`, the rest are `owner/repo|number|state` blockers.
+  local target=$1; shift
+  IFS='|' read -r repo number <<<"$target"
+  local rows=()
+  for row in "$@"; do
+    IFS='|' read -r brepo bnumber bstate <<<"$row"
+    rows+=("{\"number\":$bnumber,\"state\":\"$bstate\",\"repository_url\":\"https://api.github.com/repos/$brepo\"}")
+  done
+  local joined
+  joined=$(IFS=,; echo "${rows[*]}")
+  echo "[$joined]" > "$GH_FIXTURES/blocked_${repo//\//_}_issues_$number"
+}
+
+case_setup
+issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+boarded "660:Ready:Kolonie-AI/kolonie-platform"
+blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err")
+check "an issue with an open blocker is not taken" "" "$out"
+contains "and the log names what it waits for" "660 waits for Kolonie-AI/kolonie-platform#659" "$(cat "$WORK/err")"
+
+# The case `#261` asks to get right. `#659`'s pull request was closed without
+# merging and the issue went back to Ready; a closed blocker still unblocks,
+# because the field is either on `main` or it is not and the check says which.
+case_setup
+issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+boarded "660:Ready:Kolonie-AI/kolonie-platform"
+blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|closed"
+check "a closed blocker does not block" "$(q 660 Kolonie-AI/kolonie-platform)" \
+  "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# Blocked or not blocked. An issue waiting on one open and one closed blocker is
+# waiting.
+case_setup
+issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+boarded "660:Ready:Kolonie-AI/kolonie-platform"
+blocked_by "Kolonie-AI/kolonie-platform|660" \
+  "Kolonie-AI/kolonie-platform|659|closed" "Kolonie-AI/kolonie-docs|1|open"
+check "one open blocker among closed ones is still a block" "" \
+  "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# The queue does not stop at the blocked issue: it goes on to the next one in the
+# order it had already computed.
+case_setup
+issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform" \
+       "10|2026-08-02T00:00:00Z|agent:opencode,p1"
+boarded "660:Ready:Kolonie-AI/kolonie-platform" "10:Ready"
+blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
+check "the next candidate is taken instead" "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+case_setup
+issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform" \
+       "10|2026-08-02T00:00:00Z|agent:opencode,p1"
+boarded "660:Ready:Kolonie-AI/kolonie-platform" "10:Ready"
+blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
+blocked_by "Kolonie-AI/kolonie-docs|10" "Kolonie-AI/kolonie-docs|9|open"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err")
+check "a queue where everything waits takes nothing" "" "$out"
+contains "and says that is what happened" "every queued issue is waiting" "$(cat "$WORK/err")"
+
+# A dependency that cannot be read is not *no dependency*. The whole point is
+# that the worker stops taking blocked work, and a queue it cannot read is
+# unknown — which the workflow reports as an error rather than as a quiet hour.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p1"
+boarded "10:Ready"
+echo yes > "$GH_FIXTURES/dependencies_fail"
+out=$(bash "$SCRIPT" pick 2>"$WORK/err"); rc=$?
+check "a dependency read that fails does not become an empty answer" "" "$out"
+check "and the queue is unknown rather than empty" "1" "$rc"
+contains "and it says why it took nothing" "rather than taking blocked work" "$(cat "$WORK/err")"
+
+# The same question, asked directly, because a person needs it too.
+case_setup
+blocked_by "Kolonie-AI/kolonie-platform|660" \
+  "Kolonie-AI/kolonie-platform|659|open" "Kolonie-AI/kolonie-docs|1|closed"
+check "blockers prints the open ones and only those" "Kolonie-AI/kolonie-platform#659" \
+  "$(bash "$SCRIPT" blockers Kolonie-AI/kolonie-platform 660 2>/dev/null)"
 
 echo
 echo "two runs, one issue (#266)"
