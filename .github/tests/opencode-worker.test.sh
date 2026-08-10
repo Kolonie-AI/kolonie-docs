@@ -1451,6 +1451,12 @@ contains "pick reads which repositories are already in flight" \
 contains "and skips candidates from them" \
   'select(.repo as $r | $busy | index($r) | not)' "$(cat "$SCRIPT")"
 
+# `#259`: a failure must never leave an issue with no `agent:` label at all.
+contains "a failed run routes the issue onward rather than orphaning it" \
+  "--add-label opencode:failed --add-label agent:claude" "$wf"
+contains "and the conflict sweep does the same" \
+  "--add-label opencode:failed --add-label agent:claude \\" "$wf"
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"

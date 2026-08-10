@@ -234,9 +234,11 @@ jobs:
               >/dev/null 2>&1 ||
               echo "::warning::could not comment on $repo#$issue"
 
-            # Both edits in one call, so no window shows neither (`#255`).
+            # All three edits in one call, so no window shows an issue with no
+            # route at all (`#255`, `#259`).
             gh issue edit "$issue" --repo "$repo" \
-              --remove-label agent:opencode --add-label opencode:failed \
+              --remove-label agent:opencode \
+              --add-label opencode:failed --add-label agent:claude \
               >/dev/null 2>&1 ||
               echo "::warning::could not relabel $repo#$issue"
 
@@ -1497,7 +1499,20 @@ jobs:
           # which `pick` excludes **whatever the queue label says** — a person
           # putting `agent:opencode` back is no longer enough, and changing the
           # issue is what it takes.
-          labels=(--remove-label agent:opencode --add-label opencode:failed)
+          # **And it gains a route, because losing one is not the same as having
+          # none.** `#259` asks that an issue carry exactly one `agent:` label at
+          # all times; an issue that has just lost `agent:opencode` and gained
+          # nothing violates that at the moment it most needs somebody to look.
+          #
+          # `agent:claude` rather than a judgement about which of the four
+          # endings this was. They differ — a refusal usually wants the issue
+          # rewritten, a red check may well pass on a second run, a worker fault
+          # is not about the issue at all — and `#259`'s own rule for that spread
+          # is that **uncertain means `agent:claude`, because a person is
+          # reachable there.** After a failure we are uncertain by definition, and
+          # a Claude agent reading the comment decides in seconds whether to hand
+          # it straight back.
+          labels=(--remove-label agent:opencode --add-label opencode:failed --add-label agent:claude)
           [ -z "${FORBIDDEN:-}" ] || labels+=(--add-label opencode:forbidden)
 
           if gh issue edit "$ISSUE" --repo "$REPO" "${labels[@]}" >/dev/null 2>&1; then

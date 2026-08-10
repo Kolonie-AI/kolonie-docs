@@ -616,6 +616,17 @@ obvious reading is wrong in both halves:
   Before this, a failing issue was retried every twenty minutes with nobody
   watching — `kolonie-infra#107` was taken three times in eighty minutes and
   refused identically each time.
+- **And it gains a route.** The same run sets **`agent:claude`**, because an
+  issue that has just lost `agent:opencode` and gained nothing carries no
+  `agent:` label at all — which the rule above forbids, at the moment somebody
+  most needs to look at it. It is not a judgement about the failure: uncertain
+  means `agent:claude`, and after a failure we are uncertain. A Claude agent
+  reading the comment decides in seconds whether to hand it straight back.
+- **And where a retry cannot help, it says so.** `opencode:forbidden` marks an
+  issue whose only implementation is a path the worker may not write, and `pick`
+  excludes it **whatever the queue label says** — putting `agent:opencode` back
+  is deliberately not enough, because `kolonie-infra#107` was refused three times
+  in eighty minutes by a comment inviting exactly that.
 - **And it leaves a mark.** The same run sets **`opencode:failed`**
   (`kolonie-docs#255`), which the worker clears the next time it takes the issue.
   Without it, an issue nobody has tried and one the worker took and abandoned
