@@ -699,6 +699,75 @@ check "no captured output is not an error" "0" "$rc"
 check "and produces nothing to put in the comment" "" "$out"
 
 echo
+echo "what the model is given to read, and what it may print (#254)"
+
+# The failing line is above the tail's cut, which is the whole reason a tail
+# was not enough: `kolonie-platform#533`'s siblings read as "npm run check did
+# not pass" followed by a hundred lines of vitest output.
+case_setup
+{
+  echo "FAIL src/thing.test.ts > it keeps the header"
+  echo "AssertionError: expected 'a' to be 'b'"
+  for i in $(seq 1 100); do echo "some perfectly ordinary line $i"; done
+} > "$WORK/deep.log"
+out=$(bash "$SCRIPT" failure-digest "$WORK/deep.log" 2>/dev/null)
+contains "the failing line survives even when it is a hundred lines above the tail" \
+  "FAIL src/thing.test.ts" "$out"
+contains "and so does what it expected against what it got" \
+  "expected 'a' to be 'b'" "$out"
+contains "the tail is still there, and is labelled as a tail" \
+  "the last 20 lines" "$out"
+contains "which the tail's last line proves" "ordinary line 100" "$out"
+
+# The digest is read by a model that then writes into a public comment, so it
+# goes through exactly the filter the excerpt does.
+case_setup
+printf 'Error: connecting with ghp_%s\n' "aaaaaaaaaaaaaaaaaaaa" > "$WORK/leaky-digest.log"
+out=$(bash "$SCRIPT" failure-digest "$WORK/leaky-digest.log" 2>/dev/null)
+absent "a token in the log never reaches the model" "ghp_aaaaaaaaaaaaaaaaaaaa" "$out"
+contains "and is named rather than silently dropped" "redacted: a GitHub token" "$out"
+
+case_setup
+printf 'FAIL: %s\n' "$(head -c 9000 /dev/zero | tr '\0' 'x')" > "$WORK/huge.log"
+out=$(bash "$SCRIPT" failure-digest "$WORK/huge.log" 2>/dev/null)
+if [ "${#out}" -le 6200 ]; then
+  echo "  ok   somebody else's build output cannot become an unbounded prompt"
+else
+  echo "  FAIL somebody else's build output cannot become an unbounded prompt"
+  echo "         ${#out} characters"
+  FAILURES+=("the digest is bounded")
+fi
+
+case_setup
+out=$(bash "$SCRIPT" failure-digest "$WORK/there-is-no-such-log" 2>/dev/null); rc=$?
+check "no log is not an error, it is a missing paragraph" "0" "$rc"
+check "and there is nothing to ask about" "" "$out"
+
+# The account is written by a process that holds the gateway key, so what it
+# wrote is filtered before it is published — the same filter again.
+case_setup
+printf 'The check failed because GH_TOKEN=%s was wrong.\n' "ghp_bbbbbbbbbbbbbbbbbbbb" > "$WORK/account.raw"
+out=$(bash "$SCRIPT" redact "$WORK/account.raw" 2>/dev/null)
+absent "a secret the model wrote into its account does not reach the comment" \
+  "ghp_bbbbbbbbbbbbbbbbbbbb" "$out"
+
+case_setup
+printf 'a %s b\n' "$(head -c 4000 /dev/zero | tr '\0' 'y')" > "$WORK/verbose.raw"
+out=$(bash "$SCRIPT" redact "$WORK/verbose.raw" 2>/dev/null)
+if [ "${#out}" -le 1600 ]; then
+  echo "  ok   \"answer in three short paragraphs\" is an instruction, not a guarantee"
+else
+  echo "  FAIL \"answer in three short paragraphs\" is an instruction, not a guarantee"
+  echo "         ${#out} characters"
+  FAILURES+=("the account is bounded")
+fi
+
+case_setup
+printf 'it broke in ```ts\nconst x = 1\n```\n' > "$WORK/fenced.raw"
+out=$(bash "$SCRIPT" redact "$WORK/fenced.raw" 2>/dev/null)
+absent "and a fence in the account cannot break the comment either" '```' "$out"
+
+echo
 echo "nothing leaves the runner carrying a secret (#246)"
 
 # The boundary where a secret would actually escape: GitHub masks a value in a
@@ -1202,6 +1271,34 @@ fi
 # from the reporting path — the summary is derived or it is not written.
 absent "no model is asked to summarise the work it produced" "opencode run" \
   "$(awk '/name: Say what landed/,/name: Is there anything to do/' "$WORKFLOW")"
+
+# `#254`: a red check gets an account of what broke, on that ending only, and
+# nothing about producing one may cost the comment that has to be written.
+why_step=$(awk '/name: What failed, and why/,/name: Say why on the issue/' "$WORKFLOW")
+contains "a red check is read by the model that caused it" "failure-digest" "$why_step"
+contains "and only that ending" '"$kind" = work' "$why_step"
+contains "the call is bounded in time" "timeout 120 opencode run" "$why_step"
+contains "the model runs with bash denied, so it cannot print its own environment" \
+  '.permission.bash = {"*": "deny"}' "$why_step"
+contains "and with no instructions file to pull in a repository's context" \
+  "del(.instructions)" "$why_step"
+contains "what it wrote is filtered before it is published" \
+  "opencode-worker.sh redact" "$why_step"
+contains "a call that fails leaves a missing paragraph and says so" \
+  "the comment goes without one" "$why_step"
+contains "the account is attributed, not presented as a finding" \
+  "The model's account of why the check failed" "$wf"
+contains "and the attribution says it did not read the diff" \
+  "it did not review the diff" "$wf"
+# The refusal is the artefact and a paraphrase of it is a loss, so the account
+# must not be produced on that ending. `kind` is the only thing separating them.
+refusal_guarded=$(grep -c 'kind" = work' <<<"$why_step")
+if [ "$refusal_guarded" -ge 1 ]; then
+  echo "  ok   a refusal keeps its own words, unsummarised"
+else
+  echo "  FAIL a refusal keeps its own words, unsummarised"
+  FAILURES+=("the account is guarded on kind=work")
+fi
 contains "and says what actually happens to the pull request" \
   "merges itself when the target's required check goes green" "$wf"
 

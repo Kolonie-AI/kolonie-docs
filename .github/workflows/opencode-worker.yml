@@ -1206,6 +1206,68 @@ jobs:
 
           excerpt=$(bash .github/scripts/opencode-worker.sh excerpt "$FAILURE_DIR/output")
 
+          # ## The model reads its own red check (`#254`, 2026-08-10)
+          #
+          # The maintainer, 2026-08-10: *"es wäre praktisch, wenn opencode bevor
+          # es abbricht noch schreibt, was das Problem war."* Half of that
+          # already existed and is better than a summary would be — when the
+          # model declines, its own reason is quoted in full, and on
+          # `kolonie-platform#533` that produced five specific unanswered design
+          # questions. **Summarising that would only make it shorter and worse**,
+          # so this runs on the *other* ending: a commit exists and the target's
+          # check went red. There the excerpt is a build-log tail, bounded by
+          # line count rather than by relevance, and the line that matters is
+          # usually above the cut.
+          #
+          # **Only `work`.** A refusal keeps exactly what it carries today.
+          #
+          # **Not fatal, and not slow.** The run has already failed and the
+          # comment must still be written, so every guard below is a reason to
+          # skip rather than to stop: no binary, no model, no key, no config, no
+          # log, or a call that times out — each leaves a missing paragraph.
+          #
+          # **The model cannot reach anything.** It runs from an empty directory
+          # on a config with bash and every external directory denied, so the
+          # process holding the gateway key cannot be asked to print its own
+          # environment into a public comment. What it can see is the digest,
+          # which has been through the same redaction the excerpt has.
+          account=""
+          if [ "$kind" = work ] && command -v opencode >/dev/null 2>&1 &&
+             [ -n "${OPENCODE_LLM_MODEL:-}" ] && [ -f /tmp/opencode/runtime.json ] &&
+             [ -s "$FAILURE_DIR/output" ]; then
+
+            digest=$(bash .github/scripts/opencode-worker.sh failure-digest "$FAILURE_DIR/output")
+            if [ -n "$digest" ]; then
+              jq '.permission.bash = {"*": "deny"}
+                  | .permission.external_directory = {"*": "deny"}
+                  | del(.instructions)' /tmp/opencode/runtime.json \
+                > /tmp/opencode/reporting.json 2>/dev/null
+
+              reading=$(mktemp -d)
+              read_prompt="A check failed on a change an unattended coding agent just made. Below is what it printed: the lines that look like the failure, then the last lines of the log. It is a tail and not the whole log, so do not describe anything you cannot see here.
+
+          Answer three things, in three short paragraphs, in plain prose and under 200 words in total. No preamble, no headings, no code fences.
+
+          1. What failed — name the test, the file and the rule if they are there.
+          2. What it expected against what it got.
+          3. Whether this looks related to the change or independent of it, and say which parts of that you cannot tell from a tail.
+
+          --- output ---
+          ${digest}"
+
+              if ( cd "$reading" &&
+                   OPENCODE_CONFIG=/tmp/opencode/reporting.json \
+                   timeout 120 opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$read_prompt" \
+                   > "$RUNNER_TEMP/opencode-account.raw" 2>/dev/null ); then
+                account=$(bash .github/scripts/opencode-worker.sh redact "$RUNNER_TEMP/opencode-account.raw")
+                echo "the model wrote an account of the failure"
+              else
+                echo "the model could not be asked what failed; the comment goes without one"
+              fi
+              rm -rf "$reading"
+            fi
+          fi
+
           # **Four endings and four sentences, since `#253`.** Three of these
           # used to be `work` and share its verdict — *the change did not pass
           # the check* — which was true of exactly one of them. The other two had
@@ -1244,6 +1306,7 @@ jobs:
             echo "reason<<$d"; echo "$reason"; echo "$d"
             echo "verdict<<$d"; echo "$verdict"; echo "$d"
             echo "excerpt<<$d"; echo "$excerpt"; echo "$d"
+            echo "account<<$d"; echo "$account"; echo "$d"
           } >> "$GITHUB_OUTPUT"
 
           # `$GITHUB_STEP_SUMMARY` renders at the top of the run page, which is
@@ -1262,6 +1325,12 @@ jobs:
             echo "$verdict"
             echo
             echo "$reason"
+            if [ -n "$account" ]; then
+              echo
+              echo "### The model's account of why the check failed"
+              echo
+              echo "$account"
+            fi
             if [ -n "$excerpt" ]; then
               echo
               echo "### The last of what it printed"
@@ -1286,6 +1355,7 @@ jobs:
           REASON: ${{ steps.why.outputs.reason }}
           VERDICT: ${{ steps.why.outputs.verdict }}
           EXCERPT: ${{ steps.why.outputs.excerpt }}
+          ACCOUNT: ${{ steps.why.outputs.account }}
         run: |
           set -uo pipefail
 
@@ -1301,6 +1371,19 @@ jobs:
             echo "${VERDICT}"
             echo
             echo "${REASON}"
+            # **Above the excerpt and attributed, never presented as the
+            # Colony's finding** (`#254`). A model summarising a failure it
+            # caused has an interest in the answer — *the test was flaky* is a
+            # comfortable diagnosis — so the sentence naming whose account this
+            # is does as much work as the account. The refusal path already
+            # attributes the model's own words this way and is the model copied
+            # here.
+            if [ -n "${ACCOUNT:-}" ]; then
+              echo
+              echo "**The model's account of why the check failed.** It read the log below and answered three questions; it did not review the diff, and it is describing a failure it produced, so this is its account and not a finding."
+              echo
+              echo "${ACCOUNT}"
+            fi
             if [ -n "${EXCERPT:-}" ]; then
               echo
               echo "<details><summary>The last of what it printed</summary>"

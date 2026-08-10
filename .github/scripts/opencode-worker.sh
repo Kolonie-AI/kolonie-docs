@@ -323,29 +323,33 @@ GUARDED_SECRETS=${GUARDED_SECRETS:-OPENCODE_LLM_API_KEY OPENCODE_LLM_BASE_URL OP
 # exactly and whatever they look like. By shape catches what value-matching
 # cannot: a credential the target repository printed, a token in somebody else's
 # output, an environment dump. Neither is sufficient alone.
-excerpt_from() {
-  local file=$1
-  [ -f "$file" ] || return 0
 
-  local line name value out=""
-  while IFS= read -r line; do
-    # By value first, with bash's literal replacement rather than a regex, so a
-    # secret containing `/` or `.` cannot escape the substitution.
-    for name in $GUARDED_SECRETS; do
-      value=${!name:-}
-      [ "${#value}" -ge 10 ] || continue
-      line=${line//"$value"/[redacted: the value of $name]}
-    done
+# One line of arbitrary output, made safe to put in a public comment.
+#
+# **Lifted out of `excerpt_from` for `#254`** and otherwise unchanged. That
+# ending now has a second thing to publish — the model's account of why the
+# check failed — and two redactions would be two things to keep in step. There
+# is one, and everything that leaves this runner goes through it.
+redact_line() {
+  local line=$1 name value
 
-    # Then by shape. The last rule is the one that catches a `postgres://` or an
-    # `https://user:pass@` that nothing in this run put there.
-    #
-    # **The `NAME=value` rule runs before the token-shaped ones**, and the order
-    # is not arbitrary: with it last, `GH_TOKEN=ghp_…` was redacted twice — once
-    # into `[redacted: a GitHub token]` and then again over the front of that —
-    # leaving `GH_TOKEN=[redacted] a GitHub token]`. Nothing leaked, and it read
-    # like something had.
-    line=$(sed -E \
+  # By value first, with bash's literal replacement rather than a regex, so a
+  # secret containing `/` or `.` cannot escape the substitution.
+  for name in $GUARDED_SECRETS; do
+    value=${!name:-}
+    [ "${#value}" -ge 10 ] || continue
+    line=${line//"$value"/[redacted: the value of $name]}
+  done
+
+  # Then by shape. The last rule is the one that catches a `postgres://` or an
+  # `https://user:pass@` that nothing in this run put there.
+  #
+  # **The `NAME=value` rule runs before the token-shaped ones**, and the order
+  # is not arbitrary: with it last, `GH_TOKEN=ghp_…` was redacted twice — once
+  # into `[redacted: a GitHub token]` and then again over the front of that —
+  # leaving `GH_TOKEN=[redacted] a GitHub token]`. Nothing leaked, and it read
+  # like something had.
+  line=$(sed -E \
       -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' \
       -e 's/([A-Za-z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|CREDENTIAL))=[^[:space:]]+/\1=[redacted]/g' \
       -e 's/gh[pousr]_[A-Za-z0-9]{16,}/[redacted: a GitHub token]/g' \
@@ -353,18 +357,27 @@ excerpt_from() {
       -e 's/(sk|xoxb|xoxp|xapp)-[A-Za-z0-9_-]{16,}/[redacted: an API key]/g' \
       -e 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/[redacted: a token]/g' \
       -e 's/[Bb]earer[[:space:]]+[A-Za-z0-9._~+/-]{16,}=*/[redacted: a bearer token]/g' \
-      -e 's#://[^/@:[:space:]]+:[^/@[:space:]]+@#://[redacted: credentials]@#g' \
-      <<<"$line")
+    -e 's#://[^/@:[:space:]]+:[^/@[:space:]]+@#://[redacted: credentials]@#g' \
+    <<<"$line")
 
-    # A fenced block is what carries this into a comment, so three backticks in
-    # the output would end the fence and let the rest render as prose.
-    line=${line//'```'/\'\'\'}
-    line=${line//$'\r'/}
+  # A fenced block is what carries this into a comment, so three backticks in
+  # the output would end the fence and let the rest render as prose.
+  line=${line//'```'/\'\'\'}
+  line=${line//$'\r'/}
 
-    if [ "${#line}" -gt "$EXCERPT_LINE_CHARS" ]; then
-      line="${line:0:$EXCERPT_LINE_CHARS}… (line truncated)"
-    fi
-    out+="$line"$'\n'
+  if [ "${#line}" -gt "$EXCERPT_LINE_CHARS" ]; then
+    line="${line:0:$EXCERPT_LINE_CHARS}… (line truncated)"
+  fi
+  printf '%s\n' "$line"
+}
+
+excerpt_from() {
+  local file=$1
+  [ -f "$file" ] || return 0
+
+  local line out=""
+  while IFS= read -r line; do
+    out+="$(redact_line "$line")"$'\n'
   done < <(tail -n "$EXCERPT_LINES" "$file")
 
   # Trailing newline off, then the last bound. The comment says the run link
@@ -387,6 +400,75 @@ excerpt_from() {
 #
 # It never fails the caller. A reporting step that dies while reporting leaves
 # exactly the silence it was added to remove.
+# What the model is given to read when a check went red (`#254`).
+#
+# ## Why the tail alone was not enough
+#
+# The comment on a red check carries the last twenty lines of the build log —
+# **bounded by line count rather than by relevance**, and the line that matters
+# is usually above the cut. `kolonie-platform#533`'s sibling failures read as
+# *`npm run check` did not pass* followed by a hundred lines of vitest output.
+#
+# So this is the tail **plus** the lines that look like the failure itself,
+# wherever in the log they are. Every line goes through `redact_line`, which is
+# the same filter the excerpt uses — the model must not be shown a credential
+# any more than a reader must, and a model that has read one can put it in the
+# account it writes.
+#
+# ## Bounded three ways, because the input is somebody else's build output
+#
+# The matched lines are capped, the total is capped, and the whole thing is a
+# tail rather than the log — which the prompt says out loud, so the model does
+# not describe what it cannot see.
+DIGEST_MATCH=${DIGEST_MATCH:-FAIL|Error|error|✗|×|✘|not ok|AssertionError|Expected|Received|panic|SyntaxError|Cannot find|Module not found|✖}
+DIGEST_LINES=${DIGEST_LINES:-60}
+DIGEST_CHARS=${DIGEST_CHARS:-6000}
+
+failure_digest_from() {
+  local file=$1
+  [ -f "$file" ] || return 0
+
+  local line out=""
+  # The matched lines first: they are the answer where there is one, and the
+  # tail is context for them rather than the other way round.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    out+="$(redact_line "$line")"$'\n'
+  done < <(grep -aE "$DIGEST_MATCH" "$file" 2>/dev/null | head -n "$DIGEST_LINES")
+
+  out+=$'\n'"--- the last $EXCERPT_LINES lines ---"$'\n'
+  out+="$(excerpt_from "$file")"
+
+  if [ "${#out}" -gt "$DIGEST_CHARS" ]; then
+    out="${out:0:$DIGEST_CHARS}"$'\n'"… (truncated at $DIGEST_CHARS characters)"
+  fi
+  printf '%s\n' "$out"
+}
+
+# The model's own account, made safe to publish.
+#
+# It is written by a model that ran with the gateway key in its environment, so
+# it goes through the same filter as everything else — and through a bound,
+# because *"answer in three short paragraphs"* is an instruction and not a
+# guarantee.
+ACCOUNT_CHARS=${ACCOUNT_CHARS:-1500}
+
+redact_from() {
+  local file=$1
+  [ -f "$file" ] || return 0
+
+  local line out=""
+  while IFS= read -r line; do
+    out+="$(redact_line "$line")"$'\n'
+  done < "$file"
+
+  out=${out%$'\n'}
+  if [ "${#out}" -gt "$ACCOUNT_CHARS" ]; then
+    out="${out:0:$ACCOUNT_CHARS}… (the model's account was longer than $ACCOUNT_CHARS characters and is cut here)"
+  fi
+  printf '%s\n' "$out"
+}
+
 failed_step() {
   local repo=${GITHUB_REPOSITORY:-} run=${GITHUB_RUN_ID:-}
   [ -n "$repo" ] && [ -n "$run" ] || return 0
@@ -835,6 +917,16 @@ case "${1:-}" in
     exit 0
     ;;
 
+  failure-digest)
+    failure_digest_from "${2:?failure-digest needs a file to read}"
+    exit 0
+    ;;
+
+  redact)
+    redact_from "${2:?redact needs a file to read}"
+    exit 0
+    ;;
+
   previous-failures)
     previous_failures "${2:?previous-failures needs a repository}" \
       "${3:?previous-failures needs an issue number}"
@@ -897,6 +989,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
     ;;
 esac
