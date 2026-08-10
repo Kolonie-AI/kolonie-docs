@@ -585,6 +585,17 @@ obvious reading is wrong in both halves:
   Before this, a failing issue was retried every twenty minutes with nobody
   watching — `kolonie-infra#107` was taken three times in eighty minutes and
   refused identically each time.
+- **And it leaves a mark.** The same run sets **`opencode:failed`**
+  (`kolonie-docs#255`), which the worker clears the next time it takes the issue.
+  Without it, an issue nobody has tried and one the worker took and abandoned
+  look identical on the board — and the second is the more interesting of the
+  two, because a run has already been spent learning something about it and that
+  is buried in a comment thread.
+
+  `label:opencode:failed` is the filter: **what did the worker try and not
+  finish.** It is set on failure and cleared on the next attempt rather than on
+  success, because an issue being tried again is exactly when *not finished*
+  stops being true.
 - **Not a trigger.** `.github/workflows/opencode-worker.yml` runs on a
   **schedule** and takes exactly one issue an hour. It does not run on
   `issues: [labeled]`, deliberately: labelling five issues would start five runs
@@ -670,11 +681,17 @@ repository in the organisation: it was the single one, which meant
 repository however it searched. It now exists in the five that carry issues *on
 the board*:
 
-| Repository | `agent:opencode` |
-|---|---|
-| `kolonie-docs` | yes, since 2026-08-04 |
-| `kolonie-platform`, `kolonie-infra`, `kolonie-website`, `kolonie-email` | yes, created 2026-08-08 |
-| the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** |
+| Repository | `agent:opencode` | `opencode:failed` |
+|---|---|---|
+| `kolonie-docs` | yes, since 2026-08-04 | yes, 2026-08-10 |
+| `kolonie-platform`, `kolonie-infra`, `kolonie-website` | yes, created 2026-08-08 | yes, 2026-08-10 |
+| `kolonie-email` | yes, created 2026-08-08 | yes, 2026-08-10 |
+| the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** | — |
+
+**`opencode:failed` has to exist in the target repository, not here.** The worker
+sets it on the issue it took, wherever that lives, so a repository in the queue
+without the label gets a failed edit and the comment says so — which is why the
+edit is best-effort and reports rather than throws.
 
 **The last row is a decision and not an omission.** The worker takes an issue
 only if the board says it is in **Ready**, and those repositories put nothing on

@@ -222,10 +222,23 @@ jobs:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # **The failure mark clears when the issue is taken, not when it
+          # passes** (`#255`). `opencode:failed` answers *what did the worker try
+          # and not finish*, and an issue being tried again is exactly when that
+          # stops being true — waiting for success would leave the mark on
+          # something already in hand, and a filter that lies about the present
+          # is worse than no filter.
+          #
+          # Best-effort and never fatal: an issue that never failed has no label
+          # to remove, and `gh` says so rather than failing. Losing the claim
+          # over a cosmetic edit would be the reporting costing the work.
+          gh issue edit "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" \
+            --remove-label opencode:failed >/dev/null 2>&1 || true
+
           gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
             "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
 
-          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, a person reviews and merges — it never merges its own work. If the run fails, this issue goes back to **Ready** with a comment saying which run failed."
+          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, a person reviews and merges — it never merges its own work. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
 
       # ## Which credential reaches the target repository (`#231`, 2026-08-08)
       #
@@ -1043,7 +1056,24 @@ jobs:
           # **Best-effort, and never fatal.** A label that could not be removed is
           # worth saying and is not worth failing a run that has already failed —
           # the comment is written either way and says which happened.
-          if gh issue edit "$ISSUE" --repo "$REPO" --remove-label agent:opencode >/dev/null 2>&1; then
+          # ## And a mark that survives the label coming off (`#255`)
+          #
+          # Removing `agent:opencode` takes the issue out of the queue and leaves
+          # nothing saying it was ever in it. An issue that was never tried and
+          # one the worker took and abandoned then look identical on the board,
+          # and the second is the more interesting of the two: somebody has
+          # already spent a run learning something about it, and the comment
+          # holding that is buried in a thread.
+          #
+          # `opencode:failed` is that mark, and it is a filter more than a label:
+          # `label:opencode:failed` is *what did the worker try and not finish*.
+          # Set here, cleared when the issue is taken again — see `Claim it`.
+          #
+          # **Both edits in one call.** Two would leave a window in which the
+          # issue carries neither, and a board read landing in it would show a
+          # failure as an ordinary untried issue.
+          if gh issue edit "$ISSUE" --repo "$REPO" \
+               --remove-label agent:opencode --add-label opencode:failed >/dev/null 2>&1; then
             removed=yes
           else
             removed=no
@@ -1052,9 +1082,9 @@ jobs:
           {
             echo
             if [ "$removed" = yes ]; then
-              echo "**The \`agent:opencode\` label has been removed**, so the worker will not take this again on its own. That is not a verdict on the issue: put the label back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue."
+              echo "**The \`agent:opencode\` label has been removed and \`opencode:failed\` set**, so the worker will not take this again on its own and the board still says it was tried. That is not a verdict on the issue: put \`agent:opencode\` back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue. \`opencode:failed\` clears itself when the issue is taken again."
             else
-              echo "**The \`agent:opencode\` label could not be removed**, so this issue is still queued and may be taken again on the next run. That is a defect in this worker rather than a decision about the issue, and \`kolonie-docs#142\` is where it goes."
+              echo "**The labels could not be edited**, so this issue is still queued and may be taken again on the next run, and the board does not record that it was tried. That is a defect in this worker rather than a decision about the issue, and \`kolonie-docs#142\` is where it goes."
             fi
             echo
             echo "The run link has the full log; the excerpt above is bounded and has every known secret taken out of it."

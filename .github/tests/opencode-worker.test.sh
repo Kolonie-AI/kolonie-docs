@@ -898,9 +898,9 @@ fi
 
 # `#251`: a failing issue leaves the queue rather than being retried forever.
 contains "a failed run takes the label off the issue it took" \
-  "gh issue edit \"\$ISSUE\" --repo \"\$REPO\" --remove-label agent:opencode" "$wf"
+  "--remove-label agent:opencode" "$wf"
 contains "and says so in the comment, as something a person reverses" \
-  "put the label back once the reason above is dealt with" "$wf"
+  "back once the reason above is dealt with" "$wf"
 contains "a removal that failed is reported rather than swallowed" \
   "could not be removed" "$wf"
 contains "and the counter now finds a second failure worth naming" \
@@ -920,6 +920,20 @@ contains "the model's refusal is recorded under its own kind" \
   "fail refused" "$wf"
 contains "and a commitless run under its own" \
   "fail empty" "$wf"
+
+# `#255`: a failure leaves a mark the board can be filtered on.
+contains "a failed run sets the mark as it takes the queue label off" \
+  "--remove-label agent:opencode --add-label opencode:failed" "$wf"
+contains "and both edits are one call, so no window shows neither" \
+  "Both edits in one call" "$wf"
+contains "taking an issue clears the mark" \
+  "--remove-label opencode:failed" "$wf"
+contains "and clearing it cannot cost the claim" \
+  ">/dev/null 2>&1 || true" "$wf"
+# The literal in the workflow carries backslash-escaped backticks, so this
+# matches the part of the sentence that has none.
+contains "the comment says what the board now shows" \
+  "goes back to **Ready**, loses" "$wf"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
