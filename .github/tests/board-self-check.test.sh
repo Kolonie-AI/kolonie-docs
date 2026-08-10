@@ -47,6 +47,28 @@ done
 case "$1 $2" in
   "api graphql")
     if [[ "$*" == *"projectV2(number:1){ id }"* ]]; then cat "$GH_FIXTURES/readable" 2>/dev/null
+    # **5b's board read is GraphQL now** (`#271`): it goes through
+    # `opencode-worker.sh board-read` rather than `gh project item-list`, which
+    # is what 5a spends its whole header explaining the cost of. Recognised by
+    # the paging clause, which neither of the other two queries has.
+    #
+    # **The board fixture stays as it is: `owner/repo#n`, one per line.** That
+    # is what the old call returned, because the `--jq` that reduced it to that
+    # was an argument to `gh`; the filter now lives in the script, so the shape
+    # it filters is assembled here instead. Every case below writes the fixture
+    # the way it always did — including the short one that proves 5b refuses to
+    # accuse a hundred issues on a failed read.
+    elif [[ "$*" == *"items(first: 100"* ]]; then
+      jq -Rn '[inputs | select(length > 0) | capture("(?<repo>.+)#(?<n>[0-9]+)$")]
+        | {data:{organization:{projectV2:{items:{
+            pageInfo:{hasNextPage:false,endCursor:null},
+            nodes:[ .[]
+              | {id:("ITEM_" + .n),
+                 fieldValueByName:{name:"Ready"},
+                 content:{number:(.n|tonumber), title:"untitled", url:"",
+                          repository:{nameWithOwner:.repo, url:""},
+                          labels:{nodes:[]}}} ]}}}}}' \
+        "$GH_FIXTURES/board" 2>/dev/null
     else
       cat "$GH_FIXTURES/pruning" 2>/dev/null
       [ -s "$GH_FIXTURES/pruning_err" ] && cat "$GH_FIXTURES/pruning_err" >&2
@@ -157,8 +179,12 @@ expect "names it a configuration gap" \
   "$([[ "$out" == *"configuration gap"* ]] && echo yes || echo no)" "$out"
 expect "does not report the board as broken" \
   "$([[ "$out" != *"Auto-archive is switched off"* && "$out" != *"not on the board"* ]] && echo yes || echo no)" "$out"
+# Grepping for `project item-list` here stopped meaning anything the moment
+# `#271` removed the call: an assertion that nothing does what nothing does any
+# more passes for the wrong reason and would go on passing if 5b started reading
+# the board again by its new name. The paging clause is what 5b's read is now.
 expect "asks neither question" \
-  "$(grep -q 'project item-list' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
+  "$(grep -q 'items(first: 100' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
 echo "reporting — the guard #132 asked to be proved"

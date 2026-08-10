@@ -11,9 +11,15 @@
 # §6 query 5a was written to catch exactly one failure, and on 2026-08-02 that
 # failure happened while nobody ran it: the GraphQL budget was exhausted at
 # **4,998 of 5,000 points in a single working session**, every point spent by
-# `gh project item-list --limit 1000` — the query the orchestration loop is told
-# to run. Board columns could not be set on three issues that had just been
-# created, and the loop could not read its own state until the hourly reset.
+# `gh project item-list --limit 1000` — which was, then, the query the
+# orchestration loop was told to run. Board columns could not be set on three
+# issues that had just been created, and the loop could not read its own state
+# until the hourly reset.
+#
+# **That call is gone from this file** (`#271`, 2026-08-10). 5b reads the board
+# through `opencode-worker.sh board-read`, 2 points against 203, so the check no
+# longer spends a twentieth of the budget asking whether the budget is being
+# spent.
 #
 # The document was right and the check was correct. **What was missing is that
 # nothing ran it** (`kolonie-docs#132`). A self-check that depends on somebody
@@ -41,6 +47,7 @@
 # `gh` rather than trusting the reading.
 set -uo pipefail
 
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ORG=Kolonie-AI
 TITLE="The board has stopped maintaining itself"
 
@@ -103,7 +110,7 @@ check_pruning() {
   rm -f "$err"
 
   if [ -n "$stale" ]; then
-    echo "5a — **Done items are not being archived.** These have sat in Done, untouched, for more than $STALE_DAYS days, and the archive filter is \`updated:<@today-2w\`. The board is growing again, which is what makes \`--limit 1000\` expensive. Check that *Auto-archive items* is still enabled in the Projects UI; §6 has the manual sweep for catching up."
+    echo "5a — **Done items are not being archived.** These have sat in Done, untouched, for more than $STALE_DAYS days, and the archive filter is \`updated:<@today-2w\`. The board is growing again, and every board read is charged a point per hundred items. Check that *Auto-archive items* is still enabled in the Projects UI; §6 has the manual sweep for catching up."
     echo
     printf '%s\n' "$stale" | sed 's/^/    /' | head -20
     return 1
@@ -118,8 +125,12 @@ check_pruning() {
 check_arrivals() {
   local board missing
   board=$(mktemp) || return 1
-  gh project item-list 1 --owner "$ORG" --limit 1000 --format json \
-    --jq '.items[] | "\(.content.repository)#\(.content.number)"' 2>/dev/null | sort -u > "$board"
+  # `board-read` and not `gh project item-list`: the same document for 2 points
+  # against 203 (`#269`, measured 2026-08-10 on a 129-item board), and 5a above
+  # exists because that 203 emptied the budget. A check whose own cost is the
+  # thing it warns about was reporting a symptom it was helping to cause.
+  bash "$HERE/opencode-worker.sh" board-read 2>/dev/null \
+    | jq -r '.items[] | "\(.content.repository)#\(.content.number)"' 2>/dev/null | sort -u > "$board"
 
   # A board that reads as empty is a failed call, not an empty board, and
   # reporting every open issue in the organisation as missing is the loudest

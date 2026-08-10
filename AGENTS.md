@@ -363,16 +363,28 @@ after a move. If you moved something, verify it by this query rather than by the
 command exiting zero — `item-edit` reports success for any valid item id,
 including the wrong one.
 
-**It costs 1 point. Reading the whole board to find the same id costs 304**
-(measured 2026-08-08 against a 205-item board; it was 203 against 120 items on
+**It costs 1 point. `gh project item-list` cost 304 to find the same id**
+(measured 2026-08-08 against a 205-item board; 203 against 120 items on
 2026-08-07, because the charge is per item *requested*, in pages of a hundred).
-So the cheap call is also the correct one, and there is no case for the
-expensive one when you are placing a single issue.
+`#269` and `#271` retired that call from every script here, and a board read is
+2 points now — but the single lookup is still the correct one for a single
+issue, because it answers from the board rather than from a listing assembled a
+page at a time.
+
+**And it returns only cards on this board that are not archived.** Both filters
+went in on `#271`; without them the lookup answered with archived Done cards and
+with items on any other project of the same number, and a card move accepts a
+wrong id and reports success. **When it prints nothing, it says on stderr which
+of the three reasons it was** — no project at all, this board but archived, or
+some other project — because those need different next moves and an empty line
+does not distinguish them.
 
 **Read the board at most once per session, and never once per issue.** On
 2026-08-08 the GraphQL budget hit zero twice, and one session had spent six full
 board reads placing six issues — 1,800 points to learn what six 1-point queries
-would have answered. Fetch the board when you need the *overview* — §6's four
+would have answered. That arithmetic is gentler at 2 points a read and the habit
+is still right: a lookup is fresher, and six of them are still cheaper than six
+reads. Fetch the board when you need the *overview* — §6's four
 questions — and reuse that one file for the rest of the session. Resolve
 individual items with the query above, every time.
 
@@ -384,11 +396,16 @@ Both are in one script, so this is a command rather than a rule to remember:
 .github/scripts/board-item-id.sh --cost             # what is left, and when it resets
 ```
 
-**`--map` is for a batch and nothing else.** It costs the full board read, and it
-goes stale from the moment it is written; below roughly three hundred lookups
-the single query is cheaper as well as fresher. It exists so that the one case
-where a map genuinely wins does not become an argument for reading the board
-again.
+**`--map` is for a batch, and the threshold moved a long way on `#271`.** It
+reads the whole board — through `board-read` since 2026-08-10, so 2 points
+rather than 304 — which means it beats a batch of single lookups from **about
+three issues**, where the number here was about three hundred. A batch is now
+the ordinary case for it.
+
+What has not changed is that a map goes stale from the moment it is written and
+a lookup does not. That is why the single query is still the call for one issue,
+and after `#271` it is the **only** reason — the arithmetic no longer argues for
+it.
 
 **A card move is 1 point, and that is worth stating because the arithmetic
 misleads.** `kolonie-docs#227` recorded *"one board read and three card moves

@@ -24,6 +24,11 @@ trap 'rm -rf "$WORK"' EXIT
 
 export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
+# The board's own project id. `opencode-red.sh` and the `board-item-id.sh` it
+# calls after `#271` both default to this one; exporting it is what stops the
+# stub and the lookup under test disagreeing about which project a card is on,
+# which would pass as *not on the board* in every case below.
+export PROJECT_ID="PVT_kwDOEmwuYs4BebbB"
 
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'STUB'
@@ -42,7 +47,31 @@ case "$1 $2" in
       exit 1
     fi
     ;;
-  "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
+  # **One item, by repository and number** (`#271`). This script used to read
+  # the whole board to find one card; it now asks the issue what it is on,
+  # through `board-item-id.sh`, and that is a GraphQL call.
+  #
+  # The fixture stays in `item-list` shape, so `boarded` below and every
+  # assertion are unchanged. The row matching the number the query asked for is
+  # reshaped into what that query returns — and `isArchived: false` with the
+  # board's own project id, because the lookup filters on both and a fixture
+  # that omitted them would answer *not on the board* for every case here.
+  "api graphql")
+    n=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -F) case "$2" in n=*) n=${2#n=} ;; esac; shift 2 ;;
+        *)  shift ;;
+      esac
+    done
+    jq --argjson n "${n:-0}" --arg project "$PROJECT_ID" '
+      {data:{repository:{issue:{
+        state:"OPEN",
+        projectItems:{nodes:[ .items[]
+          | select(.content.number == $n)
+          | {id:.id, isArchived:false, project:{id:$project},
+             fieldValueByName:{name:.status}} ]}}}}}' \
+      "$GH_FIXTURES/board" 2>/dev/null ;;
   "project item-edit")
     if [ -s "$GH_FIXTURES/edit_fails" ]; then
       echo "HTTP 401: Bad credentials" >&2
