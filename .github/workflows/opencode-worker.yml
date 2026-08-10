@@ -1206,6 +1206,24 @@ jobs:
 
           excerpt=$(bash .github/scripts/opencode-worker.sh excerpt "$FAILURE_DIR/output")
 
+          # ## A refusal that names a rule rather than the issue (`#250`)
+          #
+          # `kolonie-infra#107` was taken three times in eighty minutes on
+          # 2026-08-09 and refused identically each time: its only possible
+          # implementation was a workflow, and this worker may not write one.
+          # **The worker was right every time.** What was missing was upstream —
+          # nothing could say *this is not the worker's to do*, so the only thing
+          # that discovered it was the worker, repeatedly.
+          #
+          # Read off the refusal the model already wrote, not guessed from the
+          # issue's text. The model has read the issue, decided, and named the
+          # rule; there is nothing left to classify.
+          forbidden=""
+          if [ "$kind" = refused ]; then
+            forbidden=$(bash .github/scripts/opencode-worker.sh worker-rule-refusal "$FAILURE_DIR/output")
+            [ -z "$forbidden" ] || echo "the refusal names \`$forbidden\`, which this worker may not touch"
+          fi
+
           # ## The model reads its own red check (`#254`, 2026-08-10)
           #
           # The maintainer, 2026-08-10: *"es wäre praktisch, wenn opencode bevor
@@ -1307,6 +1325,7 @@ jobs:
             echo "verdict<<$d"; echo "$verdict"; echo "$d"
             echo "excerpt<<$d"; echo "$excerpt"; echo "$d"
             echo "account<<$d"; echo "$account"; echo "$d"
+            echo "forbidden=$forbidden"
           } >> "$GITHUB_OUTPUT"
 
           # `$GITHUB_STEP_SUMMARY` renders at the top of the run page, which is
@@ -1356,6 +1375,7 @@ jobs:
           VERDICT: ${{ steps.why.outputs.verdict }}
           EXCERPT: ${{ steps.why.outputs.excerpt }}
           ACCOUNT: ${{ steps.why.outputs.account }}
+          FORBIDDEN: ${{ steps.why.outputs.forbidden }}
         run: |
           set -uo pipefail
 
@@ -1450,8 +1470,22 @@ jobs:
           # **Both edits in one call.** Two would leave a window in which the
           # issue carries neither, and a board read landing in it would show a
           # failure as an ordinary untried issue.
-          if gh issue edit "$ISSUE" --repo "$REPO" \
-               --remove-label agent:opencode --add-label opencode:failed >/dev/null 2>&1; then
+          #
+          # ## And one refusal that must not invite another attempt (`#250`)
+          #
+          # Everything above is built on *put the label back and it rejoins the
+          # queue*, which is right for every ending but one. An issue whose only
+          # possible implementation is a path this worker is forbidden to write
+          # does not become possible by being retried, and the comment inviting a
+          # retry is what produced three identical refusals on
+          # `kolonie-infra#107`. So that case gets `opencode:forbidden` as well,
+          # which `pick` excludes **whatever the queue label says** — a person
+          # putting `agent:opencode` back is no longer enough, and changing the
+          # issue is what it takes.
+          labels=(--remove-label agent:opencode --add-label opencode:failed)
+          [ -z "${FORBIDDEN:-}" ] || labels+=(--add-label opencode:forbidden)
+
+          if gh issue edit "$ISSUE" --repo "$REPO" "${labels[@]}" >/dev/null 2>&1; then
             removed=yes
           else
             removed=no
@@ -1459,7 +1493,11 @@ jobs:
 
           {
             echo
-            if [ "$removed" = yes ]; then
+            if [ "$removed" = yes ] && [ -n "${FORBIDDEN:-}" ]; then
+              echo "**This is not the worker's to do, and \`opencode:forbidden\` now says so.** The refusal above names \`${FORBIDDEN}\`, which this worker's own prompt forbids it to edit — a worker that could change its own permissions, schedule and guard rails in a run nobody is watching would be a worse thing than a queue that occasionally holds an issue it cannot take. The refusal is correct and a fourth attempt would produce the same words."
+              echo
+              echo "So this one is **out of the queue until a person changes something**, and putting \`agent:opencode\` back is deliberately not enough: \`pick\` excludes \`opencode:forbidden\` whatever else the issue carries. What unblocks it is a decision — someone implements it by hand, or the issue is respecified as something that does not need that path, or the rule itself changes. Remove \`opencode:forbidden\` when one of those has happened. \`AGENTS.md\` §5 is where the entry condition is written down."
+            elif [ "$removed" = yes ]; then
               echo "**The \`agent:opencode\` label has been removed and \`opencode:failed\` set**, so the worker will not take this again on its own and the board still says it was tried. That is not a verdict on the issue: put \`agent:opencode\` back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue. \`opencode:failed\` clears itself when the issue is taken again."
             else
               echo "**The labels could not be edited**, so this issue is still queued and may be taken again on the next run, and the board does not record that it was tried. That is a defect in this worker rather than a decision about the issue, and \`kolonie-docs#142\` is where it goes."

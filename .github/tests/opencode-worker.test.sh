@@ -211,6 +211,30 @@ boarded "10:Ready"
 out=$(bash "$SCRIPT" pick 2>/dev/null)
 check "exactly one issue is taken per run" "1" "$(grep -c . <<<"$out")"
 
+# `#250`: the one mark a person putting `agent:opencode` back does not undo.
+# `kolonie-infra#107` was taken three times in eighty minutes and refused in the
+# same words each time, because nothing could say *this is not the worker's*.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:forbidden" \
+       "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+boarded "10:Ready" "11:Ready"
+check "an issue the worker may not implement is out of the queue" "$(q 11)" \
+  "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:forbidden"
+boarded "10:Ready"
+check "even when it is the only thing queued and in Ready" "" \
+  "$(bash "$SCRIPT" pick 2>/dev/null)"
+
+# `opencode:failed` is the reversible one and must stay reversible: it says
+# *tried and not finished*, and putting the queue label back is the whole design.
+case_setup
+issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:failed"
+boarded "10:Ready"
+check "a merely failed issue is still takeable, which is the difference" "$(q 10)" \
+  "$(bash "$SCRIPT" pick 2>/dev/null)"
+
 echo
 echo "claiming, and the token that stopped working"
 
@@ -898,6 +922,47 @@ check "and exits 0" "0" "$rc"
 contains "and says why it continued" "the claim is the real lock" "$(cat "$WORK/err")"
 
 echo
+echo "a refusal that names a rule rather than the issue (#250)"
+
+case_setup
+cat > "$WORK/refusal-rule.txt" <<'DOC'
+Issue #107 cannot be implemented as specified under this run's binding rule that
+.github/workflows/ must not be edited.
+DOC
+check "a refusal naming the workflow path is recognised" ".github/workflows/" \
+  "$(bash "$SCRIPT" worker-rule-refusal "$WORK/refusal-rule.txt" 2>/dev/null)"
+
+case_setup
+printf 'This needs a change to opencode.json, which I may not edit.\n' > "$WORK/refusal-config.txt"
+check "and so is the other one" "opencode.json" \
+  "$(bash "$SCRIPT" worker-rule-refusal "$WORK/refusal-config.txt" 2>/dev/null)"
+
+# The distinction this whole issue turns on: a refusal about the *issue* may
+# not recur, and must keep the ordinary "put the label back" ending.
+case_setup
+cat > "$WORK/refusal-issue.txt" <<'DOC'
+The issue asks for a decision I cannot take: it does not say which of the two
+schemas the migration should target, and both are defensible.
+DOC
+check "a refusal about the issue is not a worker-rule refusal" "" \
+  "$(bash "$SCRIPT" worker-rule-refusal "$WORK/refusal-issue.txt" 2>/dev/null)"
+
+case_setup
+out=$(bash "$SCRIPT" worker-rule-refusal "$WORK/there-is-no-refusal" 2>/dev/null); rc=$?
+check "no refusal file is not an error" "0" "$rc"
+check "and names nothing" "" "$out"
+
+# The rule lives in three places — the model's prompt, this script and AGENTS.md
+# §5 — and the whole point of `#250` is that the labeller reads the third. Two
+# of them drifting apart is how the rule stops being applied.
+for path in ".github/workflows/" "opencode.json"; do
+  contains "AGENTS.md names \`$path\` as forbidden to the worker" \
+    "$path" "$(awk '/What has to be true before you apply it/,/#### The order it takes them in/' "$ROOT/AGENTS.md")"
+  contains "and the prompt the model is given names it too" \
+    "$path" "$(grep -A 3 'Do not edit' "$ROOT/.github/workflows/opencode-worker.yml")"
+done
+
+echo
 echo "the pull requests that cannot merge (#256)"
 
 # The fixtures are the *output* of the `--jq` the stub ignores, as everywhere
@@ -1292,6 +1357,24 @@ contains "and the attribution says it did not read the diff" \
   "it did not review the diff" "$wf"
 # The refusal is the artefact and a paraphrase of it is a loss, so the account
 # must not be produced on that ending. `kind` is the only thing separating them.
+# `#250`: the backstop, and the one ending that does not invite another attempt.
+contains "a refusal is checked against the worker's own rules" \
+  "worker-rule-refusal" "$why_step"
+contains "and only a refusal is" '"$kind" = refused' "$why_step"
+contains "a worker-rule refusal marks the issue" "--add-label opencode:forbidden" "$wf_commands"
+contains "and the comment says a fourth attempt would produce the same words" \
+  "would produce the same words" "$wf"
+contains "and says what actually unblocks it" \
+  "out of the queue until a person changes something" "$wf"
+# The exclusion is in `pick`'s own filter rather than in the search query, so a
+# label somebody re-applies cannot put the issue back in the queue. The
+# behavioural cases above prove the effect; this proves it is where it has to be.
+contains "the exclusion is in the queue filter, not in the search term" \
+  'index($forbidden) | not' "$(cat "$SCRIPT")"
+# It is set and never cleared by the worker: every other mark here has a run
+# that clears it, and this one is a person's to remove.
+absent "the worker never clears it for you" "--remove-label opencode:forbidden" "$wf_commands"
+
 refusal_guarded=$(grep -c 'kind" = work' <<<"$why_step")
 if [ "$refusal_guarded" -ge 1 ]; then
   echo "  ok   a refusal keeps its own words, unsummarised"

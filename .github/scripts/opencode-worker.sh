@@ -89,6 +89,30 @@ STATUS_IN_REVIEW=${STATUS_IN_REVIEW:-d66d01e2}
 
 ORG=${ORG:-Kolonie-AI}
 QUEUE_LABEL=${QUEUE_LABEL:-agent:opencode}
+
+# The mark on an issue whose implementation the worker is **not permitted** to
+# write, as opposed to one it merely failed at (`#250`).
+#
+# `opencode:failed` says *tried and not finished*, and its whole design is that a
+# person can put `agent:opencode` back and get another attempt. That is the right
+# default and it is wrong for exactly one case: an issue whose only possible
+# implementation is a path the worker's own prompt forbids. `kolonie-infra#107`
+# was taken three times in eighty minutes on 2026-08-09 and refused identically
+# each time. **The worker was right every time** — the rule is load-bearing, and
+# a worker that could edit `.github/workflows/` could change its own permissions,
+# schedule and guard rails in a run nobody is watching. What was wrong was
+# upstream: nothing in the queue could say *this cannot be done here*, so the
+# only thing that could discover it was the worker, repeatedly.
+#
+# An issue carrying this is out of the queue whatever its labels say. It comes
+# off when a person changes something about the issue, which is the point.
+FORBIDDEN_LABEL=${FORBIDDEN_LABEL:-opencode:forbidden}
+
+# The two paths the worker's prompt forbids it to touch. Named here so that a
+# refusal quoting one is machine-distinguishable from a refusal about the issue,
+# and so that AGENTS.md §5 and this file cannot drift apart silently — the test
+# asserts both carry both.
+FORBIDDEN_PATHS=${FORBIDDEN_PATHS:-.github/workflows/ opencode.json}
 RUN_URL=${RUN_URL:-}
 
 # How many labelled issues the search returns before the ordering runs. The
@@ -469,6 +493,28 @@ redact_from() {
   printf '%s\n' "$out"
 }
 
+# Which forbidden path a refusal named, or nothing (`#250`).
+#
+# ## Why this reads the refusal and not the issue
+#
+# `#250` refuses a scanner that guesses from an issue's text whether it needs a
+# workflow edit: *"a classifier with a false-negative cost measured in wasted
+# runs and a false-positive cost measured in work never attempted"*. This is the
+# other end of the run and a different question. The model has already read the
+# issue, already decided, and already written down which rule stopped it — so
+# there is nothing to guess. A refusal naming `.github/workflows/` will recur
+# identically for as long as the rule holds; one naming the issue may not.
+worker_rule_refusal() {
+  local file=$1 path
+  [ -f "$file" ] || return 0
+  for path in $FORBIDDEN_PATHS; do
+    if grep -qF -- "$path" "$file"; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+}
+
 failed_step() {
   local repo=${GITHUB_REPOSITORY:-} run=${GITHUB_RUN_ID:-}
   [ -n "$repo" ] && [ -n "$run" ] || return 0
@@ -813,9 +859,14 @@ case "${1:-}" in
     # number alone lets `kolonie-platform#204` decide whether `kolonie-docs#204`
     # is in Ready. Now that the search is organisation-wide this is no longer a
     # latent defect: the candidate set genuinely contains several repositories.
-    selection=$(jq -r --slurpfile board "$board_file" '
+    # **`opencode:forbidden` is excluded here and not by the search**, so that
+    # an issue carrying it is out of the queue even when somebody has put
+    # `agent:opencode` back — which is exactly the case `#250` is about, and the
+    # case a search term the labeller can overwrite would not cover.
+    selection=$(jq -r --arg forbidden "$FORBIDDEN_LABEL" --slurpfile board "$board_file" '
       [ .[]
         | select([.labels[].name] | index("blocked:human") | not)
+        | select([.labels[].name] | index($forbidden) | not)
         | { repo: .repository.nameWithOwner,
             number: .number,
             createdAt: .createdAt,
@@ -917,6 +968,11 @@ case "${1:-}" in
     exit 0
     ;;
 
+  worker-rule-refusal)
+    worker_rule_refusal "${2:?worker-rule-refusal needs a file to read}"
+    exit 0
+    ;;
+
   failure-digest)
     failure_digest_from "${2:?failure-digest needs a file to read}"
     exit 0
@@ -989,6 +1045,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
+    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
     ;;
 esac

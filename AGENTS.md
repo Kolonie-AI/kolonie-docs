@@ -572,6 +572,37 @@ looking like a live part of the process for two months (`kolonie-docs#4`).
 > **`agent:opencode` is queue membership. It is not a status and it is not a
 > trigger.**
 
+#### What has to be true before you apply it
+
+> **The label says two things, not one: this issue is specified well enough to be
+> done unattended, *and* its implementation is something the worker is permitted
+> to do.** The worker may not edit **`.github/workflows/`** or
+> **`opencode.json`**. An issue whose only possible implementation touches either
+> is not a candidate, however well specified it is.
+
+**The second half was missing until `kolonie-docs#250`, and the cost of leaving it
+unwritten was measured.** `kolonie-infra#107` asks for something that reacts to
+each deploy run's result, remembers consecutive results, and writes and closes
+issues — there is no implementation of that which is not a workflow. It was
+labelled by the maintainer agent, which knew the worker's rules and did not check
+this one against them, and three runs on 2026-08-09 took it and refused it in the
+same words. **The worker was right every time**: the rule is in its own prompt and
+it is load-bearing, because a worker that could edit `.github/workflows/` could
+change its own permissions, its own schedule and its own guard rails in a run
+nobody is watching.
+
+**The queue could not express *this cannot be done here*, so the only thing that
+discovered it was the worker, three times.** That is what this paragraph fixes,
+and it is why the rule is written where the labeller reads rather than only in the
+prompt the labeller never sees.
+
+**And a refusal that names one of those paths now marks the issue**
+(`opencode:forbidden`, below) rather than inviting a fourth attempt. That is the
+backstop; this paragraph is the fix. **What neither is: a scanner that guesses
+from an issue's text whether it needs a workflow edit.** That is a classifier
+whose false negatives cost wasted runs and whose false positives cost work never
+attempted, against a rule a person can apply in one line.
+
 The distinction is the whole of it and is worth reading twice, because the
 obvious reading is wrong in both halves:
 
@@ -596,6 +627,19 @@ obvious reading is wrong in both halves:
   finish.** It is set on failure and cleared on the next attempt rather than on
   success, because an issue being tried again is exactly when *not finished*
   stops being true.
+- **Except once, and that once is not reversible by a label.**
+  **`opencode:forbidden`** (`kolonie-docs#250`) is set when the model's refusal
+  names one of the two paths the worker may not touch, and `pick` excludes it
+  **whatever else the issue carries** — putting `agent:opencode` back is
+  deliberately not enough. Every other ending is built on *try again if you
+  think it is worth it*; this one is not, because an issue whose only possible
+  implementation is structurally forbidden does not become possible by being
+  retried.
+
+  What clears it is a person changing something: implementing it by hand,
+  respecifying it as something that does not need that path, or changing the
+  rule. **Then remove the label.** It is the only one of the three the worker
+  never clears for you.
 - **Not a trigger.** `.github/workflows/opencode-worker.yml` runs on a
   **schedule** and takes exactly one issue an hour. It does not run on
   `issues: [labeled]`, deliberately: labelling five issues would start five runs
@@ -666,6 +710,9 @@ and an agent should have a basis for answering rather than a feeling:
 - with a check that fails clearly when the change is wrong
 - **not** a decision, not money, keys or governance, and not anything carrying
   `blocked:human`
+- **and implementable without touching `.github/workflows/` or `opencode.json`**
+  — the entry condition above, and the one of these that is checked against the
+  worker's rules rather than against the issue's quality
 
 **That last line is not a new rule.** It is the seven classes above, applied to a
 queue nobody supervises in real time. An issue in any of them is out of scope by
@@ -681,12 +728,12 @@ repository in the organisation: it was the single one, which meant
 repository however it searched. It now exists in the five that carry issues *on
 the board*:
 
-| Repository | `agent:opencode` | `opencode:failed` |
-|---|---|---|
-| `kolonie-docs` | yes, since 2026-08-04 | yes, 2026-08-10 |
-| `kolonie-platform`, `kolonie-infra`, `kolonie-website` | yes, created 2026-08-08 | yes, 2026-08-10 |
-| `kolonie-email` | yes, created 2026-08-08 | yes, 2026-08-10 |
-| the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** | — |
+| Repository | `agent:opencode` | `opencode:failed` | `opencode:forbidden` |
+|---|---|---|---|
+| `kolonie-docs` | yes, since 2026-08-04 | yes, 2026-08-10 | yes, 2026-08-10 |
+| `kolonie-platform`, `kolonie-infra`, `kolonie-website` | yes, created 2026-08-08 | yes, 2026-08-10 | yes, 2026-08-10 |
+| `kolonie-email` | yes, created 2026-08-08 | yes, 2026-08-10 | yes, 2026-08-10 |
+| the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** | — | — |
 
 **`opencode:failed` has to exist in the target repository, not here.** The worker
 sets it on the issue it took, wherever that lives, so a repository in the queue
