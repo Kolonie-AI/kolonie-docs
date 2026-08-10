@@ -952,6 +952,56 @@ check "a count that cannot be read is zero, not a failure" \
 unset GITHUB_RUN_ID
 
 echo
+echo "the one diff that does not merge itself (#263)"
+
+# Auto-merge stays on. A migration is the exception, because `deploy.sh` applies
+# it before the new image is healthy — so it has run against production by the
+# time anybody reads the diff, and being wrong costs a restore.
+case_setup
+cat > "$WORK/changed" <<'FILES'
+apps/api/src/routes/agent.ts
+packages/db/drizzle/0198_add_column.sql
+packages/db/schema.ts
+FILES
+check "a migration in the diff holds the pull request back" \
+  "packages/db/drizzle/0198_add_column.sql" \
+  "$(bash "$SCRIPT" merge-gate "$WORK/changed" 2>/dev/null)"
+
+# `packages/db/` is not the gate and neither is a mention of it further along a
+# path. The prefix matches at the start, or it does not match.
+case_setup
+cat > "$WORK/changed" <<'FILES'
+packages/db/schema.ts
+apps/api/src/packages/db/drizzle/note.md
+docs/packages/db/drizzle.md
+FILES
+check "everything else merges exactly as it did" "" \
+  "$(bash "$SCRIPT" merge-gate "$WORK/changed" 2>/dev/null)"
+
+case_setup
+cat > "$WORK/changed" <<'FILES'
+packages/db/drizzle/0198_add_column.sql
+packages/db/drizzle/meta/_journal.json
+FILES
+check "and every gated file is named, not just the first" \
+  "packages/db/drizzle/0198_add_column.sql packages/db/drizzle/meta/_journal.json" \
+  "$(bash "$SCRIPT" merge-gate "$WORK/changed" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+
+case_setup
+: > "$WORK/changed"
+out=$(bash "$SCRIPT" merge-gate "$WORK/changed" 2>/dev/null); rc=$?
+check "an empty diff gates nothing" "" "$out"
+check "and that is not an error" "0" "$rc"
+
+# A list that is not there is a question that was not answered, and answering
+# *nothing is gated* to it would merge a migration unread.
+case_setup
+rm -f "$WORK/missing"
+out=$(bash "$SCRIPT" merge-gate "$WORK/missing" 2>"$WORK/err"); rc=$?
+check "a list that cannot be read fails rather than merging" "1" "$rc"
+contains "and says what it wanted" "listing the changed paths" "$(cat "$WORK/err")"
+
+echo
 echo "an issue that waits for another one (#261)"
 
 # `kolonie-platform#660` reads a contract field `#659` creates. It was written in
@@ -1403,6 +1453,18 @@ absent "and no force-with-lease either" "force-with-lease" "$wf_commands"
 contains "auto-merge is queued, never waited on" "--auto --squash" "$wf"
 contains "and it is gated on the target having a required check" \
   "branches/main/protection" "$wf"
+
+# `#263`: the gate is asked *before* auto-merge is enabled, and a gated pull
+# request says so on the issue. Neither can be executed by a test — this is the
+# `run:` block the whole script exists to keep logic out of — so what is asserted
+# is that the workflow asks the script rather than deciding for itself, and that
+# the enabling branch is reached only when nothing is gated.
+contains "the workflow asks the script which changes are gated" \
+  "opencode-worker.sh merge-gate" "$wf_commands"
+contains "and enables auto-merge only when nothing is" \
+  'if [ -n "$gated" ]; then' "$wf_commands"
+contains "and the issue is told rather than left to a reader of the pull request" \
+  "does not merge itself, because it changes a schema migration" "$wf"
 
 # `#245`: the two places a failure is announced both have to carry the reason.
 # Neither can be executed by a test, so both are asserted on the file.
