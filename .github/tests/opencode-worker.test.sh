@@ -45,7 +45,75 @@ case "$1 $2" in
       exit 1
     fi
     cat "$GH_FIXTURES/runs" 2>/dev/null ;;
-  "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
+  # ## The board is read over GraphQL now (`#269`), and the fixture did not change
+  #
+  # `boarded` still writes what `gh project item-list --format json` returned,
+  # because that is the shape the cases are written in and the shape
+  # `board_read` still emits. This case translates it into the two API answers
+  # the script now asks for, so the tests describe what the worker does with the
+  # board rather than which call it made to get it.
+  #
+  # The board fixture is the whole board, so `hasNextPage` is false: pagination
+  # is exercised against the live API in `#269`, not here, and a stub that
+  # pretended to paginate would only be testing itself.
+  "api graphql")
+    query=""; owner=""; name=""; number=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -f|-F)
+          case "$2" in
+            query=*)  query=${2#query=} ;;
+            owner=*)  owner=${2#owner=} ;;
+            name=*)   name=${2#name=} ;;
+            number=*) number=${2#number=} ;;
+          esac
+          shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    # **An empty fixture is an unreadable board, not an empty one** — an empty
+    # board is `{"items":[]}` and the cases that mean that write it. `cat` of an
+    # empty file used to produce this, caught downstream by `[ -s ]`; over
+    # GraphQL the same thing is a call that fails, so it fails here. Answering
+    # `[]` instead would erase the distinction `pick` exists to draw.
+    if [ ! -s "$GH_FIXTURES/board" ]; then
+      echo "GraphQL: API rate limit exceeded for user ID 1" >&2
+      exit 1
+    fi
+
+    case "$query" in
+      # One issue's card, asked from the issue's side. `isArchived` is false
+      # because nothing in the fixture is archived; the live query filters on it
+      # and the reason is in the script.
+      *projectItems*)
+        jq -c --arg repo "$owner/$name" --argjson n "${number:-0}" '
+          { data: { repository: { issue: { projectItems: { nodes:
+            [ .items[]
+              | select(.content.repository == $repo and .content.number == $n)
+              | { id: .id,
+                  isArchived: false,
+                  project: { id: "PVT_kwDOEmwuYs4BebbB" },
+                  fieldValueByName: { name: .status } } ] } } } } }
+        ' "$GH_FIXTURES/board"
+        ;;
+      *)
+        jq -c '
+          { data: { organization: { projectV2: { items: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [ .items[]
+              | { id: .id,
+                  fieldValueByName: { name: .status },
+                  content: { number: .content.number,
+                             title: .content.title,
+                             url: ("https://github.com/\(.content.repository)/issues/\(.content.number)"),
+                             repository: { nameWithOwner: .content.repository,
+                                           url: ("https://github.com/\(.content.repository)") },
+                             labels: { nodes: [ (.labels // [])[] | { name: . } ] } } } ] } } } } }
+        ' "$GH_FIXTURES/board"
+        ;;
+    esac
+    ;;
   # **The board write moves the board** (`#266`). It used to do nothing at all,
   # which was enough while `claim` never read what it had written — and would
   # have made the read-back it now does either always pass or always fail,

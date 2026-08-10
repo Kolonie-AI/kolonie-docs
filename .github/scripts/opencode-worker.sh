@@ -255,32 +255,45 @@ GRAPHQL
 # site and no filter has to be re-read to be trusted. `labels` and the urls cost
 # nothing to ask for — a page is a point with them or without — so they are here
 # rather than left out to be added back by whoever needs them next.
+# **The pages accumulate in a file and never on a command line** (`#142`). The
+# first draft of this held the running board in a shell variable and passed it to
+# the next page's `jq` with `--argjson`, which is exactly the defect `#142` spent
+# three days finding: Linux caps a single argument at 128 KiB whatever `ARG_MAX`
+# says, the board is larger than that, and `jq` exits with `Argument list too
+# long` — after which `pick` prints nothing and the run reports an empty queue.
+# The test for that case caught this before it shipped. A here-string is fine,
+# because it is a pipe rather than an argument.
 board_read() {
-  local after="" page items="[]"
+  local after="" page pages rc=0
+  pages=$(mktemp) || return 1
   while :; do
     page=$(gh api graphql -f query="$BOARD_QUERY" -f org="$ORG" \
-             -F project="$BOARD_PROJECT" ${after:+-f after="$after"}) || return 1
+             -F project="$BOARD_PROJECT" ${after:+-f after="$after"}) || { rc=1; break; }
     # Draft items and pull requests have no `number`: the fragment matches only
     # an Issue, so anything else arrives as an empty object. Dropping them here
     # saves every caller from having to.
-    items=$(jq -c --argjson acc "$items" '
-      $acc + [ .data.organization.projectV2.items.nodes[]
-               | select(.content.number != null)
-               | { id: .id,
-                   status: (.fieldValueByName.name // ""),
-                   title: .content.title,
-                   labels: [ .content.labels.nodes[].name ],
-                   repository: .content.repository.url,
-                   content: { number: .content.number,
-                              title: .content.title,
-                              repository: .content.repository.nameWithOwner,
-                              url: .content.url,
-                              type: "Issue" } } ]
-    ' <<<"$page") || return 1
+    jq -c '
+      [ .data.organization.projectV2.items.nodes[]
+        | select(.content.number != null)
+        | { id: .id,
+            status: (.fieldValueByName.name // ""),
+            title: .content.title,
+            labels: [ .content.labels.nodes[].name ],
+            repository: .content.repository.url,
+            content: { number: .content.number,
+                       title: .content.title,
+                       repository: .content.repository.nameWithOwner,
+                       url: .content.url,
+                       type: "Issue" } } ]
+    ' <<<"$page" >>"$pages" || { rc=1; break; }
     [ "$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$page")" = true ] || break
     after=$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor' <<<"$page")
   done
-  jq -n --argjson items "$items" '{items: $items}'
+  if [ "$rc" -eq 0 ]; then
+    jq -s '{items: (add // [])}' "$pages" || rc=1
+  fi
+  rm -f "$pages"
+  return "$rc"
 }
 
 # One issue's board item, without reading the board.

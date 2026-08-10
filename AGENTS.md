@@ -1148,11 +1148,13 @@ every column change is GraphQL, and the budget is **per user**, so two agents
 share one and neither can see what the other spent. When it runs out both stop,
 and the error names a user id rather than a cause.
 
-So the archive is not merely about tidiness, and `--limit` is not free. What is
-true instead is measured under
-[What a board read costs](#what-a-board-read-costs), and it changes what the
-queries above should look like rather than whether the arrangement here is
-right.
+**That was the position until 2026-08-10 and the measurement has moved out from
+under it.** A board read is 2 points rather than 203 once the query asks for the
+five fields it uses, so the budget is no longer close to binding and the archive
+window is not load-bearing for it: 77 archived cards were saving under a point.
+§6 has the arithmetic. The window still earns its keep by keeping the board
+readable to a person, which is what it was for before the cost argument was
+attached to it.
 
 **The one thing that reverses this** is the window having to be authoritative in
 Git rather than observed in a UI. `kolonie-docs#55` is closed on the reasoning
