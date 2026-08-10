@@ -432,7 +432,7 @@ apply_one() {
   local blocker linked=""
   for blocker in $depends; do
     [ -n "$blocker" ] || continue
-    if link_blocker "$repo" "$number" "$blocker"; then
+    if link_blocker "$repo" "$number" "$blocker" "$candidates" "$labels"; then
       linked+="$blocker "
       said+=("blocked by $blocker")
     fi
@@ -564,7 +564,7 @@ route_rank() {
 # The dependency, as the relation `#261` made readable. Prose in a body is what
 # `kolonie-platform#660` cost, so triage records the relation or records nothing.
 link_blocker() {
-  local repo=$1 number=$2 blocker=$3
+  local repo=$1 number=$2 blocker=$3 candidates=${4:-} labels=${5:-}
   local blocker_repo blocker_number blocker_id state
 
   blocker_repo=${blocker%#*}
@@ -592,6 +592,27 @@ link_blocker() {
   # dependency to learn something the write says by itself. Either way nothing
   # changed, so neither is reported: an hourly comment saying a link that was
   # already there is still there is the noise `#262` refuses.
+  # ## Two findings from one watcher are siblings, not a sequence
+  #
+  # Measured 2026-08-10: the pass linked `kolonie-docs#241` → `#242` → `#243` —
+  # `api`, `postgres` and `traefik` each logging something they do not normally log,
+  # three independent findings from one watcher run — and took all three out of
+  # Ready. Nothing in one of them is created by another, and a watcher finding never
+  # creates what another needs: it reports. So a link between two `from:watcher`
+  # issues is refused here rather than argued with hourly.
+  if [ -n "$candidates" ] && case " $labels " in *" from:watcher "*) true ;; *) false ;; esac; then
+    local blocker_labels
+    blocker_labels=$(jq -r --arg repo "$blocker_repo" --argjson n "$blocker_number" \
+      '[.index[] | select(.repo == $repo and .number == $n) | .labels[]] | join(" ")' \
+      "$candidates" 2>/dev/null)
+    case " $blocker_labels " in
+      *" from:watcher "*)
+        note "$repo#$number and $blocker_repo#$blocker_number are both watcher findings — siblings from one run, not a dependency. Not linked."
+        return 1
+        ;;
+    esac
+  fi
+
   # **A mutual dependency is a deadlock, not a relation.** Two issues each waiting
   # for the other are both permanently out of the queue, and nothing on the board
   # would say why. The model has proposed a pair once already, on 2026-08-10, in a

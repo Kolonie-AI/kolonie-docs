@@ -58,7 +58,10 @@ before it can be specified.
 board can make, and it is the one that stops a worker taking work that cannot be \
 finished. An issue whose body mentions a number is not thereby dependent on it: \
 the test is whether this issue needs something that issue creates. Never name a \
-pair that waits for each other — that leaves both out of the queue for ever.
+pair that waits for each other — that leaves both out of the queue for ever. And \
+**two findings from the same watcher run are siblings, not a sequence**: three \
+services each logging something unusual are three reports, and a report creates \
+nothing another one needs.
 5. **ready** — true if it can be picked up now, false if it should stay in Inbox.
 
 And **reason** — one sentence, for a person reading the issue later. Say what \

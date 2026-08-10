@@ -474,6 +474,21 @@ log=$(cat "$GH_LOG")
 absent "an opinion does not take a card out of Ready" "single-select-option-id b14e3c08" "$log"
 absent "and says nothing, because nothing changed" "issue comment" "$log"
 
+# Measured 2026-08-10: the pass linked three independent watcher findings — `api`,
+# `postgres` and `traefik` each logging something unusual — into a chain, and took
+# all three out of Ready. A watcher reports; it creates nothing another one needs.
+case_setup
+searched "$(issue 900 'api is logging errors' 'from:watcher agent:claude')" \
+  "$(issue 800 'postgres is logging errors' 'from:watcher agent:claude')"
+boarded "900|Ready|from:watcher agent:claude" "800|Ready|from:watcher agent:claude"
+cat > "$GH_FIXTURES/issue_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
+{"id": 55500, "state": "open"}
+JSON
+run_apply "$(decided 900 "agent:claude" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "two watcher findings are not linked to each other" "--method POST" "$log"
+contains "and the run says they are siblings" "siblings from one run" "$(cat "$WORK/stderr")"
+
 echo
 echo "what stays in Inbox"
 
