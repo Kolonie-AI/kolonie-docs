@@ -21,6 +21,62 @@ entry, the positional cross-references in the prose are yours to re-check.
 
 ---
 
+## 2026-08-10 — The drift watcher died at the moment it had something to report
+
+**What happened.** `health-watch.yml` in `kolonie-infra` failed on every run from
+2026-08-09 08:02 and nothing said so. The failing step is *Compare what is running
+against what was last built*; the two steps after it — the drift report and the
+whole pin check — were skipped on every run, while the health step above it kept
+succeeding and kept its own issue up to date. The workflow looked like a working
+watcher for a day and a half. It was found by looking, while answering an
+unrelated question about host monitoring (`kolonie-infra#104`).
+
+What it was not reporting, meanwhile: `Build and deploy` in `kolonie-platform`
+had failed on **every run since 2026-08-10 05:23** — twenty of them, each having
+built and pushed its images first — leaving the host 24 builds behind. The fix
+merged at about 22:45 and the watcher filed that report at **22:51:02**, on its
+first run afterwards. The deploys began failing at 05:23, so the board learned of
+it seventeen and a half hours later.
+
+**What actually caused it.** Four lines of shell, and not a script. GitHub runs a
+`run:` block through `/usr/bin/bash -e`, and the step read:
+
+```bash
+set -uo pipefail
+./scripts/drift-triage.sh < revisions.out > drift.md 2> drift-verdict.env
+status=$?
+```
+
+`set -uo pipefail` does not unset `-e` — omitting `-e` from a `set` line never
+could — so the step ended on the script's first non-zero exit and `status=$?`
+never ran. And `drift-triage.sh` **reports drift by exiting 1**: its own header
+says so, and `rehearse-drift.sh` has asserted it the whole time. The step was
+written to tell 0, 1 and 2 apart and could only ever see 0.
+
+So it worked for as long as there was nothing to say, and stopped on the first
+day there was. The pin step below it carried the identical defect and had never
+shown it, because the drift step dies first: one broken watcher was reported and
+there were two.
+
+**What changed.** Both calls take `|| status=$?`. The workflow now files a `p1`
+issue on `if: failure()` naming the run and closes it on the first run that
+reaches the end — the steps report what they *find*, and nothing reported that
+they had not run. And `rehearse-watch-wiring.sh` checks the wiring rather than the
+scripts, proved against the pre-fix file rather than reasoned about.
+
+**The lesson.** **A monitor that signals a finding by its exit status will be
+killed by `set -e` exactly when it has a finding.** The two meanings of a non-zero
+exit — *I found something* and *I could not run* — are indistinguishable to the
+shell, and the failure is silent, one-sided and worst on the day it matters.
+Anything that reads an exit status must capture it explicitly.
+
+There is a second one, and it is the more expensive. **Every script here was
+rehearsed and correct; nothing tested the four lines that call them.** A test
+suite that stops at the module boundary leaves the wiring as the only untested
+part of the system, and the wiring is where a monitor is armed.
+
+---
+
 ## 2026-08-06 — A stalled deploy reached us as a citizen reporting that tools had been removed
 
 **What happened.** A GitHub Actions outage from roughly 15:19Z meant no job was
