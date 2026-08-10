@@ -50,18 +50,24 @@ name: opencode worker
 
 on:
   schedule:
-    # Every twenty minutes, at :00, :20 and :40 — the maintainer's cadence,
-    # 2026-08-09, once the worker had run four times end to end without a
-    # failure and the queue had grown faster than it could be emptied.
+    # Every thirty minutes, at :20 and :50 — back to where `#142` put it, after
+    # `0,20,40` was measured on 2026-08-09 and did not deliver.
     #
-    # **:00 collides with `check-red-lines` (04:00) and `board-self-check`
-    # (05:00)**, which the old `20,50` was arranged to avoid: they share one
-    # GraphQL budget, and the point was that an hour containing one of those did
-    # not spend its allowance in the same minute. Two of seventy-two runs a day
-    # now overlap. That is accepted rather than overlooked — a run whose board
-    # read is throttled exits on `pick` failing, which is loud, and the next one
-    # is twenty minutes away.
-    - cron: '0,20,40 * * * *'
+    # **Three triggers an hour produced fewer runs than two.** Between 20:12 and
+    # 23:51 UTC six runs started, averaging forty-four minutes apart and never
+    # twenty; then none at all fired between 23:51 and 00:51 while three were
+    # scheduled. GitHub delays and outright drops scheduled runs under load, and
+    # a repository asking more often appears to be asked less.
+    #
+    # So this is not a return to a slower cadence. It is the cadence that was
+    # actually running, stated honestly, and it costs nothing that the faster
+    # number was buying — because it was not buying it.
+    #
+    # `:20` and `:50` also clear `check-red-lines` (04:00) and `board-self-check`
+    # (05:00), which share one GraphQL budget: the reason `#142` chose these two
+    # minutes rather than the round ones, and which `0,20,40` gave up for a
+    # speed that never arrived.
+    - cron: '20,50 * * * *'
   workflow_dispatch:
 
 # ## There is deliberately no `concurrency` group here (2026-08-07)
@@ -371,7 +377,7 @@ jobs:
           # genuinely is not done and requeueing is right. **`worker`** means the
           # issue was never the problem — a token, a checkout, the environment,
           # the worker's own scratch files — and that one will fail the same way
-          # every twenty minutes until somebody looks.
+          # every half hour until somebody looks.
           fail() {
             printf '%s\n' "$1" > "$FAILURE_DIR/kind"
             printf '%s\n' "$2" > "$FAILURE_DIR/reason"
