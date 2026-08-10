@@ -182,15 +182,144 @@ MERGE_GATE_PATHS=${MERGE_GATE_PATHS:-packages/db/drizzle/}
 # one that drifts.
 CLAIM_MARKER=${CLAIM_MARKER:-Taken by the opencode worker}
 
-# `--limit 1000`, sized to be unreachable rather than sized to the board, for the
-# reason AGENTS.md §6 gives: `gh project item-list` fetches the limit and filters
-# *afterwards*, so a low one silently drops rows and exits zero.
-BOARD_LIMIT=${BOARD_LIMIT:-1000}
+# The project number the board is, for the two queries below. `PROJECT_ID` above
+# is the same board's node id, which is what a mutation needs and a query cannot
+# use.
+BOARD_PROJECT=${BOARD_PROJECT:-1}
 
 die() {
   echo "$1" >&2
   exit "${2:-1}"
 }
+
+# The whole board, as `{"items":[{id, status, content:{number, title,
+# repository}}]}`.
+#
+# ## Why this is not `gh project item-list`
+#
+# `gh project item-list` asks for every field of every item — body, url, type and
+# every custom field — and this script reads five of them. What a GraphQL call
+# costs is the number of nodes it asked for, so the price is set by how much is
+# wanted about each item and not by how many items there are. Measured against
+# the live board on 2026-08-10 (`#269`), 129 items:
+#
+#   gh project item-list   203 points
+#   this query               2 points
+#
+# At 203 a run spent about 812 across its four reads and six runs an hour spent
+# 4,872 of the 5,000 an account has. Runs died at `pick` with *API rate limit
+# exceeded*, which reads like a board that got too big and was a query that asked
+# for too much.
+#
+# **Filtering the finished items out is not what fixes it, and is not offered.**
+# `items` takes `first` and `after` and no filter — the web UI's column filter
+# runs in the browser. 77 of the 129 items are in Done, and at a point per
+# hundred items they are no longer worth removing.
+#
+# ## Why it paginates
+#
+# The page is 100 and the board is past it. A single page would return the first
+# hundred items and exit zero, so an issue would be missing from the queue rather
+# than the queue being missing — the quiet failure `BOARD_LIMIT` was sized to
+# prevent, arriving by a different route.
+read -r -d '' BOARD_QUERY <<'GRAPHQL' || true
+query($org: String!, $project: Int!, $after: String) {
+  organization(login: $org) {
+    projectV2(number: $project) {
+      items(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue { name }
+          }
+          content {
+            ... on Issue {
+              number
+              title
+              url
+              repository { nameWithOwner url }
+              labels(first: 20) { nodes { name } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL
+
+# **The shape is `gh project item-list --format json`'s, deliberately.** Every
+# `jq` filter in this script and the four in AGENTS.md §6 were written against
+# it, so emitting the same document means this change is one line at each call
+# site and no filter has to be re-read to be trusted. `labels` and the urls cost
+# nothing to ask for — a page is a point with them or without — so they are here
+# rather than left out to be added back by whoever needs them next.
+board_read() {
+  local after="" page items="[]"
+  while :; do
+    page=$(gh api graphql -f query="$BOARD_QUERY" -f org="$ORG" \
+             -F project="$BOARD_PROJECT" ${after:+-f after="$after"}) || return 1
+    # Draft items and pull requests have no `number`: the fragment matches only
+    # an Issue, so anything else arrives as an empty object. Dropping them here
+    # saves every caller from having to.
+    items=$(jq -c --argjson acc "$items" '
+      $acc + [ .data.organization.projectV2.items.nodes[]
+               | select(.content.number != null)
+               | { id: .id,
+                   status: (.fieldValueByName.name // ""),
+                   title: .content.title,
+                   labels: [ .content.labels.nodes[].name ],
+                   repository: .content.repository.url,
+                   content: { number: .content.number,
+                              title: .content.title,
+                              repository: .content.repository.nameWithOwner,
+                              url: .content.url,
+                              type: "Issue" } } ]
+    ' <<<"$page") || return 1
+    [ "$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$page")" = true ] || break
+    after=$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor' <<<"$page")
+  done
+  jq -n --argjson items "$items" '{items: $items}'
+}
+
+# One issue's board item, without reading the board.
+#
+# An issue can be asked what it is on directly, which is a single node and costs
+# **one point** where a board scan cost 203. `claim` and `release` both want one
+# item, so between them this is most of what `#269` was about.
+#
+# ## Two filters, and neither is optional
+#
+# **`isArchived`, because this side of the graph answers differently.** The
+# board's `items` connection omits archived cards and so did
+# `gh project item-list`; an issue's `projectItems` returns them. Done cards are
+# archived automatically, so without this filter the first thing that changed
+# would be a card nobody can see, and `release` would report a success that left
+# the board untouched. Caught on `kolonie-docs#1`, whose card is archived and
+# came back from the lookup while the board read had never heard of it.
+#
+# **The project by id and not by number.** Project numbers are per owner, so a
+# personal project 1 belonging to anyone is also `number: 1`. `PROJECT_ID` is the
+# board and nothing else is.
+read -r -d '' BOARD_ITEM_QUERY <<'GRAPHQL' || true
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      projectItems(first: 20) {
+        nodes {
+          id
+          isArchived
+          project { id }
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue { name }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL
 
 # The board item id for an issue, or nothing.
 #
@@ -199,9 +328,11 @@ die() {
 # identifier — §4 says so, and this is where it is enforced in code.
 board_item_for() {
   local repo=$1 number=$2
-  gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json |
-    jq -r --argjson n "$number" --arg repo "$repo" \
-      '.items[] | select(.content.number == $n and .content.repository == $repo) | .id' |
+  gh api graphql -f query="$BOARD_ITEM_QUERY" \
+    -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" |
+    jq -r --arg project "$PROJECT_ID" \
+      '(.data.repository.issue.projectItems.nodes // [])[]
+       | select(.project.id == $project and .isArchived == false) | .id' |
     head -1
 }
 
@@ -214,10 +345,12 @@ board_item_for() {
 # the difference matters.
 board_item_status_for() {
   local repo=$1 number=$2
-  gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json |
-    jq -r --argjson n "$number" --arg repo "$repo" \
-      '.items[] | select(.content.number == $n and .content.repository == $repo)
-       | "\(.id)\t\(.status)"' |
+  gh api graphql -f query="$BOARD_ITEM_QUERY" \
+    -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" |
+    jq -r --arg project "$PROJECT_ID" \
+      '(.data.repository.issue.projectItems.nodes // [])[]
+       | select(.project.id == $project and .isArchived == false)
+       | "\(.id)\t\(.fieldValueByName.name // "")"' |
     head -1
 }
 
@@ -990,8 +1123,8 @@ case "${1:-}" in
     # can hit. It wraps the document in an array, hence `$board[0]`.
     board_file=$(mktemp)
     trap 'rm -f "$board_file"' EXIT
-    gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json \
-      >"$board_file" || die "could not read the board, so the queue is unknown"
+    board_read >"$board_file" ||
+      die "could not read the board, so the queue is unknown"
     [ -s "$board_file" ] || die "the board came back empty, so the queue is unknown"
 
     # The ordering, and it is deterministic on purpose: two people reading the
@@ -1238,7 +1371,7 @@ case "${1:-}" in
     # is hung does not say what it was working on. The worker comments when it
     # takes an issue and when it fails, so an issue nothing has touched in
     # `FORGOTTEN_CLAIM_HOURS` has no run behind it whatever the run list says.
-    board=$(gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json) ||
+    board=$(board_read) ||
       die "could not read the board, so a forgotten claim cannot be found" 1
 
     in_progress=$(jq -r '.items[] | select(.status == "In Progress")
@@ -1360,7 +1493,16 @@ case "${1:-}" in
     exit $?
     ;;
 
+  board-read)
+    # The board as JSON, for a human or an agent working the loop in AGENTS.md
+    # §6. Nothing in this script calls it — the four internal readers call
+    # `board_read` directly — but §6 tells a reader to fetch the board once and
+    # ask it four things, and an instruction to copy a GraphQL query out of a
+    # shell script into a terminal is an instruction to get it subtly wrong.
+    board_read || die "could not read the board"
+    ;;
+
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | merge-gate <file> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

@@ -815,86 +815,55 @@ off in one step.
 
 Run these. They are the procedure, not an illustration of it.
 
-**`--limit` is load-bearing, and it is not decoration.** `gh project item-list`
-fetches that many items and *then* the filter runs, so a limit below the board's
-size silently drops rows — the command succeeds and prints a shorter, plausible,
-wrong answer. It has already happened: on 2026-07-30 the board held 146 items,
-`--limit 100` was what these examples said, and query 1 returned **one** of the six
-issues that were actually Ready. Everything above roughly issue #39 was invisible.
-The cause is that **Done items dominate the board and come first** — 92 of those
-146.
-
-**The number is 1000 because it is sized to be unreachable, not sized to the
-board.** Sizing it to the board is what has to be redone every time the board
-grows, and being one growth spurt behind is the failure above. A limit above any
-plausible board size cannot truncate, and **raising it past the board is free**:
-`--limit` caps the pagination, it does not force it, so `gh` still stops on the
-last page. Measured on 2026-07-30 against a 148-item board, `--limit 1000` and
-`--limit 300` both fetch the same two pages and finish within a second of each
-other — and measured again in points on 2026-08-07 against a 120-item board,
-`--limit 200`, `--limit 500` and `--limit 1000` all cost **203**.
-
-**Free above the board is not the same as free**, which is what the sentence
-above used to be read as saying. The read itself is expensive, and the next
-section is what it costs.
-
-### What a board read costs
-
-Measured 2026-08-07 against a 120-item board, by reading `gh api rate_limit`
-either side of each call:
+**Do not read the board with `gh project item-list`.** It asks the API for every
+field of every item — body, url, type and every custom field — and a board read
+needs five of them. What a GraphQL call costs is the number of nodes it asked
+for, so the bill is set by how much is wanted about each item and not by how many
+items there are. Measured on 2026-08-10 against a 129-item board:
 
 | Call | GraphQL points |
 |---|---|
 | `gh project item-list --limit 1000` | **203** |
-| the same at `--limit 500`, `--limit 200` | **203** |
-| the same at `--limit 150` | 153 |
-| one issue's status by repository and number (§4) | **1** |
-| queries 1–4 above, run as four separate listings | **812** |
-| queries 1–4 above, one fetch and four `jq` filters | **203** |
-
-And measured again on 2026-08-08, when the board had grown to 205 items:
-
-| Call | GraphQL points |
-|---|---|
-| `gh project item-list --limit 1000` | **304** |
-| one issue's status by repository and number (§4) | **1** |
+| the five fields a board read uses, asked for explicitly | **2** |
+| one issue's board item by repository and number (§4) | **1** |
 | one card move, `updateProjectV2ItemFieldValue` | **1** |
 | the same issue read over REST | **0** |
 
-**The read gets more expensive as the board grows and nothing else does.** Two
-pages became three, and 203 became 304; the 1-point calls did not move. Anything
-this file says about saving points is therefore about the read, and only about
-the read.
+`board_read` in `.github/scripts/opencode-worker.sh` is that query, and it is
+what to copy. It returns the shape `gh project item-list --format json` returned,
+so a `jq` filter written against the old output still works.
 
-**The charge is for the items *requested*, not the items received**, in pages of
-a hundred. That is the whole model, and three things fall out of it that nothing
-in this file previously said:
+**This corrects what this section said until 2026-08-10.** It taught that a board
+read simply costs 203, that the charge was for items requested in pages of a
+hundred, and therefore that the answer was to read the board once a session and
+to weigh archiving in units of a hundred items. The measurement was right and the
+conclusion drawn from it was wrong: the price was never the board's size. It was
+the question. At 2 points a read the advice to hoard reads is obsolete, and
+archiving Done items buys nothing at all — 77 of the 129 are in Done and they
+cost, between them, under a point.
 
-- **A limit above the board is genuinely free**, because `gh` stops when the API
-  says there are no more pages. `--limit 1000` stays.
-- **Retention only matters in units of a hundred.** A 120-item board costs two
-  pages; the same board at 99 items costs one, and at 101 it costs two again.
-  Archiving 20 items usually buys nothing and occasionally halves the bill. The
-  fortnight window is the maintainer's either way — no API can change it — so
-  this is what to weigh if it is ever revisited, rather than a general feeling
-  that a shorter window is tidier.
-- **The cheap call already exists and §4 already tells you to use it.** Resolving
-  one item by repository and number costs 1 point against 203, and it is the
-  *correct* call as well as the cheap one — it answers from the board rather than
-  from a snapshot that may be minutes old.
+**What is still true is the truncation.** `gh project item-list` fetches the
+limit and filters *afterwards*, so a limit below the board's size silently drops
+rows: the command succeeds and prints a shorter, plausible, wrong answer. On
+2026-07-30 the board held 146 items, these examples said `--limit 100`, and query
+1 returned **one** of the six issues that were actually Ready — everything above
+roughly issue #39 invisible, because Done items dominate the board and come
+first. The explicit query has the same trap by a different name: its page is 100
+and it must follow `pageInfo.hasNextPage` to the end. `board_read` does.
+**Anything that reads the board and stops at one page is wrong**, whichever call
+it uses.
 
-At 203 points a read, a 5,000-point day is about **24 full board reads shared
-between every agent working as this user**. Four separate listings per waking
-loop is 812, so four wakings exhausted it. That is how 2026-08-06 reached
-4,962/5,000 with REST at 261.
+**And the 1-point lookup is still the right call for one issue.** §4 already says
+so, and it is correct as well as cheap: it answers from the board rather than
+from a snapshot that may be minutes old. Reaching for the whole board to find one
+item is what `board_item_for` did until `#269`, and it cost 203 points to learn
+one id.
 
-**At 304 it is 16, and that is the number to hold on to.** The board grew from
-120 items to 205 in a day, so the budget bought a third fewer reads by the end of
-it than at the start — which is why the answer cannot be *read the board more
-carefully* and has to be [read it once a
-session](#getting-item-id-right-which-is-harder-than-it-looks). The 1-point
-lookup does not get more expensive as the board grows. The read is the only
-thing that does.
+At 2 points a read the budget is no longer a constraint worth designing around.
+It was: on 2026-08-06 this user reached 4,962 of 5,000, and on 2026-08-10 the
+worker exhausted the quota outright and its runs died at `pick` with *API rate
+limit exceeded* — six runs an hour spending 812 points each across four listings.
+The same six runs now spend about 48.
 
 **What this does not license: a second copy of the status.** §4 refused status
 labels on `kolonie-docs#118` and the reasoning stands — two records of one fact
@@ -965,17 +934,24 @@ which is `blocked:human` because it needs an account created and an
 organisation seat. Nothing in this section is a substitute for it; it is what to
 do until it exists.
 
-**Fetch the board once, then ask it four things.** Each of these used to be its
-own `gh project item-list`, and each one pays for the whole board — 812 points
-for the four, measured 2026-08-07, against 203 for the shape below.
-[What a board read costs](#what-a-board-read-costs) is the arithmetic; this is
-the only change it asks of you, and it loses nothing, because all four filter
-locally with `jq` and always did.
+**Fetch the board once, then ask it four things.** All four filter locally with
+`jq` and always did, so one fetch answers them.
 
 ```bash
 board=$(mktemp)
-gh project item-list 1 --owner Kolonie-AI --limit 1000 --format json > "$board"
+bash .github/scripts/opencode-worker.sh board-read > "$board"
 ```
+
+That is `board_read` from the worker script, and it is here rather than inlined
+because the query has two traps in it — it must follow `pageInfo.hasNextPage` to
+the end of the board, and it must ask for a field's value by name — and a copy
+in this file is a copy that will be one fix behind. It emits what
+`gh project item-list --format json` emitted, so the filters below are unchanged
+from when they were written against that.
+
+Two points for the whole board against 203, and the item titles are the issues'
+current ones: `gh project item-list`'s top-level `.title` is the card's own copy
+and was stale on two of 129 items when this was measured.
 
 **1. What can be started right now, by anyone:**
 
