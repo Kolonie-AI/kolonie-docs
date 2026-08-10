@@ -61,8 +61,9 @@ on:
     #
     # What makes this worth trying rather than arguing about: **it costs nothing
     # to be wrong.** A trigger that does not fire leaves no trace and no work
-    # undone, a run that finds an empty queue exits in seconds, and the `Am I
-    # already running?` step means two firings cannot overlap on one issue.
+    # undone, a run that finds an empty queue exits in seconds, and two firings
+    # cannot overlap on one issue — the claim below decides that, and since
+    # `#266` it decides it honestly.
     #
     # **What to measure, so this is not settled by impression.** Count runs
     # actually started over a full day against the 144 scheduled. If the ratio is
@@ -76,32 +77,32 @@ on:
     - cron: '*/10 * * * *'
   workflow_dispatch:
 
-# ## There is deliberately no `concurrency` group here (2026-08-07)
+# ## Nothing stops a second run any more, and that is the point (`#266`)
 #
-# There was one — `group: opencode-worker`, `cancel-in-progress: false` — and its
-# comment called it *"a backstop and not the mechanism"*, the mechanism being the
-# explicit *am I already running* step below.
+# Two things used to: a `concurrency` group, removed on 2026-08-07 because it
+# held the second run **pending** and so prevented the step that was supposed to
+# detect it from ever seeing anything; and an *am I already running* step, which
+# stopped a second run outright and is removed here.
 #
-# **The backstop prevented the mechanism from ever running.** A `concurrency`
-# group with `cancel-in-progress: false` holds a second run as **pending** until
-# the first finishes, so two runs of this workflow were never `in_progress` at the
-# same time and step 1's query could never count more than one. Measured on
-# 2026-08-07 with two dispatches two seconds apart: both logged
-# `in_progress runs, counting this one: 1`. `kolonie-docs#142`'s definition of
-# done asked for that path to have been seen fire at least once, and it could not
-# be, because it never did.
+# **Both were global, and the thing worth preventing is local.** Two runs in one
+# repository is what every collision this worker has had was made of — a
+# migration number taken twice, a branch that stopped applying to `main` while
+# its pull request waited. Two runs in *different* repositories share no history,
+# no check and no merge. `pick` skips a repository that already has work in
+# flight (`5e6efd4`), and that filter was inert for as long as a second run could
+# not start at all.
 #
-# So the group goes and the step stays — the maintainer's decision, 2026-08-07.
-# The reasoning behind it is unchanged and is the one the old comment already
-# made: **the claim is the real lock.** `pick` only ever returns an issue in
-# **Ready** and `claim` moves it to **In Progress**, so an issue being worked no
-# longer matches the query and two runners that did overlap still could not take
-# the same one. Step 1 is the courtesy that says so in the log rather than leaving
-# a person to infer it from a run that is not there.
+# What made removing the global lock unsafe was that the claim underneath it was
+# not one: `claim` wrote In Progress without ever reading it, so two runs could
+# hold the same issue and only the absent second run kept that theoretical.
+# `#266` makes the claim check the column, read it back, and break a true tie on
+# the claim comment — which is ordered, where the board is not. The script's
+# header argues it in full.
 #
-# What is given up is the case step 1 cannot answer — a `gh run list` that fails.
-# That now lets a second run through to the claim, which refuses it. A queue
-# defect degrades into the structural lock rather than into two workers.
+# **A run that loses the tie retires quietly**: exit 0, nothing written on the
+# issue, its own claim comment deleted. It must not take the ordinary failure
+# path, which would remove `agent:opencode` and mark the issue `opencode:failed`
+# for having been wanted by two runs at once.
 
 permissions:
   contents: write
@@ -126,20 +127,53 @@ jobs:
       - name: Test the queue logic
         run: bash .github/tests/opencode-worker.test.sh
 
-      # Step 1. Explicit, so the log says *a previous run is still working* in as
-      # many words rather than leaving a person to notice a missing run.
-      - name: Am I already running?
-        id: solo
+      # ## An In Progress item nobody is behind (`#266`, 2026-08-10)
+      #
+      # `pick` skips a repository that has anything In Progress, which is the
+      # per-repository courtesy that replaced `solo`. Its cost is that an item
+      # left in that column holds its whole repository out of the queue —
+      # `kolonie-platform#602` did for an afternoon with nobody working it, and
+      # at four workers that is a quarter of the throughput lost in silence.
+      #
+      # **It reports and moves nothing.** `#266`: deciding an item is abandoned is
+      # a judgement, and a reaper would eventually take an issue away from
+      # somebody mid-thought. The comment is the whole action, and writing it
+      # touches the issue — which is also what keeps this quiet for another four
+      # hours rather than saying the same thing every ten minutes.
+      #
+      # Never fatal, for the sweep above's reason: this run's issue must not be
+      # lost to a report about a different one.
+      - name: Is anything stuck In Progress with nobody behind it?
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # The query lives in the script since `#231`, so that the case where
-          # *it* fails is covered by a test — a `run:` block is the one part of
-          # this workflow nothing can exercise, which is why everything that can
-          # go wrong quietly is in the script.
-          if [ "$(bash .github/scripts/opencode-worker.sh solo)" = busy ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          # `bash -e {0}` is the shell GitHub gives this. See the sweep below.
+          set +e
+          set -uo pipefail
+
+          forgotten="$RUNNER_TEMP/opencode-forgotten"
+          if ! bash .github/scripts/opencode-worker.sh forgotten-claims > "$forgotten"; then
+            echo "::warning::the forgotten-claim sweep could not read the board; skipping it this run"
+            exit 0
           fi
+
+          if [ ! -s "$forgotten" ]; then
+            echo "every In Progress item has been touched recently"
+            exit 0
+          fi
+
+          while IFS=$'\t' read -r repo issue hours title; do
+            [ -n "${repo:-}" ] || continue
+            echo "::warning::$repo#$issue has been In Progress and untouched for ${hours}h, holding $repo out of the queue: $title"
+
+            gh issue comment "$issue" --repo "$repo" --body \
+              "**This issue has been In Progress for ${hours} hours with nothing touching it**, and while it is there \`pick\` skips every issue in \`${repo}\` (\`kolonie-docs#266\`).
+
+          Either a run died without releasing it, or somebody claimed it and moved on. **Nothing has been changed here** — the column is still In Progress, the labels are untouched, and no automation will take this away from whoever holds it. If it is yours, it is yours; if it is not, moving it back to **Ready** returns the repository to the queue. Reported by $RUN_URL." \
+              >/dev/null 2>&1 ||
+              echo "::warning::could not comment on $repo#$issue; the finding is in this log only"
+          done < "$forgotten"
 
       # ## The one ending that was silent (`#256`, 2026-08-10)
       #
@@ -166,7 +200,6 @@ jobs:
       # fatal. `set -e` is deliberately absent for the same reason.
       - name: Is a pull request of mine stuck?
         id: stale
-        if: steps.solo.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -252,7 +285,6 @@ jobs:
       # `WORKER_REPO_TOKEN` above cannot move a column. Same split as `Claim it`
       # and `Say so on the issue`, and for the same reason.
       - name: Put the stuck ones back on the board
-        if: steps.solo.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -296,7 +328,6 @@ jobs:
       # look; what the change was *for* stays where it was argued, which is the
       # issue this comment is written on.
       - name: Say what landed
-        if: steps.solo.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -384,7 +415,6 @@ jobs:
       # from a broken job is the failure mode this line exists to prevent.
       - name: Is there anything to do?
         id: queue
-        if: steps.solo.outputs.skip != 'true'
         env:
           # Read-only, and it is the token that can see the board. The write
           # below uses a different one on purpose.
@@ -438,13 +468,26 @@ jobs:
       # `BOARD_WRITE_TOKEN` expires 2027-08-04 and that is a certainty, not a
       # hypothesis.
       - name: Claim it
+        id: claim
         if: steps.queue.outputs.issue
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          bash .github/scripts/opencode-worker.sh claim \
-            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
+          set -uo pipefail
+          # `claim` prints `held` or `lost` since `#266`, and exits 0 for both:
+          # losing a race is not a failure, and every non-zero exit here ends the
+          # run through the path that marks the issue `opencode:failed`. A
+          # non-zero exit still means what it always did — the board could not be
+          # read or could not be written — and still stops the run.
+          verdict=$(bash .github/scripts/opencode-worker.sh claim \
+            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}") || exit $?
+
+          if [ "$verdict" != held ]; then
+            echo "another run holds ${{ steps.queue.outputs.repo }}#${{ steps.queue.outputs.issue }}. Retiring; the issue is untouched."
+            exit 0
+          fi
+          echo "held=true" >> "$GITHUB_OUTPUT"
 
       # **Comments were `GITHUB_TOKEN`'s job and cannot be** (`#231`). That
       # reasoning was right while the worker only ever touched its own
@@ -456,11 +499,71 @@ jobs:
       # one step after the claim. `Say why on the issue` was moved and this one
       # was missed, so both now read the same secret.
       - name: Say so on the issue
-        if: steps.queue.outputs.issue
+        if: steps.claim.outputs.held
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # **This comment is also the tie-break** (`#266`), which is why nothing
+          # else happens in this step and why it must keep saying `$RUN_URL`:
+          # comment ids are ordered where the board is not, so if two runs claimed
+          # this issue in the same instant, the earlier of these two comments
+          # decides which one holds it. The step after this reads them back.
+          #
+          # It starts with `Taken by the opencode worker` because
+          # `CLAIM_MARKER` in the script looks for exactly that.
+          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
+            "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
+
+          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, that pull request merges itself when the target's required check goes green and nobody has to press anything (\`kolonie-docs#232\`) — a red check leaves it open for a person. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
+
+      # ## The tie-break, and everything downstream hangs off it (`#266`)
+      #
+      # `claim` above read the column, wrote it and read it back. That settles
+      # every race except the one where two runs read **Ready** in the same
+      # instant: both write In Progress, both read In Progress, and both are
+      # telling the truth. Projects v2 has no conditional field update, so the
+      # board cannot answer this — but the comments can, because they are
+      # ordered. Whoever commented first holds the issue, and both runs compute
+      # that from the same list and cannot disagree.
+      #
+      # **A run that lost changes nothing and ends green.** It deletes its own
+      # claim comment — which is its only mark on the issue, the column being
+      # already what the winner set it to — and stops. `held` is not written, so
+      # every step below is skipped, including `Put it back` and `Say why on the
+      # issue`: releasing an issue somebody else is working, or marking it
+      # `opencode:failed`, is precisely the harm `#266` exists to prevent.
+      - name: Did I win the claim?
+        id: held
+        if: steps.claim.outputs.held
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          repo="${{ steps.queue.outputs.repo }}"
+          issue="${{ steps.queue.outputs.issue }}"
+
+          verdict=$(bash .github/scripts/opencode-worker.sh verify-claim "$repo" "$issue") || {
+            echo "::warning::the claim could not be verified; continuing on the column read-back alone"
+            verdict=held
+          }
+
+          if [ "${verdict%% *}" = lost ]; then
+            echo "::notice::${verdict#lost }claimed $repo#$issue first. This run retires and the issue keeps its labels and its column."
+
+            # Its own comment and nothing else. `--jq` selects by this run's URL,
+            # so a comment from any other run is out of reach here whatever the
+            # id turns out to be.
+            id=$(gh api "repos/$repo/issues/$issue/comments" --paginate \
+              --jq "map(select(.body | contains(\"$RUN_URL\"))) | .[0].id" 2>/dev/null)
+            if [ -n "${id:-}" ] && [ "$id" != null ]; then
+              gh api -X DELETE "repos/$repo/issues/comments/$id" >/dev/null 2>&1 ||
+                echo "::warning::could not delete this run's claim comment on $repo#$issue"
+            fi
+            exit 0
+          fi
+
           # **The failure mark clears when the issue is taken, not when it
           # passes** (`#255`). `opencode:failed` answers *what did the worker try
           # and not finish*, and an issue being tried again is exactly when that
@@ -468,16 +571,17 @@ jobs:
           # something already in hand, and a filter that lies about the present
           # is worse than no filter.
           #
+          # It happens **here** rather than beside the claim comment because a
+          # run that lost the tie-break must leave the issue exactly as it found
+          # it, and a label it removed on the way past is not that.
+          #
           # Best-effort and never fatal: an issue that never failed has no label
           # to remove, and `gh` says so rather than failing. Losing the claim
           # over a cosmetic edit would be the reporting costing the work.
-          gh issue edit "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" \
+          gh issue edit "$issue" --repo "$repo" \
             --remove-label opencode:failed >/dev/null 2>&1 || true
 
-          gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
-            "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
-
-          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, that pull request merges itself when the target's required check goes green and nobody has to press anything (\`kolonie-docs#232\`) — a red check leaves it open for a person. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
+          echo "mine=true" >> "$GITHUB_OUTPUT"
 
       # ## Which credential reaches the target repository (`#231`, 2026-08-08)
       #
@@ -505,7 +609,7 @@ jobs:
       # sends the next reader looking in the wrong place entirely.
       - name: Can this run reach the target repository?
         id: reach
-        if: steps.queue.outputs.issue
+        if: steps.held.outputs.mine
         env:
           WORKER_REPO_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
         run: |
@@ -529,7 +633,7 @@ jobs:
       # `fetch-depth: 0` because the run compares the branch against
       # `origin/main` to decide whether anything was committed.
       - name: Check out the target repository
-        if: steps.queue.outputs.issue
+        if: steps.held.outputs.mine
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.queue.outputs.repo }}
@@ -550,7 +654,7 @@ jobs:
       # nothing; a repository naming no *command* still stops the run.
       - name: What is the target repository's check command?
         id: check
-        if: steps.queue.outputs.issue
+        if: steps.held.outputs.mine
         run: |
           set -euo pipefail
           command=$(bash .github/scripts/opencode-worker.sh check-command target/AGENTS.md)
@@ -566,7 +670,7 @@ jobs:
           echo "prerequisite=$prerequisite" >> "$GITHUB_OUTPUT"
 
       - name: Install opencode
-        if: steps.queue.outputs.issue
+        if: steps.held.outputs.mine
         env:
           # Pinned to a version, not to `latest`, for the reason `#142` gives
           # about pinning an action: this runs with write access here, and
@@ -582,7 +686,7 @@ jobs:
 
       - name: Work it
         id: work
-        if: steps.queue.outputs.issue
+        if: steps.held.outputs.mine
         env:
           # All three reach opencode by `{env:…}` substitution in the committed
           # `opencode.json`, so none is ever written into this file (`#207`).
@@ -1145,7 +1249,7 @@ jobs:
           fi
 
       - name: Move it to In Review
-        if: success() && steps.queue.outputs.issue
+        if: success() && steps.held.outputs.mine
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -1159,7 +1263,7 @@ jobs:
       # does not undo its own claim; `cancelled()` too, because a cancelled run
       # holds a claim exactly as a failed one does.
       - name: Put it back
-        if: (failure() || cancelled()) && steps.queue.outputs.issue
+        if: (failure() || cancelled()) && steps.held.outputs.mine
         env:
           GH_TOKEN: ${{ secrets.BOARD_WRITE_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -1378,7 +1482,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Say why on the issue
-        if: (failure() || cancelled()) && steps.queue.outputs.issue
+        if: (failure() || cancelled()) && steps.held.outputs.mine
         env:
           # The comment lands in the *target* repository, which `github.token`
           # cannot reach when that is not this one. Same fallback as the work

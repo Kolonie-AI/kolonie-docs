@@ -2,9 +2,10 @@
 # The hourly worker's queue logic: pick one issue, claim it, release it (#142).
 #
 # Usage:
-#   opencode-worker.sh solo                    # -> prints "busy" if another run is working
 #   opencode-worker.sh pick                    # -> prints "<owner/repo>\t<number>", or nothing
-#   opencode-worker.sh claim <repo> <number>   # -> In Progress
+#   opencode-worker.sh claim <repo> <number>   # -> "held", or "lost" if another run got there first
+#   opencode-worker.sh verify-claim <repo> <number>  # -> "held", or "lost <run url>" if an earlier run claimed it too
+#   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
@@ -50,16 +51,36 @@
 # use a credential with organisation reach. That is a widening and it is
 # deliberate — see the workflow header for what bounds it.
 #
-# ## Two locks, and why the second one is what matters
+# ## The claim, and what makes it a lock (`#266`, 2026-08-10)
 #
-# The workflow asks *am I already running* before calling this. That is the
-# visible lock, and it is deliberately explicit rather than left to `concurrency`
-# so that a person reading the log sees the decision.
+# There used to be a `solo` subcommand — *am I already running* — that stopped a
+# second run outright, and the file said underneath it that the claim was the
+# real lock. **It was not.** `claim` wrote In Progress unconditionally: two runs
+# that read the board seconds apart picked the same issue, both wrote the column
+# they had both already seen, and both worked it. Nothing had ever noticed
+# because `solo` meant there was never a second run.
 #
-# **The real lock is the claim.** `pick` only ever returns an issue in **Ready**,
-# and `claim` moves it to **In Progress** — so an issue being worked no longer
-# matches the query, and two runners that somehow overlapped still could not take
-# the same one. The first lock is a courtesy; this one is structural.
+# `solo` is gone, because it also made `pick`'s per-repository filter (`5e6efd4`)
+# inert — a courtesy paid globally cannot be paid per repository. What replaces
+# it is a claim that is honest about being one, in three parts:
+#
+# 1. **`claim` checks the column before it writes it.** An item that is no longer
+#    in Ready is one another run took between `pick` and here, which is the wide
+#    window: those are separate steps, seconds to a minute apart.
+# 2. **`claim` reads the column back after it writes it.** A write that did not
+#    take is not a claim, whatever the API returned.
+# 3. **`verify-claim` breaks a true tie.** Both of the above pass for two runs
+#    that read Ready in the same instant, and *no compare-and-swap exists* —
+#    Projects v2 has no conditional field update, which `#266` states as the
+#    constraint rather than as a thing to work around. So the tie is broken on a
+#    record that **is** ordered: the claim comment. Both runs write one, comment
+#    ids are monotonic, and the earliest one wins. Each run reaches that verdict
+#    independently and they cannot disagree, so exactly one run holds the issue.
+#
+# **A run that loses leaves the issue exactly as it found it and exits 0.** Not
+# through the failure path: since `#251` and `#255` that path removes
+# `agent:opencode` and sets `opencode:failed`, and an issue demoted for losing a
+# coin toss is worse than the collision this prevents.
 #
 # ## What this never does
 #
@@ -122,6 +143,29 @@ RUN_URL=${RUN_URL:-}
 # finding in itself.
 SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 
+# How far back `verify-claim` looks for a competing claim comment, in minutes.
+#
+# It exists only to keep a *previous* attempt's claim out of the comparison — an
+# issue that failed and was tried again carries one, hours or days old. The race
+# it is actually deciding is seconds wide, and the schedule is ten minutes, so
+# anything between the two works and there is no edge to tune. Ten.
+CLAIM_RACE_WINDOW_MINUTES=${CLAIM_RACE_WINDOW_MINUTES:-10}
+
+# How long an In Progress item may go untouched before it is a finding (`#266`).
+#
+# Four hours, and the reasoning is the run: the worker comments when it takes an
+# issue and again when it fails, and its runs are bounded at two hours. An item
+# nothing has touched for twice that has no run behind it — either one died
+# without releasing, or a person forgot — and it is holding its whole repository
+# out of `pick` while it does.
+FORGOTTEN_CLAIM_HOURS=${FORGOTTEN_CLAIM_HOURS:-4}
+
+# What a claim comment starts with. Written once here because two things now
+# depend on the exact wording — the workflow that writes it and `verify-claim`,
+# which finds the competing one by it — and a marker that lives in two files is
+# one that drifts.
+CLAIM_MARKER=${CLAIM_MARKER:-Taken by the opencode worker}
+
 # `--limit 1000`, sized to be unreachable rather than sized to the board, for the
 # reason AGENTS.md §6 gives: `gh project item-list` fetches the limit and filters
 # *afterwards*, so a low one silently drops rows and exits zero.
@@ -142,6 +186,22 @@ board_item_for() {
   gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json |
     jq -r --argjson n "$number" --arg repo "$repo" \
       '.items[] | select(.content.number == $n and .content.repository == $repo) | .id' |
+    head -1
+}
+
+# The board item id **and the column it is in**, tab separated, or nothing.
+#
+# The status is the half `claim` was missing (`#266`): a claim that does not read
+# the column it is about to overwrite cannot tell *I am taking this* from *I am
+# taking this from whoever is working it*. One read answers both questions, so
+# this costs nothing over `board_item_for` and replaces it in the one place where
+# the difference matters.
+board_item_status_for() {
+  local repo=$1 number=$2
+  gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json |
+    jq -r --argjson n "$number" --arg repo "$repo" \
+      '.items[] | select(.content.number == $n and .content.repository == $repo)
+       | "\(.id)\t\(.status)"' |
     head -1
 }
 
@@ -931,8 +991,25 @@ case "${1:-}" in
   claim)
     repo=${2:?claim needs a repository}
     number=${3:?claim needs an issue number}
-    item=$(board_item_for "$repo" "$number")
-    [ -n "$item" ] || die "$repo#$number is not on the board — refusing to start work on it" 3
+    read -r item status < <(board_item_status_for "$repo" "$number")
+    [ -n "${item:-}" ] || die "$repo#$number is not on the board — refusing to start work on it" 3
+
+    # **The column is read before it is written** (`#266`). `pick` and this are
+    # separate steps of the workflow, so an issue can be taken by another run in
+    # between — and until now that other run's In Progress was simply overwritten
+    # by this one's, with both runs believing they held it.
+    #
+    # A lost race prints `lost` and exits **0**. Not 3, not 4: nothing is wrong
+    # here, and every non-zero exit from this step ends the run through the
+    # failure path, which since `#251` and `#255` takes `agent:opencode` off the
+    # issue and marks it `opencode:failed`. That is the correct ending for work
+    # that was tried and not finished, and the wrong one for work somebody else
+    # is doing right now.
+    if [ "${status:-}" != "Ready" ]; then
+      echo "$repo#$number is in ${status:-no column} rather than Ready — another run took it between the pick and here. Taking nothing." >&2
+      echo lost
+      exit 0
+    fi
 
     # **The board write happens before the comment and before any work.** An
     # expired or revoked token has to stop the run here, while nothing has been
@@ -941,6 +1018,136 @@ case "${1:-}" in
     # token that then could not move it back.
     set_status "$item" "$STATUS_IN_PROGRESS" ||
       die "could not move $repo#$number to In Progress — the board token may have expired. Not starting work." 4
+
+    # And read it back, because a write that reported success and did not take is
+    # indistinguishable from a claim otherwise. This is the cheap half of `#266`:
+    # it cannot see a simultaneous claim — both runs read In Progress and both are
+    # right — which is what `verify-claim` is for.
+    read -r _ confirmed < <(board_item_status_for "$repo" "$number")
+    if [ "${confirmed:-}" != "In Progress" ]; then
+      echo "$repo#$number reads back as ${confirmed:-nothing} after the claim, so this run does not hold it. Taking nothing." >&2
+      echo lost
+      exit 0
+    fi
+
+    echo held
+    exit 0
+    ;;
+
+  verify-claim)
+    # The tie-break, and the reason `solo` could go (`#266`).
+    #
+    # ## Why it is the comment and not the board
+    #
+    # Projects v2 has no conditional field update, so two runs that read Ready in
+    # the same instant both write In Progress and both read it back. There is no
+    # board state that distinguishes them, and inventing one — a *held by* field —
+    # would be the lock service `#266` refuses: the board is the state.
+    #
+    # An ordered record already exists. Both runs write a claim comment on the
+    # issue, GitHub assigns comment ids in creation order, and **the earliest one
+    # wins**. Whichever order the two runs arrive here in, each sees at least its
+    # own comment and any comment written before it, so each reaches the same
+    # verdict about who was first. Exactly one run holds the issue.
+    #
+    # ## What the window is for
+    #
+    # An issue that failed and was retried carries an older claim comment. The
+    # window keeps that out of the comparison; it is not a timeout on the race,
+    # which is seconds wide.
+    repo=${2:?verify-claim needs a repository}
+    number=${3:?verify-claim needs an issue number}
+    mine=${4:-$RUN_URL}
+    [ -n "$mine" ] || die "verify-claim needs this run's URL, in \$RUN_URL or as the third argument" 1
+
+    comments=$(gh api "repos/$repo/issues/$number/comments" --paginate \
+      --jq '.[] | [(.id|tostring), .created_at, (.body|gsub("\n"; " "))] | @tsv' 2>/dev/null) || {
+      # **A verification that cannot run holds the claim.** The two checks in
+      # `claim` have already passed, so the likelihood this run is the loser of a
+      # simultaneous race is small — and abandoning an issue on an API blip
+      # would spend a run to avoid a rarer collision than the one it creates.
+      echo "could not read the comments on $repo#$number, so the claim cannot be verified. Continuing, because the column was read back and held." >&2
+      echo held
+      exit 0
+    }
+
+    # **The cutoff is an ISO 8601 string and the comparison is a string
+    # comparison.** `created_at` is UTC and so is this, and the format sorts
+    # lexicographically in the order it sorts chronologically. The obvious
+    # alternative — `mktime` in awk — reads its argument as *local* time, so on
+    # any runner not set to UTC every comment looks hours old and the window
+    # silently discards the race it exists to decide.
+    cutoff=$(date -u -d "$CLAIM_RACE_WINDOW_MINUTES minutes ago" +%Y-%m-%dT%H:%M:%SZ)
+
+    winner=$(awk -F'\t' -v marker="$CLAIM_MARKER" -v cutoff="$cutoff" '
+      index($3, marker) && $2 >= cutoff {
+        if (first == "" || $1 + 0 < first + 0) { first = $1; body = $3 }
+      }
+      END { print body }
+    ' <<<"$comments")
+
+    # No claim comment inside the window means nothing to lose to — the comment
+    # step is best-effort and this must not turn its failure into a lost issue.
+    if [ -z "$winner" ]; then
+      echo "no claim comment on $repo#$number inside the last $CLAIM_RACE_WINDOW_MINUTES minutes; nothing contests this claim" >&2
+      echo held
+      exit 0
+    fi
+
+    if [[ "$winner" == *"$mine"* ]]; then
+      echo "this run wrote the first claim comment on $repo#$number" >&2
+      echo held
+      exit 0
+    fi
+
+    other=$(grep -o 'https://[^ )]*/actions/runs/[0-9]*' <<<"$winner" | head -1)
+    echo "$repo#$number was claimed first by ${other:-another run}. Retiring, and leaving the issue exactly as it was found." >&2
+    printf 'lost %s\n' "${other:-another run}"
+    exit 0
+    ;;
+
+  forgotten-claims)
+    # The other half of `#266`: `pick` skips a repository that has anything In
+    # Progress, so an item left there holds its whole repository out of the
+    # queue. `kolonie-platform#602` sat that way for an afternoon with nobody
+    # working it, and nothing said so.
+    #
+    # **It reports and does not move anything.** Deciding an item is abandoned is
+    # a judgement, and a reaper would eventually take an issue away from somebody
+    # mid-thought. `#266` says so in as many words.
+    #
+    # *No run behind it* is read off the issue's own `updated_at` rather than off
+    # the run list: a run that died is not in the run list either, and a run that
+    # is hung does not say what it was working on. The worker comments when it
+    # takes an issue and when it fails, so an issue nothing has touched in
+    # `FORGOTTEN_CLAIM_HOURS` has no run behind it whatever the run list says.
+    board=$(gh project item-list 1 --owner "$ORG" --limit "$BOARD_LIMIT" --format json) ||
+      die "could not read the board, so a forgotten claim cannot be found" 1
+
+    in_progress=$(jq -r '.items[] | select(.status == "In Progress")
+      | "\(.content.repository)\t\(.content.number)\t\(.content.title)"' <<<"$board")
+    [ -n "$in_progress" ] || exit 0
+
+    while IFS=$'\t' read -r repo number title; do
+      [ -n "${repo:-}" ] || continue
+      updated=$(gh api "repos/$repo/issues/$number" --jq '.updated_at' 2>/dev/null) || {
+        echo "could not read $repo#$number; saying nothing about it rather than guessing" >&2
+        continue
+      }
+      [ -n "$updated" ] || continue
+
+      # Reporting *is* touching the issue, so the comment the caller writes moves
+      # `updated_at` and this stays quiet for another `FORGOTTEN_CLAIM_HOURS`.
+      # That is the whole of the de-duplication, and it is deliberate: an item
+      # still forgotten four hours later is worth saying again.
+      #
+      # `date` rather than awk's `mktime`, which reads its argument as local time
+      # and would report a four-hour-old item as six on a runner in CEST.
+      then=$(date -d "$updated" +%s 2>/dev/null) || continue
+      hours=$(( ( $(date +%s) - then ) / 3600 ))
+      [ "$hours" -gt "$FORGOTTEN_CLAIM_HOURS" ] &&
+        printf '%s\t%s\t%s\t%s\n' "$repo" "$number" "$hours" "$title"
+    done <<<"$in_progress"
 
     exit 0
     ;;
@@ -1036,45 +1243,7 @@ case "${1:-}" in
     exit $?
     ;;
 
-  solo)
-    # *Am I the only run working right now?* Prints `busy` when a previous run is
-    # still going, and nothing when it is not.
-    #
-    # **It moved here from the workflow's `run:` block for `#231`**, whose
-    # acceptance criteria ask for a test covering the case where this query
-    # fails — and a `run:` block cannot be tested, which is the reason the whole
-    # of this file exists. Nothing about the behaviour changed in the move.
-    #
-    # ## A query that fails is not an answer, and does not stop the run
-    #
-    # The workflow header already argues this and the code now matches it: this
-    # step is *the courtesy*, and the claim is the lock. `pick` only ever returns
-    # an issue in Ready and `claim` moves it to In Progress, so two runs that did
-    # overlap still could not take the same issue.
-    #
-    # So a `gh run list` that fails degrades into the structural lock rather than
-    # into a stopped worker. **Loudly** — the alternative reading, that a failed
-    # query means *stop*, turns a GitHub API blip into an hour of silence that
-    # looks exactly like an empty queue, which is the confusion `#142` spent
-    # three days on already.
-    running=$(gh run list --repo "${GITHUB_REPOSITORY:?solo needs GITHUB_REPOSITORY}" \
-      --workflow opencode-worker.yml --status in_progress \
-      --limit 10 --json databaseId --jq 'length' 2>/dev/null)
-
-    if [ -z "$running" ] || ! [ "$running" -eq "$running" ] 2>/dev/null; then
-      echo "could not count in-progress runs; continuing, because the claim is the real lock" >&2
-      exit 0
-    fi
-
-    echo "in_progress runs, counting this one: $running" >&2
-    if [ "$running" -gt 1 ]; then
-      echo "a previous run is still working. Exiting, and taking nothing." >&2
-      echo busy
-    fi
-    exit 0
-    ;;
-
   *)
-    die "usage: opencode-worker.sh solo | pick | claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | review <repo> <n> | release <repo> <n> | check-command <path> | check-prerequisite <path> | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | forgotten-claims | leak-check <file>..."
     ;;
 esac

@@ -27,23 +27,56 @@ export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
 
 mkdir -p "$WORK/bin"
-cat > "$WORK/bin/gh" <<'STUB'
+# ## One stub, installed twice (`#266`)
+#
+# There were two copies of this and they had already drifted — the same cases in
+# a different order, one of them missing a comment. A stub that two cases
+# disagree about is a stub neither of them is really testing against, so it is
+# written once here and `install_stub` puts it back where a case has replaced it.
+cat > "$WORK/stub-gh" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$GH_LOG"
 case "$1 $2" in
   "search issues")     cat "$GH_FIXTURES/issues" 2>/dev/null ;;
+  "issue list")        cat "$GH_FIXTURES/issues" 2>/dev/null ;;
   "run list")
     if [ -s "$GH_FIXTURES/run_list_fails" ]; then
       echo "HTTP 503: the API is having a moment" >&2
       exit 1
     fi
     cat "$GH_FIXTURES/runs" 2>/dev/null ;;
-  "issue list")        cat "$GH_FIXTURES/issues" 2>/dev/null ;;
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
+  # **The board write moves the board** (`#266`). It used to do nothing at all,
+  # which was enough while `claim` never read what it had written — and would
+  # have made the read-back it now does either always pass or always fail,
+  # depending on the fixture, rather than on the code. So the option id is
+  # translated back into the column name and written into the board fixture,
+  # and `edit_ignored` is the case where the API says yes and nothing moves.
   "project item-edit")
     if [ -s "$GH_FIXTURES/edit_fails" ]; then
       echo "HTTP 401: Bad credentials" >&2
       exit 1
+    fi
+    [ -s "$GH_FIXTURES/edit_ignored" ] && exit 0
+    item="" option=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --id) item=$2; shift 2 ;;
+        --single-select-option-id) option=$2; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    case "$option" in
+      ee5ea42c) status="Ready" ;;
+      39185de7) status="In Progress" ;;
+      d66d01e2) status="In Review" ;;
+      *)        status="" ;;
+    esac
+    if [ -n "$item" ] && [ -n "$status" ] && [ -s "$GH_FIXTURES/board" ]; then
+      jq --arg id "$item" --arg status "$status" \
+        '.items = [.items[] | if .id == $id then .status = $status else . end]' \
+        "$GH_FIXTURES/board" > "$GH_FIXTURES/board.next" &&
+        mv "$GH_FIXTURES/board.next" "$GH_FIXTURES/board"
     fi
     ;;
   # `#245` reads two things over REST: this run's steps, and the issue's own
@@ -80,7 +113,12 @@ case "$1 $2" in
   *) ;;
 esac
 STUB
-chmod +x "$WORK/bin/gh"
+
+install_stub() {
+  cp "$WORK/stub-gh" "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+}
+install_stub
 export PATH="$WORK/bin:$PATH"
 
 case_setup() {
@@ -168,7 +206,7 @@ boarded() {
   for row in "$@"; do
     IFS=':' read -r number status repo <<<"$row"
     repo=${repo:-Kolonie-AI/kolonie-docs}
-    items+=("{\"id\":\"ITEM_${number}\",\"status\":\"${status}\",\"content\":{\"number\":${number},\"repository\":\"$repo\"}}")
+    items+=("{\"id\":\"ITEM_${number}\",\"status\":\"${status}\",\"content\":{\"number\":${number},\"repository\":\"$repo\",\"title\":\"issue $number\"}}")
   done
   local joined
   joined=$(IFS=,; echo "${items[*]}")
@@ -491,58 +529,7 @@ check "a search that fails is not an empty queue" "1" "$rc"
 check "and picks nothing" "" "$out"
 contains "and says the queue is unknown" "unknown" "$(cat "$WORK/err")"
 # Put the ordinary stub back for everything after this.
-cat > "$WORK/bin/gh" <<'STUB'
-#!/bin/bash
-echo "$*" >> "$GH_LOG"
-case "$1 $2" in
-  "search issues")     cat "$GH_FIXTURES/issues" 2>/dev/null ;;
-  "issue list")        cat "$GH_FIXTURES/issues" 2>/dev/null ;;
-  "run list")
-    if [ -s "$GH_FIXTURES/run_list_fails" ]; then
-      echo "HTTP 503: the API is having a moment" >&2
-      exit 1
-    fi
-    cat "$GH_FIXTURES/runs" 2>/dev/null ;;
-  "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
-  "project item-edit")
-    if [ -s "$GH_FIXTURES/edit_fails" ]; then
-      echo "HTTP 401: Bad credentials" >&2
-      exit 1
-    fi
-    ;;
-  "api "*)
-    if [ -s "$GH_FIXTURES/api_fails" ]; then
-      echo "HTTP 502" >&2
-      exit 1
-    fi
-    case "$2" in
-      */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
-      */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
-      # `#256` sweeps the worker's own pull requests: one search for the set,
-      # then one read per pull request. The per-pull-request fixture is keyed by
-      # `<repo>#<number>` so one case can hold several and give each a different
-      # `mergeable_state`, which is the whole thing the sweep decides on.
-      search/issues)
-        if [ -s "$GH_FIXTURES/search_fails" ]; then
-          echo "HTTP 422: the search index said no" >&2
-          exit 1
-        fi
-        cat "$GH_FIXTURES/prs" 2>/dev/null ;;
-      */pulls/*)
-        key=${2#repos/}
-        cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
-      # `#258` asks one more question per pull request: is the issue closed.
-      # `*/comments` above already claimed the comments path, so this only ever
-      # sees the issue itself.
-      */issues/*)
-        key=${2#repos/}
-        cat "$GH_FIXTURES/issue_${key//\//_}" 2>/dev/null ;;
-      *) ;;
-    esac ;;
-  *) ;;
-esac
-STUB
-chmod +x "$WORK/bin/gh"
+install_stub
 
 echo
 echo "the check command, read from the target's AGENTS.md (#231)"
@@ -936,32 +923,152 @@ check "a count that cannot be read is zero, not a failure" \
 unset GITHUB_RUN_ID
 
 echo
-echo "two runs cannot work at once (#231)"
+echo "two runs, one issue (#266)"
 
-case_setup
-# What `gh run list --jq length` actually prints is the count, not the array.
-echo 1 > "$GH_FIXTURES/runs"
-check "one in-progress run — this one — is not busy" "" "$(bash "$SCRIPT" solo 2>/dev/null)"
+# `solo` used to answer this by refusing to let a second run start at all. It is
+# gone, so what is tested here is the claim itself — the thing the file always
+# said was the real lock and was not.
 
+# A claim reads the column before it writes it. The stub now moves the board on a
+# successful write, so this is the whole sequence: Ready, write, read back.
 case_setup
-echo 2 > "$GH_FIXTURES/runs"
-check "a second run says busy and takes nothing" "busy" "$(bash "$SCRIPT" solo 2>/dev/null)"
-
-# The case `#231` asks for by name. A query that cannot answer must not stop the
-# worker: the claim is the real lock, and an hour of silence is
-# indistinguishable from an empty queue.
-case_setup
-printf '' > "$GH_FIXTURES/runs"
-out=$(bash "$SCRIPT" solo 2>"$WORK/err")
-check "an answer that is not a number is treated as no answer" "" "$out"
-contains "and says so" "could not count" "$(cat "$WORK/err")"
-
-case_setup
-echo yes > "$GH_FIXTURES/run_list_fails"
-out=$(bash "$SCRIPT" solo 2>"$WORK/err"); rc=$?
-check "a failed run-count does not stop the worker" "" "$out"
+boarded "10:Ready"
+out=$(bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 2>/dev/null); rc=$?
+check "a claim on a Ready issue is held" "held" "$out"
 check "and exits 0" "0" "$rc"
-contains "and says why it continued" "the claim is the real lock" "$(cat "$WORK/err")"
+
+# The wide window, and the one that has actually happened: `pick` and `claim` are
+# separate steps of the workflow, so another run can take the issue in between.
+case_setup
+boarded "10:In Progress"
+out=$(bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 2>"$WORK/err"); rc=$?
+check "an issue already In Progress is not claimed" "lost" "$out"
+check "and losing is not a failure" "0" "$rc"
+absent "and the column is not overwritten" "39185de7" "$(cat "$GH_LOG")"
+contains "and the log says who has it" "another run took it" "$(cat "$WORK/err")"
+
+# A write that reports success and does not take is not a claim. Before `#266`
+# nothing here was read, so this was indistinguishable from a claim that worked.
+case_setup
+boarded "10:Ready"
+echo yes > "$GH_FIXTURES/edit_ignored"
+out=$(bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 2>"$WORK/err"); rc=$?
+check "a write that did not move the column is not a claim" "lost" "$out"
+check "and still exits 0" "0" "$rc"
+contains "and says what it read back" "reads back as Ready" "$(cat "$WORK/err")"
+
+echo
+echo "the tie-break, for two runs that read Ready in the same instant (#266)"
+
+# Both runs write a claim comment and comment ids are ordered, which the board is
+# not. Each run reads the same list and reaches the same verdict, so exactly one
+# of them holds the issue however the two orderings interleave.
+claimed() {
+  # $1.. are `id|minutes ago|run url` rows.
+  : > "$GH_FIXTURES/comments"
+  for row in "$@"; do
+    IFS='|' read -r id ago url <<<"$row"
+    printf '%s\t%s\t%s\n' "$id" \
+      "$(date -u -d "$ago minutes ago" +%Y-%m-%dT%H:%M:%SZ)" \
+      "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $url" \
+      >> "$GH_FIXTURES/comments"
+  done
+}
+
+MINE="https://github.com/Kolonie-AI/kolonie-docs/actions/runs/111"
+THEIRS="https://github.com/Kolonie-AI/kolonie-docs/actions/runs/222"
+
+case_setup
+claimed "900|0|$MINE"
+check "the only claim on the issue is this run's" "held" \
+  "$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>/dev/null)"
+
+case_setup
+claimed "900|0|$MINE" "901|0|$THEIRS"
+check "the earlier comment wins, and it is this one" "held" \
+  "$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>/dev/null)"
+
+case_setup
+claimed "899|0|$THEIRS" "900|0|$MINE"
+out=$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>/dev/null)
+check "and when it is the other one, this run has lost" "lost $THEIRS" "$out"
+
+# The verdict cannot depend on which run asks: the loser must see itself lose and
+# the winner must see itself win, from the identical list.
+case_setup
+claimed "899|0|$THEIRS" "900|0|$MINE"
+check "the same list read by the winner says held" "held" \
+  "$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$THEIRS" 2>/dev/null)"
+
+# The window exists only to keep a previous attempt out of the comparison. An
+# issue that failed and was queued again carries an old claim comment, and losing
+# to it would park the issue for good.
+case_setup
+claimed "500|90|$THEIRS" "900|0|$MINE"
+check "a claim from an earlier attempt does not win the race" "held" \
+  "$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>/dev/null)"
+
+# The comment is best-effort in the workflow. If it never landed there is nothing
+# to compare, and the answer has to be the safe one — the column was read back.
+case_setup
+: > "$GH_FIXTURES/comments"
+out=$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>"$WORK/err")
+check "no claim comment at all is not a lost race" "held" "$out"
+contains "and says why nothing contests it" "nothing contests" "$(cat "$WORK/err")"
+
+case_setup
+echo yes > "$GH_FIXTURES/api_fails"
+out=$(bash "$SCRIPT" verify-claim Kolonie-AI/kolonie-docs 10 "$MINE" 2>"$WORK/err"); rc=$?
+check "an API that cannot answer holds the claim" "held" "$out"
+check "and exits 0" "0" "$rc"
+contains "and says the column was read back" "read back and held" "$(cat "$WORK/err")"
+
+echo
+echo "an In Progress item with no run behind it (#266)"
+
+# `pick` skips a repository that has anything In Progress, so a forgotten item
+# holds its whole repository out of the queue. It is reported and never moved:
+# an automatic release would eventually take an issue from somebody mid-thought.
+aged() {
+  # $1.. are `owner/repo|number|hours ago` rows.
+  printf '%s\n' "$1" >/dev/null
+  for row in "$@"; do
+    IFS='|' read -r repo number ago <<<"$row"
+    date -u -d "$ago hours ago" +%Y-%m-%dT%H:%M:%SZ \
+      > "$GH_FIXTURES/issue_${repo//\//_}_issues_$number"
+  done
+}
+
+case_setup
+boarded "10:In Progress" "11:Ready"
+aged "Kolonie-AI/kolonie-docs|10|9"
+out=$(bash "$SCRIPT" forgotten-claims 2>/dev/null)
+contains "an item untouched for hours is a finding" "Kolonie-AI/kolonie-docs	10	9" "$out"
+
+case_setup
+boarded "10:In Progress"
+aged "Kolonie-AI/kolonie-docs|10|1"
+check "an item somebody is working is not" "" "$(bash "$SCRIPT" forgotten-claims 2>/dev/null)"
+
+case_setup
+boarded "10:Ready" "11:Done"
+check "and nothing outside In Progress is looked at" "" \
+  "$(bash "$SCRIPT" forgotten-claims 2>/dev/null)"
+
+# Reported, never released — the whole distinction `#266` draws.
+case_setup
+boarded "10:In Progress"
+aged "Kolonie-AI/kolonie-docs|10|9"
+bash "$SCRIPT" forgotten-claims >/dev/null 2>&1
+absent "the finding moves nothing" "item-edit" "$(cat "$GH_LOG")"
+
+case_setup
+boarded "10:In Progress"
+echo yes > "$GH_FIXTURES/api_fails"
+out=$(bash "$SCRIPT" forgotten-claims 2>"$WORK/err"); rc=$?
+check "an issue that cannot be read is not reported" "" "$out"
+check "and the sweep still exits 0" "0" "$rc"
+contains "and says it said nothing rather than guessing" "rather than guessing" "$(cat "$WORK/err")"
 
 echo
 echo "a refusal that names a rule rather than the issue (#250)"
