@@ -461,8 +461,15 @@ exists.
 open decision), `decision` (needs an architectural decision recorded before work
 starts), plus the GitHub defaults `bug` and `documentation`.
 
-**Origin** — `from:citizen`, `from:watcher`, `needs-triage`. Where an issue came
-from, which changes how it is read and what may be done to it.
+**Origin** — `from:citizen`, `from:external`, `from:maintainer`, `from:agent`,
+`from:watcher`, and `needs-triage` in `kolonie-platform` (measured across the five
+board repositories on 2026-08-10; the first five exist in all of them). Where an
+issue came from, which changes how it is read and what may be done to it — and,
+for the last two rows of the routing table below, what may be done to it *at all*.
+
+**Route** — `agent:opencode`, `agent:claude`, `agent:human`. **Who may pick the
+issue up**, which is a different question from what column it is in. Exactly one,
+always; the subsection below is the rule.
 
 ### `from:watcher` — observed by a machine, not judged by a person
 
@@ -598,6 +605,76 @@ was not its to take.
 **So the label is re-checked on the issue rather than trusted from its history.**
 If you find one that does not match a class, remove it and say why in a comment.
 An inherited label is not evidence.
+
+### The three routes — who may pick an issue up
+
+**The Colony has three kinds of worker, and until `kolonie-docs#259` it had no
+written rule for which got what.** It was decided in conversation and lived in one
+agent's head, which is the state this file exists to end.
+
+| Label | What it means | What goes there |
+|---|---|---|
+| **`agent:opencode`** | one issue, one run, unattended | Self-contained. One repository, one check, no question to ask. The change is finished when the target's own check passes |
+| **`agent:claude`** | a development agent, with the maintainer reachable | A package of issues that depend on each other; anything needing database, host or browser access; anything where a question may have to be asked mid-work |
+| **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:external` **and** the work would touch anything outside the area the issue names |
+
+> **Exactly one of the three, always.**
+
+**An issue with none is an issue nobody has decided about, which is what the
+Inbox column is for.** Measured on 2026-08-10 across the organisation: of 48 open
+issues, 42 carried exactly one route, none carried two, and the six carrying none
+were the five sitting in Inbox plus `kolonie-email#1`, which is Blocked. So the
+unrouted set and the undecided set were the same set, which is the property this
+rule is here to keep.
+
+#### Why the last row has two clauses
+
+**The first is obvious and covers the expensive mistakes.** It is the seven classes
+of `blocked:human` above, restated in the direction a router reads them.
+
+**The second is the security one, and it is worth stating rather than implying.** A
+citizen writing a support ticket can cause an issue to exist, and an issue can
+cause a commit. That path is legitimate and useful — a citizen reporting a defect
+in a message it received should get that message fixed. What it must not do is
+reach code the ticket never mentioned.
+
+> **So the guard is scope, not suspicion.** A citizen may cause a change to the
+> thing it complained about. It may not cause a change to the ledger.
+
+#### `agent:human` and `blocked:human` are not the same label twice
+
+They answer different questions and an issue can carry either without the other,
+which is the only reason both exist:
+
+- **`blocked:human` says a decision is not an agent's to take.** Its seven classes
+  are the *why*, they are re-checked on the issue, and one of them — class 6,
+  priority on an issue that arrived from outside — **gates a field rather than the
+  issue**. `p1`/`p2` waits for a person; the work itself may still be a worker's.
+- **`agent:human` says who picks it up.** Anything in classes 1 to 5 or 7 is
+  `agent:human`, and the second clause of the row adds a case no class covers:
+  work that is ordinary in itself but reaches outside what a citizen's or an
+  outsider's issue named.
+
+**An issue carrying `blocked:human` never carries `agent:opencode`** — the worker's
+own query excludes it, belt-and-braces, and §5 says why below.
+
+#### What this is not
+
+**Not a difficulty rating.** `agent:claude` is not *hard* — it is *needs something
+opencode does not have, or needs somebody to ask*. A trivial issue that requires
+reading production is `agent:claude`; a large mechanical refactor with a green
+check at the end is `agent:opencode`.
+
+**Not a queue.** The board column still says what is happening. This says who may
+pick it up.
+
+**And it reads the same to a person and to the worker that applies it.** The table
+above is the whole rule: `kolonie-docs#262`'s triage pass routes against these
+three rows and the prohibitions in
+[`operations/worker-prohibitions.md`](operations/worker-prohibitions.md), and
+nothing else. **A row it cannot apply confidently means `agent:claude`**, never a
+coin toss — that is the one default in this section chosen for its failure mode
+rather than its accuracy.
 
 **There is no `ready-to-build` label, and there is nothing to reintroduce it
 for.** It existed before status moved onto the board and was deleted with the
