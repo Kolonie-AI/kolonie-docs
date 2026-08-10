@@ -50,24 +50,30 @@ name: opencode worker
 
 on:
   schedule:
-    # Every thirty minutes, at :20 and :50 — back to where `#142` put it, after
-    # `0,20,40` was measured on 2026-08-09 and did not deliver.
+    # Every ten minutes, the maintainer's instruction on 2026-08-10.
     #
-    # **Three triggers an hour produced fewer runs than two.** Between 20:12 and
-    # 23:51 UTC six runs started, averaging forty-four minutes apart and never
-    # twenty; then none at all fired between 23:51 and 00:51 while three were
-    # scheduled. GitHub delays and outright drops scheduled runs under load, and
-    # a repository asking more often appears to be asked less.
+    # **The measurement says this may not buy what it asks for, and it is set
+    # anyway because that is a decision rather than a fact.** Between 20:12 and
+    # 23:51 UTC on 2026-08-09 the worker ran six times on a twenty-minute
+    # schedule — forty-four minutes apart on average — and then not at all for an
+    # hour while three runs were due. GitHub delays scheduled runs under load and
+    # drops them, so asking more often has already once produced fewer runs.
     #
-    # So this is not a return to a slower cadence. It is the cadence that was
-    # actually running, stated honestly, and it costs nothing that the faster
-    # number was buying — because it was not buying it.
+    # What makes this worth trying rather than arguing about: **it costs nothing
+    # to be wrong.** A trigger that does not fire leaves no trace and no work
+    # undone, a run that finds an empty queue exits in seconds, and the `Am I
+    # already running?` step means two firings cannot overlap on one issue.
     #
-    # `:20` and `:50` also clear `check-red-lines` (04:00) and `board-self-check`
-    # (05:00), which share one GraphQL budget: the reason `#142` chose these two
-    # minutes rather than the round ones, and which `0,20,40` gave up for a
-    # speed that never arrived.
-    - cron: '20,50 * * * *'
+    # **What to measure, so this is not settled by impression.** Count runs
+    # actually started over a full day against the 144 scheduled. If the ratio is
+    # no better than the 6-in-4-hours this replaces, the trigger count is not the
+    # limit and the honest setting is the slower one.
+    #
+    # `:00` collides with `check-red-lines` (04:00) and `board-self-check`
+    # (05:00), which share one GraphQL budget — six of 144 runs a day. A run
+    # whose board read is throttled exits on `pick` failing, which is loud, and
+    # the next one is ten minutes away.
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 # ## There is deliberately no `concurrency` group here (2026-08-07)
@@ -377,7 +383,7 @@ jobs:
           # genuinely is not done and requeueing is right. **`worker`** means the
           # issue was never the problem — a token, a checkout, the environment,
           # the worker's own scratch files — and that one will fail the same way
-          # every half hour until somebody looks.
+          # every ten minutes until somebody looks.
           fail() {
             printf '%s\n' "$1" > "$FAILURE_DIR/kind"
             printf '%s\n' "$2" > "$FAILURE_DIR/reason"
