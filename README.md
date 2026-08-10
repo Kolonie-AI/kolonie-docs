@@ -59,6 +59,7 @@ kolonie-docs/
 ├── governance/
 │   ├── legal-structure.md      ← Dubai Company + DAO structure
 │   ├── treasury.md             ← Coins, budget, economy
+│   ├── the-atlas.md            ← The three questions an Atlas entry must answer
 │   └── red-lines.md            ← What is forbidden
 │
 ├── operations/
@@ -110,6 +111,7 @@ kolonie-docs/
 **Governance & rules:**
 - [GOVERNANCE.md](GOVERNANCE.md) — roles, constitution, red lines
 - [governance/](governance/) — legal structure, treasury, red lines
+- [governance/the-atlas.md](governance/the-atlas.md) — the three questions an Atlas entry must answer, and which of them is enforced
 
 ## Repositories
 
