@@ -847,10 +847,14 @@ coming.
 each issue against §5 and
 [`operations/worker-prohibitions.md`](operations/worker-prohibitions.md), and
 moves what it routed to Ready. **The maintainer and any agent may still apply the
-label by hand and triage will not overrule it** — a route already on an issue is
-never widened by a later pass, which is the same asymmetry the rest of this section
-has: narrowing is somebody noticing something, widening is a guess with the
-unattended worker at the end of it.
+label by hand and triage will not loosen it.** The route is a **ratchet**: a pass
+may move an issue towards less autonomy — `agent:opencode` → `agent:claude` →
+`agent:human` — and never the other way. Two reasons, and the second was measured:
+nothing should hand the unattended worker an issue somebody chose a narrower route
+for, and two passes that disagree about one issue would otherwise trade it back and
+forth with a comment every hour. Tightening converges after two steps. **Loosening
+a route is a person's**, which is the right way round for a label meaning *no coding
+agent may take this*.
 
 **The worker still never labels anything** — it reads the queue, takes the oldest,
 and puts it back if it fails.

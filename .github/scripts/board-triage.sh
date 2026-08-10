@@ -496,11 +496,20 @@ sane_route() {
   # An answer that is not one of the three is not an answer.
   in_list "$proposed" "$ROUTES" || proposed="agent:claude"
 
-  # Never widened. An issue a person or a Claude agent already holds a route for
-  # is not handed to the unattended worker by a later pass — the pass cannot know
-  # why the narrower route was chosen, and `#262` says the unsure case belongs
-  # where somebody is reachable.
-  if [ "$proposed" = "agent:opencode" ] && [ -n "$current" ] && [ "$current" != "agent:opencode" ]; then
+  # ## The route is a ratchet: it may tighten and never loosen
+  #
+  # `ROUTES` is ordered by increasing autonomy, and a pass may move an issue down
+  # that order and never up. The obvious half is that nothing hands the unattended
+  # worker an issue a person or a Claude agent already holds a route for. The half
+  # that had to be measured is the other one: the second live pass moved three
+  # issues from `agent:human` back to `agent:claude`, which is a *widening*, and two
+  # passes that disagree about one issue would then trade it back and forth with a
+  # comment every hour. Tightening converges — there are two steps and then it
+  # stops.
+  #
+  # **So a route can only be loosened by a person**, which is the right way round
+  # for the label that means *no coding agent may take this*.
+  if [ -n "$current" ] && [ "$(route_rank "$proposed")" -gt "$(route_rank "$current")" ]; then
     proposed=$current
   fi
 
@@ -517,6 +526,17 @@ sane_route() {
   fi
 
   echo "$proposed"
+}
+
+# Where a route sits in `ROUTES`: 0 is the least autonomous. An unknown route ranks
+# above everything, so it can never survive the comparison above.
+route_rank() {
+  local wanted=$1 one rank=0
+  for one in $ROUTES; do
+    [ "$one" = "$wanted" ] && { echo "$rank"; return 0; }
+    rank=$((rank + 1))
+  done
+  echo 99
 }
 
 # The dependency, as the relation `#261` made readable. Prose in a body is what

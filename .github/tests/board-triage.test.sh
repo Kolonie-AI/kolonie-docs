@@ -329,6 +329,25 @@ run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 absent "a route is never widened by a later pass" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
+# The second live pass moved three issues from `agent:human` back to `agent:claude`.
+# Two passes disagreeing about one issue would trade it back and forth with a
+# comment every hour, so the route only ever tightens.
+case_setup
+searched "$(issue 900 'reserved for a person' 'agent:human')"
+boarded "900|Ready|agent:human"
+run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a route is not loosened either, so two passes cannot trade an issue" \
+  "--add-label agent:claude" "$log"
+absent "and nothing is removed" "--remove-label" "$log"
+
+case_setup
+searched "$(issue 900 'was in the queue' 'agent:opencode')"
+boarded "900|Ready|agent:opencode"
+run_apply "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
+contains "tightening is the direction that works" \
+  "--add-label agent:human --remove-label agent:opencode" "$(cat "$GH_LOG")"
+
 echo
 echo "priority, and the one class it is not triage's to set"
 
