@@ -509,6 +509,29 @@ tools a given machine has. See [operations/testing.md](operations/testing.md).
 
 Compose files, Traefik config and the deploy/rollback/healthcheck scripts live in `kolonie-infra`. See [operations/deployment.md](operations/deployment.md) for the process.
 
+## What is waiting for an agent
+
+`.github/workflows/waiting-for-an-agent.yml`, daily at 07:20 UTC
+(`kolonie-docs#265`, 2026-08-10). `agent:opencode` has a worker; `agent:claude`
+and `agent:human` have nobody, so a routed issue used to be labelled and then
+never mentioned again — which held while the maintainer agent was in the
+conversation when the label was applied, and stops the moment triage applies it
+overnight.
+
+It publishes **one issue in `kolonie-docs`, rewritten in place**, and comments
+only when something new appears on the list. Not mail: nothing in this
+repository sends any, and a mailed list would have meant a credential. Not a
+comment per issue: that is a notification per routing decision. Not a queue:
+nothing is assigned, because a Claude agent takes a *package* and asks questions
+mid-work.
+
+A package — issues linked by GitHub's dependency relation (`#261`) — is one
+entry with its parts in order. The clause saying why an issue is not
+`agent:opencode` is derived from its labels, which is all there is to read until
+triage records a reason. Logic in `.github/scripts/waiting-list.sh`, tested
+against a stubbed `gh` in `.github/tests/waiting-list.test.sh`, which the
+workflow runs before it publishes anything.
+
 ## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of

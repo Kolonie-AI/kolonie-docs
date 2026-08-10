@@ -613,6 +613,15 @@ looking like a live part of the process for two months (`kolonie-docs#4`).
 > **`agent:opencode` is queue membership. It is not a status and it is not a
 > trigger.**
 
+**The other two routes have no worker, and since `#265` they have a list.**
+`agent:claude` and `agent:human` say who should do it and nothing comes to take
+it, so `.github/workflows/waiting-for-an-agent.yml` publishes what is waiting
+once a day on one issue in this repository — rewritten in place, with a comment
+only when something new appears. A package (`§4`, issues linked by dependency)
+is one entry, because that is how it will be worked. Applying one of those two
+labels is therefore enough to be heard; it is not enough to be *started*, and
+nothing on that list is assigned to anybody.
+
 #### What has to be true before you apply it
 
 > **The label says two things, not one: this issue is specified well enough to be

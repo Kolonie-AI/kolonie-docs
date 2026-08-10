@@ -79,6 +79,7 @@ jobs:
           bash .github/tests/opencode-worker.test.sh
           bash .github/tests/opencode-red.test.sh
           bash .github/tests/opencode-context.test.sh
+          bash .github/tests/waiting-list.test.sh
           bash .github/tests/watch-finding.test.sh
 
       - name: Every internal Markdown link resolves
