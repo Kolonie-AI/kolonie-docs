@@ -109,7 +109,24 @@ that makes it usable: every line is a measurement or an argument, so a line can 
 disagreed with by pointing at something.
 
 **Not a growth area.** A fifth path or a sixth condition is a real finding and
-should arrive the way these did — from a refusal that happened. `kolonie-docs#264`
-is what turns a refusal that has appeared twice into a proposed line here, and it
-proposes rather than writes: **a worker that could widen its own constraints has
-none.**
+should arrive the way these did — from a refusal that happened.
+
+## How a line gets added
+
+**By a person, from a proposal** (`kolonie-docs#264`, live 2026-08-10). The hourly
+triage pass reads the refusals on every open issue carrying `opencode:failed`,
+compares each reason against this document, and when a reason has appeared on **two
+or more** issues and matches nothing here it comments on
+[the collecting issue](https://github.com/Kolonie-AI/kolonie-docs/issues/273) with
+the reason, the issues it appeared on, and the wording it suggests.
+
+**Accepting one is editing this file. Nothing else does.** The pass proposes and
+stops there, because the list is what constrains the workers and *a worker that
+could widen its own constraints has none* — the same argument that keeps the
+opencode worker out of `.github/workflows/`. Rejecting one is a reply saying why;
+either way it is not proposed again, because each proposal carries a key the next
+pass reads.
+
+**Two, not three.** One refusal can be one badly written issue; two of a kind is a
+rule waiting to be written. It is the number the failure counter already uses, for
+the same reason.

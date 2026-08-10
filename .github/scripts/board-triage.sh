@@ -6,6 +6,9 @@
 #   board-triage.sh brief <candidates.json> [offset] [count]  # -> what the model reads
 #   board-triage.sh apply <candidates.json> <decisions.json>  # -> the labels, links and moves
 #   board-triage.sh provenance <login>                # -> member | outside
+#   board-triage.sh refusals                          # -> the issues the worker tried and did not finish
+#   board-triage.sh proposal-brief <refusals.json>    # -> what the model reads to propose a rule (#264)
+#   board-triage.sh propose <proposals.json>          # -> publishes the proposals a person may accept
 #
 # ## Why this exists
 #
@@ -82,10 +85,39 @@ TRIAGE_STATUSES=${TRIAGE_STATUSES:-Inbox|Ready}
 # pass may move an issue *down* it and never up.
 ROUTES=${ROUTES:-agent:human agent:claude agent:opencode}
 
+# The mark the worker leaves on an issue it tried and did not finish (`#255`), and
+# the filter `#264`'s half of this file reads.
+FAILED_LABEL=${FAILED_LABEL:-opencode:failed}
+
 # The provenances that make a priority somebody else's to set (`AGENTS.md` §5,
 # class 6 of `blocked:human`). An agent triaging its own board may prioritise;
 # nothing may prioritise an issue that arrived from outside the Colony.
 OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external needs-triage}
+
+# ## Where a proposed prohibition goes (`#264`)
+#
+# `#264` says the proposal is a comment on `kolonie-docs#142` — which closed on
+# 2026-08-10, so that address no longer exists. The shape it asked for does: one
+# place a person reads, one comment per proposal, nothing rewritten. So the
+# proposals collect on **one issue found by its title**, created when there is a
+# first proposal to make and not before — the same handle
+# `waiting-for-an-agent.yml` uses, and for the same reason: a number committed here
+# would be a second record of something GitHub holds.
+PROPOSAL_ISSUE_TITLE=${PROPOSAL_ISSUE_TITLE:-Proposed additions to the worker prohibitions}
+PROPOSAL_REPO=${PROPOSAL_REPO:-$ORG/kolonie-docs}
+
+# **Two, not three** (`#264`). The existing failure counter fires at two and says an
+# issue that fails twice is a finding rather than a queue position; this is the same
+# number for the same reason. One refusal can be one badly written issue; two of a
+# kind is a rule waiting to be written.
+PROPOSAL_THRESHOLD=${PROPOSAL_THRESHOLD:-2}
+
+# How many issues the refusal read covers, and how much of each comment thread.
+# Bounded because this runs hourly and the interesting part of a refusal is its
+# first paragraph, not the thread under it.
+REFUSAL_LIMIT=${REFUSAL_LIMIT:-20}
+REFUSAL_COMMENTS=${REFUSAL_COMMENTS:-4}
+REFUSAL_CHARS=${REFUSAL_CHARS:-1200}
 
 # The generated list is not work (`#265`). It sits in Inbox by design, carries no
 # route, and a triage pass that routed it would be labelling its own report.
@@ -565,6 +597,194 @@ comment() {
   return 0
 }
 
+# ## The refusals, which are the only evidence a prohibition may be written from
+#
+# `#264`: three issues were queued on 2026-08-09 and 10 that no run could finish,
+# each produced a clear correct refusal, and **each lesson landed in a comment and
+# nowhere else** — so the second and third mistakes were made with the first one's
+# answer already written down. That is the difference between a system that reports
+# and one that learns.
+#
+# `opencode:failed` is the filter: *what did the worker try and not finish*
+# (`#255`). The comments are where the reason is, because that is where the worker
+# writes it.
+refusals() {
+  local issues
+  issues=$(gh search issues --owner "$ORG" --state open --label "$FAILED_LABEL" \
+    --limit "$REFUSAL_LIMIT" --json repository,number,title,labels) ||
+    die "the failed issues could not be searched, so no refusal can be read" 2
+  [ -n "$issues" ] || issues='[]'
+
+  local rows repo number title labels comments out
+  out=$(mktemp) || die "no temporary file" 2
+  rows=$(jq -r '.[] | "\(.repository.nameWithOwner)\t\(.number)"' <<<"$issues")
+
+  while IFS=$'\t' read -r repo number; do
+    [ -n "${repo:-}" ] || continue
+    # The last few comments and no more. A refusal is at the top of the thread the
+    # worker wrote; everything after it is a person arguing with it, which is worth
+    # reading and is not worth the whole thread.
+    comments=$(gh issue view "$number" --repo "$repo" --json comments \
+      --jq "[.comments[-$REFUSAL_COMMENTS:][] | \"\(.author.login): \(.body[0:$REFUSAL_CHARS])\"]" 2>/dev/null) ||
+      comments='[]'
+    jq -cn --arg repo "$repo" --argjson number "$number" \
+      --argjson comments "${comments:-[]}" \
+      --argjson issue "$(jq -c --arg r "$repo" --argjson n "$number" '.[] | select(.repository.nameWithOwner == $r and .number == $n)' <<<"$issues")" '
+      { repo: $repo, number: $number, title: $issue.title,
+        labels: [$issue.labels[].name], comments: $comments }' >>"$out"
+  done <<<"$rows"
+
+  jq -s '{refusals: .}' "$out"
+  rm -f "$out"
+}
+
+# What the model reads to propose a rule. The prohibitions as they stand, the
+# proposals a person has already been shown, and the refusals.
+proposal_brief() {
+  local file=$1
+  [ -f "$file" ] || die "proposal-brief needs the file \`refusals\` wrote" 1
+
+  local seen
+  seen=$(proposed_keys)
+
+  cat <<HEADER
+# What no worker can do, as it stands
+
+$(cat "$ROOT/operations/worker-prohibitions.md")
+
+# Proposals already made, which must not be made again
+
+${seen:-(none yet)}
+
+# The refusals
+
+$(jq -r '"There are \(.refusals | length) open issue(s) the worker tried and did not finish."' "$file")
+
+HEADER
+
+  jq -r '.refusals[] | "## \(.repo)#\(.number) — \(.title)\n\nlabels: \(.labels | join(", "))\n\n\(.comments | join("\n\n---\n\n"))\n"' "$file"
+}
+
+# The keys of every proposal already published, read off the collecting issue. A
+# marker comment rather than a parse of the prose: the prose is for a person and
+# will be edited, and a proposal that reappears every hour is the noise `#262`
+# refuses.
+proposed_keys() {
+  local number
+  number=$(proposal_issue) || return 0
+  [ -n "$number" ] || return 0
+  gh issue view "$number" --repo "$PROPOSAL_REPO" --json comments \
+    --jq '.comments[].body' 2>/dev/null |
+    sed -n 's/.*<!-- prohibition-proposal: \([a-z0-9-]*\) -->.*/\1/p'
+}
+
+# The collecting issue's number, or nothing. Found by title, never by a number
+# committed here.
+#
+# **Listed and filtered here rather than searched, and that cost an issue to
+# learn.** `--search "in:title"` goes through GitHub's search index, which had not
+# heard of the issue this function had created seconds earlier — so the second
+# proposal of the first live run opened a *second* collecting issue. The issues REST
+# list is the repository's own state and has no index behind it. `PROPOSAL_NUMBER`
+# then holds the answer for the rest of the run, because two proposals in one pass
+# must not race each other either.
+PROPOSAL_NUMBER=${PROPOSAL_NUMBER:-}
+
+proposal_issue() {
+  if [ -n "$PROPOSAL_NUMBER" ]; then
+    printf '%s\n' "$PROPOSAL_NUMBER"
+    return 0
+  fi
+  PROPOSAL_NUMBER=$(gh issue list --repo "$PROPOSAL_REPO" --state open --limit 100 \
+    --json number,title \
+    --jq "[.[] | select(.title == \"$PROPOSAL_ISSUE_TITLE\")] | .[0].number // empty" 2>/dev/null)
+  printf '%s\n' "$PROPOSAL_NUMBER"
+}
+
+# The proposals, filtered by the threshold and by what has already been said, then
+# published for a person to accept.
+#
+# **It proposes; it does not edit the list.** The list is what constrains the
+# workers, and a worker that could widen its own constraints has none — the same
+# reason the opencode worker may not write `.github/workflows/`.
+propose() {
+  local file=$1
+  [ -f "$file" ] || die "propose needs the file the model wrote" 1
+
+  local seen published=0
+  seen=$(proposed_keys | tr '\n' ' ')
+
+  local rows key reason issues wording count
+  rows=$(jq -r '.proposals[]? | [.key, ((.issues // []) | join(" ")), (.reason // "" | gsub("[\n\r]+"; " ")), (.wording // "" | gsub("[\n\r]+"; " "))] | join("\u001f")' "$file") ||
+    die "the model's proposals are not the shape this script publishes" 3
+
+  [ -n "$rows" ] || { note "no prohibition was proposed this pass"; return 0; }
+
+  while IFS=$'\x1f' read -r key issues reason wording; do
+    [ -n "${key:-}" ] || continue
+
+    # Two, not three, and counted here rather than trusted from the answer.
+    count=$(printf '%s\n' $issues | grep -c '#' || true)
+    if [ "${count:-0}" -lt "$PROPOSAL_THRESHOLD" ]; then
+      note "\"$key\" rests on $count refusal(s) and the threshold is $PROPOSAL_THRESHOLD — not proposed"
+      continue
+    fi
+
+    if in_list "$key" "$seen"; then
+      note "\"$key\" has already been proposed and is waiting for a person"
+      continue
+    fi
+
+    publish_proposal "$key" "$issues" "$reason" "$wording" && published=$((published + 1))
+    seen+=" $key"
+  done <<<"$rows"
+
+  echo "$published prohibition(s) proposed"
+}
+
+publish_proposal() {
+  local key=$1 issues=$2 reason=$3 wording=$4
+  local number body
+
+  number=$(proposal_issue)
+  if [ -z "$number" ]; then
+    # Created on the first proposal and not before: an empty collecting issue is a
+    # notification about nothing.
+    number=$(gh issue create --repo "$PROPOSAL_REPO" \
+      --title "$PROPOSAL_ISSUE_TITLE" \
+      --label agent:human --label area:docs --label p2 \
+      --body "Each comment here is one prohibition the triage pass has proposed for [\`operations/worker-prohibitions.md\`](https://github.com/$PROPOSAL_REPO/blob/main/operations/worker-prohibitions.md), because a refusal reason appeared on at least $PROPOSAL_THRESHOLD issues and matched nothing on that list (\`kolonie-docs#264\`).
+
+**A person accepts one by editing the document.** Nothing here edits it: a worker that could widen its own constraints has none, which is the same reason the opencode worker may not write \`.github/workflows/\`. Rejecting one is a reply saying why — the pass reads the keys it has already proposed and will not repeat itself." 2>/dev/null | sed 's|.*/||')
+    [ -n "$number" ] || {
+      note "the collecting issue for proposed prohibitions could not be created"
+      return 1
+    }
+    # Held for the rest of the run, so a second proposal in the same pass comments
+    # rather than opening a second collecting issue.
+    PROPOSAL_NUMBER=$number
+    echo "opened $PROPOSAL_REPO#$number to collect proposed prohibitions" >&2
+  fi
+
+  body="**A refusal reason that is not on the list.** $reason
+
+Seen on: $(printf '%s' "$issues" | sed 's/ /, /g')
+
+**Suggested wording:**
+
+> $wording
+
+<sub>Proposed by the triage pass (\`kolonie-docs#264\`) because this reason appeared on $PROPOSAL_THRESHOLD or more issues and matched nothing in \`operations/worker-prohibitions.md\`. **Accept it by editing that file**; reject it by replying with why. Either way it will not be proposed again.</sub>
+<!-- prohibition-proposal: $key -->"
+
+  gh issue comment "$number" --repo "$PROPOSAL_REPO" --body "$body" >/dev/null 2>&1 || {
+    note "the proposal \"$key\" could not be published on $PROPOSAL_REPO#$number"
+    return 1
+  }
+  echo "proposed \"$key\" on $PROPOSAL_REPO#$number, from $count refusals"
+  return 0
+}
+
 has_any() {
   local labels=$1 wanted=$2 one
   for one in $wanted; do
@@ -595,7 +815,16 @@ case "${1:-}" in
   provenance)
     provenance "${2:?provenance needs a login}"
     ;;
+  refusals)
+    refusals
+    ;;
+  proposal-brief)
+    proposal_brief "${2:?proposal-brief needs the file \`refusals\` wrote}"
+    ;;
+  propose)
+    propose "${2:?propose needs the file the model wrote}"
+    ;;
   *)
-    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | apply <candidates.json> <decisions.json> | provenance <login>" 1
+    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | apply <candidates.json> <decisions.json> | provenance <login> | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac

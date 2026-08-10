@@ -154,3 +154,38 @@ jobs:
           bash .github/scripts/board-triage.sh apply \
             "${{ steps.candidates.outputs.file }}" \
             "${{ steps.decide.outputs.decisions }}"
+
+      # ## And what the refusals say that the prohibitions do not (`#264`)
+      #
+      # Three issues were queued on 2026-08-09 and 10 that no run could finish; each
+      # produced a correct refusal, and each lesson landed in a comment and nowhere
+      # else — so the second and third mistakes were made with the first one's answer
+      # already written down.
+      #
+      # **`#264` puts this before the routing and it runs after it, deliberately.** A
+      # proposal is not a rule until a person accepts it, so it cannot change what
+      # this pass routes however early it runs — and at the end, a proposal step that
+      # fails costs no routing. What it does change is the *next* pass, which is the
+      # point.
+      - name: Has a refusal outgrown the list?
+        id: proposals
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
+          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
+        run: |
+          set -uo pipefail
+          refusals="$RUNNER_TEMP/refusals.json"
+          brief="$RUNNER_TEMP/proposal-brief.md"
+          proposals="$RUNNER_TEMP/proposals.json"
+
+          bash .github/scripts/board-triage.sh refusals > "$refusals" || exit 1
+          echo "$(jq '.refusals | length' "$refusals") issue(s) the worker tried and did not finish"
+
+          bash .github/scripts/board-triage.sh proposal-brief "$refusals" > "$brief"
+          python3 .github/scripts/board-triage-decide.py --propose "$brief" "$proposals"
+
+          # The threshold and the deduplication are in the script, not in the model's
+          # answer: *two, not three* is a rule with a cost.
+          bash .github/scripts/board-triage.sh propose "$proposals"

@@ -25,9 +25,35 @@ cat > "$WORK/bin/gh" <<'STUB'
 #!/bin/bash
 # The credential each call was made with, so that a step wired to the wrong token
 # is a failing assertion rather than a 403 in production (`#270`).
-echo "as=${GH_TOKEN:-none} $*" >> "$GH_LOG"
+#
+# **Short values only.** The cases that care set `GH_TOKEN=issues` or `=board`;
+# anything longer is whatever the machine running the tests happens to hold, and a
+# real token belongs in no log — including a temporary one.
+if [ "${#GH_TOKEN}" -le 12 ]; then as=${GH_TOKEN:-none}; else as=ambient; fi
+echo "as=$as $*" >> "$GH_LOG"
 case "$1 $2" in
   "search issues") cat "$GH_FIXTURES/issues" 2>/dev/null ;;
+  # `#264` reads the failed issues' threads, lists the collecting issue rather than
+  # searching for it, and opens it when there is none.
+  # Both are read through `--jq`, and the filter is the behaviour: `proposal_issue`
+  # picks the collecting issue out of the repository's issues by title, and
+  # `proposed_keys` reads the comment bodies. A fixture of pre-filtered output would
+  # assert nothing about either.
+  "issue view"|"issue list")
+    case "$1 $2" in
+      "issue view") fixture="$GH_FIXTURES/comments" ;;
+      *)            fixture="$GH_FIXTURES/issue_list" ;;
+    esac
+    [ -f "$fixture" ] || exit 0
+    expression=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --jq) expression=$2; shift 2 ;;
+        *)    shift ;;
+      esac
+    done
+    if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
+  "issue create") cat "$GH_FIXTURES/created" 2>/dev/null ;;
   # The board, translated out of the `gh project item-list` shape the fixtures are
   # written in — the same translation `opencode-worker.test.sh` does, because
   # `board-triage.sh` reads the board through that script rather than with a
@@ -502,6 +528,71 @@ printf '{"decisions": [{"repo": "Kolonie-AI/kolonie-docs", "number": 900}]}\n' >
 run_apply "$WORK/decisions.json" >/dev/null
 contains "a decision with no route at all still routes to agent:claude" \
   "--add-label agent:claude" "$(cat "$GH_LOG")"
+
+echo
+echo "a refusal that has appeared twice becomes a proposal, and nothing more (#264)"
+
+# `propose` is handed what the model answered; the threshold, the deduplication and
+# the refusal to edit the list are this script's, and they are what these cases are.
+proposals() {
+  printf '%s' "$1" > "$WORK/proposals.json"
+  echo "$WORK/proposals.json"
+}
+
+collecting() {
+  # The collecting issue exists, with the keys given here already proposed on it.
+  printf '[{"number": 500, "title": "Proposed additions to the worker prohibitions"}]\n' \
+    > "$GH_FIXTURES/issue_list"
+  local body="" key
+  for key in "$@"; do
+    body+="{\"body\": \"already said <!-- prohibition-proposal: $key -->\"},"
+  done
+  printf '{"comments": [%s]}\n' "${body%,}" > "$GH_FIXTURES/comments"
+}
+
+case_setup
+collecting
+out=$(bash "$SCRIPT" propose "$(proposals '{"proposals":[{"key":"live-host-write","reason":"it writes to the live host","issues":["Kolonie-AI/kolonie-infra#103","Kolonie-AI/kolonie-infra#107"],"wording":"A write to the live host cannot be observed by a repository check."}]}')" 2>"$WORK/stderr")
+log=$(cat "$GH_LOG")
+contains "a reason on two issues is proposed" "issue comment 500" "$log"
+contains "and the comment carries the key, so it is recognisable next time" \
+  "prohibition-proposal: live-host-write" "$log"
+contains "and the suggested wording" "cannot be observed by a repository check" "$log"
+absent "and nothing edits the prohibitions file" "worker-prohibitions.md --" "$log"
+check "and the run says what it published" "1 prohibition(s) proposed" "$(tail -1 <<<"$out")"
+
+case_setup
+collecting
+bash "$SCRIPT" propose "$(proposals '{"proposals":[{"key":"one-off","reason":"a one-off","issues":["Kolonie-AI/kolonie-docs#900"],"wording":"Something."}]}')" >/dev/null 2>"$WORK/stderr"
+absent "one refusal is not a rule: two, not three, and never one" "issue comment" "$(cat "$GH_LOG")"
+contains "and it says why it said nothing" "threshold is 2" "$(cat "$WORK/stderr")"
+
+case_setup
+collecting "live-host-write"
+bash "$SCRIPT" propose "$(proposals '{"proposals":[{"key":"live-host-write","reason":"again","issues":["Kolonie-AI/kolonie-infra#103","Kolonie-AI/kolonie-infra#107"],"wording":"Again."}]}')" >/dev/null 2>"$WORK/stderr"
+absent "a proposal already waiting for a person is not made twice" "issue comment" "$(cat "$GH_LOG")"
+contains "and it says it is waiting" "waiting for a person" "$(cat "$WORK/stderr")"
+
+case_setup
+# No collecting issue yet: it is opened on the first proposal and not before.
+printf '[]\n' > "$GH_FIXTURES/issue_list"
+printf '{"comments": []}\n' > "$GH_FIXTURES/comments"
+printf 'https://github.com/Kolonie-AI/kolonie-docs/issues/501\n' > "$GH_FIXTURES/created"
+bash "$SCRIPT" propose "$(proposals '{"proposals":[{"key":"a","reason":"r","issues":["x/y#1","x/y#2"],"wording":"W."},{"key":"b","reason":"r2","issues":["x/y#3","x/y#4"],"wording":"W2."}]}')" >/dev/null 2>&1
+log=$(cat "$GH_LOG")
+contains "the collecting issue is opened for a person, not for an agent" \
+  "--label agent:human" "$log"
+check "and it is opened once however many proposals a pass has" "1" \
+  "$(grep -c "issue create" <<<"$log")"
+check "the second proposal comments on the issue the first one opened" "2" \
+  "$(grep -c "issue comment 501" <<<"$log")"
+
+case_setup
+printf '[]\n' > "$GH_FIXTURES/issue_list"
+printf '{"comments": []}\n' > "$GH_FIXTURES/comments"
+bash "$SCRIPT" propose "$(proposals '{"proposals":[]}')" >/dev/null 2>"$WORK/stderr"
+absent "nothing proposed opens nothing" "issue create" "$(cat "$GH_LOG")"
+contains "and says so" "no prohibition was proposed" "$(cat "$WORK/stderr")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
