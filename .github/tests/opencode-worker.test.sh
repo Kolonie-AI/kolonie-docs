@@ -1428,6 +1428,14 @@ contains "and says what actually happens to the pull request" \
 contains "the worker may not rewrite its own queue script" \
   ".github/scripts/opencode-worker.sh" "$wf_commands"
 
+# The per-repository courtesy: a repository with something In Progress is one no
+# second run may take work from. Every conflict this worker has had was two runs
+# in one repository; two runs in different ones share no history.
+contains "pick reads which repositories are already in flight" \
+  'select(.status == "In Progress")' "$(cat "$SCRIPT")"
+contains "and skips candidates from them" \
+  'select(.repo as $r | $busy | index($r) | not)' "$(cat "$SCRIPT")"
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"

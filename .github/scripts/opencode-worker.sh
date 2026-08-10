@@ -875,13 +875,32 @@ case "${1:-}" in
     # `agent:opencode` back — which is exactly the case `#250` is about, and the
     # case a search term the labeller can overwrite would not cover.
     selection=$(jq -r --arg forbidden "$FORBIDDEN_LABEL" --slurpfile board "$board_file" '
-      [ .[]
+      # **The repositories a run is already working in.** Two runs in one
+      # repository is what every conflict this worker has had was made of: a
+      # migration number taken twice, two entries at the top of one changelog, a
+      # branch that stopped applying to `main` while its pull request waited. Two
+      # runs in *different* repositories share no history, no check and no merge,
+      # so git cannot put them in each other'"'"'s way.
+      #
+      # This is the courtesy `solo` used to pay globally, paid per repository
+      # instead — and read off the board rather than off the run list, because
+      # the board is where `claim` records which repository a run is in. A run
+      # that died without releasing still shows here; a run list entry for a job
+      # that is hung does not say what it was working on.
+      #
+      # The lock is still the claim. This only stops a run walking into work it
+      # would collide with.
+      ( [ $board[0].items[]
+          | select(.status == "In Progress")
+          | .content.repository ] | unique ) as $busy
+      | [ .[]
         | select([.labels[].name] | index("blocked:human") | not)
         | select([.labels[].name] | index($forbidden) | not)
         | { repo: .repository.nameWithOwner,
             number: .number,
             createdAt: .createdAt,
             labels: [.labels[].name] }
+        | select(.repo as $r | $busy | index($r) | not)
         | . as $issue
         | ($board[0].items[]
             | select(.content.number == $issue.number
