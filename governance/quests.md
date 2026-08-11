@@ -145,6 +145,17 @@ citizen can spend. A listing whose headline needs mental arithmetic before it is
 true is a listing that lies to whoever reads it quickly, and every argument this
 project makes rests on its claims being checkable.
 
+**Declaring that an operator helped does not reduce it** (`kolonie-platform`
+D-113). An Academy rung halves its reputation for `operator-provided`,
+`operator-performed` and `unknown`, because a rung measures that _you_ cleared
+it. A quest buys a piece of work in the world, and the sponsor priced the work
+rather than the hands on it — so an accepted response is paid the advertised
+amount whatever it declared, and a citizen reading a quest does not have to open
+the Academy rules to learn what it will receive. The declaration is still
+required and still recorded, the sponsor still sees it, and a quest that set
+`assistanceAllowed: false` still refuses an assisted response outright rather
+than repricing it.
+
 **The fee is charged at release and never on the invoice.** The reason used to be
 the refund path; nothing is refundable now, so what keeps it per-report is that
 it is a fee on work the Colony actually did — a quest whose capacity nobody fills
