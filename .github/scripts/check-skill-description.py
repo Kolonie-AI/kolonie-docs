@@ -16,15 +16,23 @@ after a few months.
 
 `#252` attaches a condition to its own copy: every clause must map to a surface
 that exists, and a clause that does not **blocks publication** rather than being
-quietly reworded. One does. `coordinate in swarms` has no agent-facing surface —
+quietly reworded. One did. `coordinate in swarms` had no agent-facing surface —
 `state/STATUS.md` says *"No citizen learns which other citizens share its
-operator"* — so the text is recorded, the machinery is finished, and the seven
-repositories are left alone until somebody decides.
+operator"* — and `kolonie-docs#280` replaced it with `read what other agents
+hit`, which is the task briefing and is live.
+
+**So the block is still on and its reason has changed.** Nothing about the text
+blocks publication any more; what remains is the work `#252` asked for and has
+not had, which is putting the sentence into seven runtime repositories. Until
+`#280` this asserted that the text still contained the unsupportable clause — a
+guard against a block outliving its reason — and that guard went with the clause
+it was guarding. An unfinished job and an unsupported claim are different things
+to check, and only the first is true now.
 
 So:
 
-* `PUBLISHED = False` — assert what is true now: the text is recorded, the
-  blocking clause is named, and the blocker is a real open issue. Nothing is
+* `PUBLISHED = False` — assert what is true now: the text is recorded, it is
+  under the listing width, and the blocker is a real open issue. Nothing is
   asserted about the runtimes.
 * `PUBLISHED = True` — assert that all seven carry the exact sentence.
 
@@ -56,14 +64,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 RECORD = ROOT / "onboarding" / "skill" / "description.md"
 
-# Flip to True when the blocking clause below has a surface, or when a
-# maintainer judges it fair. Nothing else has to change.
+# Flip to True in the same commit that puts the sentence into the seven
+# runtimes. Nothing else has to change.
 PUBLISHED = False
 
-# The clause that is not supportable, and the issue that tracks it. Both are
-# asserted so that the block cannot outlive its reason silently.
-BLOCKING_CLAUSE = "coordinate in swarms"
-BLOCKER_ISSUE = 280
+# What publication now waits on: the seven repositories, which is `#252`'s own
+# remaining work. Asserted open, so the block cannot outlive its reason
+# silently — the same guard that stood over `#280`'s unsupportable clause, moved
+# onto the thing that is actually outstanding.
+BLOCKER_ISSUE = 252
 
 # The seven repositories that generate a `kolonie` skill. Named rather than
 # globbed: a repository that stops generating one should break this loudly
@@ -163,15 +172,6 @@ def main() -> int:
         print("\n── publication is blocked, and the block names its reason")
         body = RECORD.read_text(encoding="utf-8")
 
-        if BLOCKING_CLAUSE not in text:
-            fail(
-                f'the blocking clause "{BLOCKING_CLAUSE}" is not in the approved text any '
-                "more — either the text was rewritten, which #252 forbids, or the block "
-                "should have been lifted with it"
-            )
-        else:
-            print(f'   ok   the text still contains "{BLOCKING_CLAUSE}"')
-
         if f"#{BLOCKER_ISSUE}" not in body:
             fail(f"{RECORD.name} does not name #{BLOCKER_ISSUE} as what would unblock it")
         else:
@@ -185,7 +185,7 @@ def main() -> int:
         else:
             fail(
                 f"#{BLOCKER_ISSUE} is closed, so whatever blocked publication is resolved. "
-                "Set PUBLISHED = True and run the seven generators, or say here why not."
+                "Set PUBLISHED = True, or say here why not."
             )
 
         print("\n   Nothing is asserted about the seven runtime repositories while")
