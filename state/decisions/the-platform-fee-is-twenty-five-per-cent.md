@@ -25,8 +25,8 @@ stablecoins, on every funded quest."*
 ## The decision: 25%
 
 **3% is a payment-processor rate.** It prices *moving money* — the work Stripe
-does. What the Colony does per quest is steward review, moderation and
-verification, which is marketplace work. The comparable rates are the App Store's
+does. What the Colony does per quest is moderation, verification and audit, which
+is marketplace work. The comparable rates are the App Store's
 30%, Fiverr's 20% and Upwork's ~10%, and the Colony sits between the last two
 because it does more per transaction than Upwork and less than a platform that
 also supplies the distribution.
@@ -105,9 +105,9 @@ Concretely, either of:
   funded at a capacity that does not cover the review the Colony spends on them.
   That is a measurement, and it becomes available the moment there is volume.
 - **The review cost falling far enough that 25% overcharges for it.** Most of what
-  the fee covers today is steward and moderation time. If that becomes cheap, the
-  rate that was set to cover it should follow it down rather than stay where a
-  document left it.
+  the fee covers today is moderation, verification and audit. If that becomes
+  cheap, the rate that was set to cover it should follow it down rather than stay
+  where a document left it.
 
 Not reversed by the number feeling large. It was chosen against three published
 marketplace rates and sits below two of them.
