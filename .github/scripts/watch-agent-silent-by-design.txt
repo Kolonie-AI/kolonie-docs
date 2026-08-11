@@ -1,0 +1,52 @@
+# Services whose ordinary output the log pipeline discards on purpose.
+#
+# `watch-agent.sh` reports a service that logged in the last seven days and
+# nothing in the last twenty-four hours. That measurement asks *is this runner
+# still writing*, and it answers correctly for every service whose lines reach
+# Loki. For a service whose ordinary lines are **dropped before they get there**,
+# it answers a question nobody asked: silence is the designed state, so the check
+# fires against a healthy host, on a schedule, forever.
+#
+# ## Why this is not `watch-agent-retired.txt`
+#
+# That file is for a service somebody **took away**. Three properties of it are
+# wrong here and each one on its own would be enough:
+#
+# - **An entry there expires after seven days**, because by then the removed
+#   service has left the window the check reads. A service that is running and
+#   permanently quiet never leaves that window, so the entry would stop working
+#   and the false alarm would return every week.
+# - **Its normal state is empty.** This file's normal state is whatever the
+#   pipeline drops, which is a property of the pipeline and not an event.
+# - **It records an intention about a service.** This records a rule about the
+#   *pipeline*, and the service it names is running.
+#
+# ## What may go in, and it is narrow
+#
+# > **Only a service whose lines are dropped by a rule in the ingest pipeline,
+# > and the entry names that rule.** Not a service that is merely quiet, not one
+# > that logs rarely, and never one somebody would like to stop hearing about.
+#
+# The test is falsifiable in the same way `AGENTS.md` §5 class 7 is: anybody
+# disagreeing opens the file the entry names and reads the stage. *It does not
+# log much* is not it — a service that logs little still logs, and the check is
+# already silent about it.
+#
+# ## What is given up, said plainly
+#
+# **This check can no longer say anything about a service listed here.** If
+# `promtail` dies, this file is why nothing is filed about `promtail`.
+#
+# That is affordable for exactly the two services below and it should not be
+# assumed for a third. `promtail` is the shipper: if it stops, **every** service
+# goes quiet at once, and the check reports all of them. `loki` is the store: if
+# it stops, the watcher's own queries fail and `loki_reachable` says so before
+# either question is asked. Both have a louder failure signal than their own
+# silence, which is what makes dropping their silence safe. A service without
+# one does not belong here whatever its volume.
+#
+# One service per line: name, the file holding the rule, and what the rule does.
+# Only the first field is matched. A line beginning with `#` is a comment.
+
+loki	kolonie-infra/promtail/promtail.yml	stage 6 drops debug and info from the log stack itself (kolonie-infra#81, 2026-08-05); warn and above still arrive
+promtail	kolonie-infra/promtail/promtail.yml	stage 6 drops debug and info from the log stack itself (kolonie-infra#81, 2026-08-05); warn and above still arrive

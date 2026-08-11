@@ -299,6 +299,58 @@ expect "with no retired list the alarm is unchanged" \
 unset WATCH_RETIRED_FILE
 
 echo
+echo "a service the pipeline silences is quiet, not dead (#284)"
+
+# `promtail` was filed as a `p1` for logging nothing in 24 hours while running,
+# healthy and tailing every file on the host: `kolonie-infra#81` drops `debug`
+# and `info` from the log stack itself at ingestion, so its ordinary output never
+# reaches Loki. Same silence as a dead runner, same as a retired one, and the
+# difference is again not in the logs — here it is a rule in another
+# repository's pipeline.
+export WATCH_SILENT_FILE="$WORK/by-design.txt"
+printf '# a comment\npromtail\tkolonie-infra/promtail/promtail.yml\tstage 6 drops debug and info\n' \
+  > "$WATCH_SILENT_FILE"
+
+setup; printf '{"data":["api","website","verifier-runner","promtail"]}\n' > "$FIX/services_7d"
+printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the silenced service is not reported" \
+  "$(grep -qx 'promtail' "$WORK/out/silent.txt" && echo no || echo yes)" "$(cat "$WORK/out/silent.txt")"
+expect "and it is recorded as by-design rather than dropped" \
+  "$(grep -qx 'promtail' "$WORK/out/by-design.txt" && echo yes || echo no)" "$(cat "$WORK/out/by-design.txt")"
+
+# The rejection case, and it is the one that matters: a pipeline rule about one
+# service must not quieten the dead service standing beside it.
+expect "a genuinely silent service beside it is still reported" \
+  "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "no issue is filed about the silenced service" \
+  "$(grep -q 'promtail` has stopped logging' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# Suppressed is not hidden, exactly as for the retired list — a check that has
+# stopped being able to speak about a service says so where it reports.
+expect "the report still says the silenced service was quiet" \
+  "$(grep -q '`promtail`' "$WORK/out/numbers.md" && grep -q 'pipeline drops' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/logged nothing in 24 hours/,+14p' "$WORK/out/numbers.md")"
+
+# A name in the list that is still logging changes nothing.
+setup; printf '{"data":["api","website","verifier-runner","promtail"]}\n' > "$FIX/services_7d"
+printf '{"data":["api","website","promtail"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "a silenced name that is still logging is not touched" \
+  "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && [ ! -s "$WORK/out/by-design.txt" ] && echo yes || echo no)" \
+  "$(cat "$WORK/out/silent.txt" "$WORK/out/by-design.txt")"
+
+# And with no list at all the check behaves exactly as it did before `#284`.
+setup; export WATCH_SILENT_FILE="$WORK/there-is-no-such-file"
+printf '{"data":["api","website","verifier-runner","promtail"]}\n' > "$FIX/services_7d"
+printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "with no by-design list the alarm is unchanged" \
+  "$(grep -qx 'promtail' "$WORK/out/silent.txt" && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
+unset WATCH_SILENT_FILE
+
+echo
 echo "the narrative is the run's own output (#165)"
 
 # Evidence first and judgement last, which was `#133`'s requirement about the
