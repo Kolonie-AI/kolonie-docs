@@ -1,0 +1,34 @@
+# Temporary diagnostic for kolonie-platform#728: the Reviewer Agent's call to the
+# LLM gateway is refused with 403 from a GitHub runner and answers 200 from a
+# maintainer machine. This says whether the refusal comes from the edge or from
+# the gateway itself. Delete it once #728 is closed.
+name: Gateway reachability probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the gateway and report how it refused
+        env:
+          BASE: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          KEY: ${{ secrets.LLM_GATEWAY_API_KEY_REVIEWER }}
+          MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
+        run: |
+          echo "egress address: $(curl -s https://api.ipify.org)"
+          code=$(curl -sS -o /tmp/body.txt -D /tmp/head.txt -w '%{http_code}' \
+            "$BASE/v1/chat/completions" \
+            -H "Authorization: Bearer $KEY" \
+            -H 'Content-Type: application/json' \
+            -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
+            || echo "curl-failed")
+          echo "status: $code"
+          echo '--- edge headers ---'
+          grep -iE '^(server|cf-ray|cf-mitigated|cf-cache-status|x-cpa-|content-type):' /tmp/head.txt || true
+          echo '--- body, first 600 bytes ---'
+          head -c 600 /tmp/body.txt
