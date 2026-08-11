@@ -148,6 +148,29 @@ note() {
   echo "$1" >&2
 }
 
+# ## A write GitHub refused is not the same fact as nothing to write (`#302`)
+#
+# **Both were silent and only one of them is fine.** An issue the model left
+# alone is the ordinary case and must stay quiet — `#262`'s rule, and the reason
+# `apply_one` returns 1 at all. A write the Colony *attempted* and GitHub refused
+# is a defect in the Colony's own configuration, and until this counter existed
+# it reached stderr and nothing else.
+#
+# Measured 2026-08-11: three route labels did not exist in `kolonie-dns`, so 48
+# passes over a day decided seven issues, paid a model each time, wrote nothing,
+# and reported `success`. Nobody could have known without opening a run log.
+#
+# The counter is per invocation — `apply` and `sweep` are separate processes —
+# and each subcommand reports its own total and decides its own exit code. It
+# never aborts a pass mid-loop: an issue the next one could still be written for
+# is not worth abandoning for one that could not.
+WRITE_FAILURES=0
+
+refused() {
+  WRITE_FAILURES=$((WRITE_FAILURES + 1))
+  note "$1"
+}
+
 # Is this login in the organisation? `member | outside`, and nothing else —
 # including when GitHub cannot be asked, which answers `outside` for no issue at
 # all because the caller treats an unreadable answer as *leave the labels alone*.
@@ -380,7 +403,10 @@ apply() {
       changed=$((changed + 1))
   done <<<"$rows"
 
-  echo "triage changed $changed issue(s)"
+  # Both numbers, always — *changed 0* and *0 could not be written* are the quiet
+  # pass, and *changed 0, 7 could not be written* is an outage (`#302`).
+  echo "triage changed $changed issue(s), $WRITE_FAILURES could not be written"
+  [ "$WRITE_FAILURES" -eq 0 ] || die "$WRITE_FAILURES write(s) GitHub refused — the decisions above were paid for and discarded" 4
 }
 
 # One issue. Returns 0 when something was written, 1 when nothing was — the
@@ -509,7 +535,7 @@ apply_one() {
     for label in ${add[@]+"${add[@]}"}; do args+=(--add-label "$label"); done
     for label in ${remove[@]+"${remove[@]}"}; do args+=(--remove-label "$label"); done
     if ! gh issue edit "$number" --repo "$repo" "${args[@]}" >/dev/null 2>&1; then
-      note "the labels on $repo#$number could not be written: ${add[*]:-} ${remove[*]:+(-${remove[*]})}"
+      refused "the labels on $repo#$number could not be written: ${add[*]:-} ${remove[*]:+(-${remove[*]})}"
       return 1
     fi
   fi
@@ -599,7 +625,7 @@ sweep() {
   rows=$(jq -r '.queue[]? | [.repo, (.number|tostring), .status, (" " + (.labels | join(" ")) + " ")] | join("\u001f")' "$candidates") ||
     die "the queue could not be read out of the candidates file" 3
 
-  [ -n "$rows" ] || { echo "the sweep moved 0 card(s)"; return 0; }
+  [ -n "$rows" ] || { echo "the sweep moved 0 card(s), 0 could not be written"; return 0; }
 
   local repo number status labels
   while IFS=$'\x1f' read -r repo number status labels; do
@@ -607,7 +633,8 @@ sweep() {
     sweep_one "$repo" "$number" "$status" "$labels" && moved=$((moved + 1))
   done <<<"$rows"
 
-  echo "the sweep moved $moved card(s)"
+  echo "the sweep moved $moved card(s), $WRITE_FAILURES could not be written"
+  [ "$WRITE_FAILURES" -eq 0 ] || die "$WRITE_FAILURES write(s) GitHub refused" 4
 }
 
 # One issue. Returns 0 when a card was moved and 1 when nothing was, which is the
@@ -667,7 +694,7 @@ sweep_one() {
     echo "$repo#$number: back in Ready"
     return 0
   fi
-  note "$repo#$number could return to Ready and could not be moved"
+  refused "$repo#$number could return to Ready and could not be moved"
   return 1
 }
 
@@ -680,7 +707,7 @@ sweep_comment() {
   gh issue comment "$number" --repo "$repo" --body "$body
 
 <sub>Moved by the deterministic half of the triage pass (\`kolonie-docs#289\`): an open blocker and \`blocked:human\` are facts, so this move needed no model and cost no tokens. Nothing else about this issue was re-decided — the route it carries is the one it already had.</sub>" >/dev/null 2>&1 || {
-    note "the sweep comment on $repo#$number could not be written"
+    refused "the sweep comment on $repo#$number could not be written"
     return 1
   }
   return 0
@@ -805,7 +832,7 @@ link_blocker() {
   case "$failure" in
     *422*) return 1 ;;
     *)
-      note "$blocker_repo#$blocker_number could not be linked as a blocker of $repo#$number: $failure"
+      refused "$blocker_repo#$blocker_number could not be linked as a blocker of $repo#$number: $failure"
       return 1
       ;;
   esac
@@ -829,7 +856,7 @@ comment() {
   body+=$'\n\n'"<sub>Routed against \`AGENTS.md\` §5 and \`operations/worker-prohibitions.md\` by \`.github/workflows/board-triage.yml\` (\`kolonie-docs#262\`). Wrong route? Change the label and say why — an inherited label is not evidence.</sub>"
 
   gh issue comment "$number" --repo "$repo" --body "$body" >/dev/null 2>&1 || {
-    note "the triage comment on $repo#$number could not be written"
+    refused "the triage comment on $repo#$number could not be written"
     return 1
   }
   echo "$repo#$number: ${said[*]}"

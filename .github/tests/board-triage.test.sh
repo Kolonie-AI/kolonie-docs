@@ -54,6 +54,15 @@ case "$1 $2" in
     done
     if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
   "issue create") cat "$GH_FIXTURES/created" 2>/dev/null ;;
+  # **A label GitHub refuses is not hypothetical** (`#302`): three route labels did
+  # not exist in `kolonie-dns` for a day, and `gh issue edit` writes every label in
+  # one call — so `p1` and `decision`, which did exist, fell with the one that did
+  # not. The fixture reproduces the whole call failing, which is what happened.
+  "issue edit")
+    if [ -s "$GH_FIXTURES/label_fails" ]; then
+      echo "could not add label: 'agent:claude' not found" >&2
+      exit 1
+    fi ;;
   # The board, translated out of the `gh project item-list` shape the fixtures are
   # written in — the same translation `opencode-worker.test.sh` does, because
   # `board-triage.sh` reads the board through that script rather than with a
@@ -779,6 +788,36 @@ out=$(run_sweep)
 absent "the sweep does not touch an undecided issue — that is the model's half" \
   "single-select-option-id" "$(cat "$GH_LOG")"
 contains "and says it moved nothing" "the sweep moved 0 card(s)" "$out"
+
+echo
+echo "a write GitHub refused (#302)"
+
+# The outage this closes: `kolonie-dns` was missing three route labels for a day,
+# 48 passes decided seven issues over it, every label write failed, and the
+# workflow reported success on all 48. The pass has to be as loud about a write
+# GitHub refused as it is quiet about an issue there was nothing to write for.
+case_setup
+searched "$(issue 900 'a label that does not exist here' '')"
+boarded "900|Inbox|"
+echo yes > "$GH_FIXTURES/label_fails"
+out=$(run_apply "$(decided 900 "agent:claude" "p1" "" "" true)"); status=$?
+check "a refused label write fails the pass" "4" "$status"
+contains "and the count is in the summary line, beside the changes" \
+  "triage changed 0 issue(s), 1 could not be written" "$out"
+contains "and stderr still names the issue and the labels" \
+  "the labels on Kolonie-AI/kolonie-docs#900 could not be written" "$(cat "$WORK/stderr")"
+absent "and the card is not moved on the strength of a label that is not there" \
+  "project item-edit" "$(cat "$GH_LOG")"
+
+# The other half of the same rule, and the one `#262` cares about: nothing to
+# write is the ordinary pass and must stay silent and green.
+case_setup
+searched "$(issue 900 'nothing to do here' 'agent:claude p1')"
+boarded "900|Ready|agent:claude p1"
+out=$(run_apply "$(decided 900 "agent:claude" "p1" "" "" true)"); status=$?
+check "a pass with nothing to write is still green" "0" "$status"
+contains "and says so with both numbers" \
+  "triage changed 0 issue(s), 0 could not be written" "$out"
 
 echo
 echo "the routing cases (#289)"

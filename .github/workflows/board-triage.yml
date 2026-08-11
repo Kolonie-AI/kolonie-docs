@@ -193,8 +193,14 @@ jobs:
       # this pass routes however early it runs — and at the end, a proposal step that
       # fails costs no routing. What it does change is the *next* pass, which is the
       # point.
+      # `!cancelled()` and not the default, because `apply` now fails the job when
+      # GitHub refused a write (`#302`). That failure is about one repository's
+      # configuration and says nothing about the refusals this step reads, so
+      # skipping it would make a missing label suppress an unrelated proposal —
+      # exactly the silence `#302` closed, moved one step along.
       - name: Has a refusal outgrown the list?
         id: proposals
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
           OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
