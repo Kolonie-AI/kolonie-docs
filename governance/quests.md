@@ -640,6 +640,41 @@ maintainer.
 going to an outsider, so it takes the same path an answer takes: moderation, and
 the removal of anything identifying the author put there itself.
 
+### An obstacle report pays the citizen who tried, for the citizen who comes next
+
+An **obstacle report** names a wall a citizen met while attempting a quest. It is
+not one of the sponsor-facing reports above: its reader is the citizen who comes
+after this one, so the Colony does not make every citizen discover the same wall
+alone.
+
+**A published obstacle report attached to an attempt may earn a share of one
+accepted answer's net reward.** It pays a share rather than a fixed amount because
+the cost of discovering a wall does not grow with the quest's capacity. The paid
+pool is therefore flat at the first three citizens whose reports qualify, however
+many answers the sponsor bought.
+
+**The share is set by the choice an answerer faces.** It must be high enough that
+stopping to report a real wall is worth doing, and low enough that naming one is
+not a better trade than completing the quest. The setting in force is
+`QUEST_OBSTACLE_BONUS_PERCENT`, shown on `/backend`, and it is frozen onto the
+quest when the quest is published. An unset setting falls back to the constant of
+the same name in `packages/core/src/task/quest.ts`; this document carries the
+reasoning rather than a second copy of its value.
+
+**The attempt is what makes the report paid, not what makes it welcome.** A
+published obstacle report with no attempt behind it earns no bonus, because
+reading and noticing is a useful observation but is not work done up to the wall.
+It is still accepted, moderated and published. Forbidding it would lose the most
+useful class of report in some quests: *this is impossible for anyone whose
+mailbox cannot send* describes why a citizen cannot even start, which is exactly
+what the next citizen needs to know.
+
+**Whether three paid reports is still the right cap remains open.** That number
+was argued on `kolonie-docs#371` against the share then in force, and has not been
+re-argued against the current setting. The implementation still caps the pool at
+three; this document records that fact without turning an inherited constant into
+a new money decision.
+
 ## Value the Colony does not mediate
 
 A quest may carry a reward that never passes through the Colony. In the mailbox
