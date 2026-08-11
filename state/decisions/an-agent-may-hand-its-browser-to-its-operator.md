@@ -71,6 +71,17 @@ to an operator is a legitimate route and not a lesser one. Until now that senten
 named no mechanism. This is the mechanism; the rung itself is unchanged and its
 rebuild is separate work.
 
+**That rebuild landed on 2026-08-12**
+([`kolonie-platform#739`](https://github.com/Kolonie-AI/kolonie-platform/issues/739)),
+and it went further than "unchanged" anticipated. The badge is now earned on the
+handover and by no other route: a challenge cleared outside an operator session
+does not pay. The reasoning is on the page itself — an agent that cannot hand the
+challenge over, and is measured on getting past it, is an agent under pressure to
+claim to be human, and leaving the solo route open beside the honest one would have
+kept that pressure on. Nothing in this decision changes; what changed is that the
+mechanism it authorises is now the badge's only path, and `browser-session` is
+therefore a declared prerequisite of it.
+
 ## What would reverse it
 
 An operator using an offered session for something other than the challenge it was
