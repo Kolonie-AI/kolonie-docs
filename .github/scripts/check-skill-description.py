@@ -56,14 +56,26 @@ frontmatter. A published listing is downstream of that and behind a cache; a
 check that read it would fail for a reason no commit here can fix, which is the
 same argument `kolonie-email`'s link check makes about external URLs.
 
-## What it does when a repository is not checked out
+## Where it reads the seven from
 
-Skips it, and says so. This runs from a maintainer's machine and in CI, and
-only one of those has the siblings beside it. **A missing repository is not a
-pass** — the summary line names how many were read, so a run that found one
-sibling cannot read as a run that found seven.
+**Disk first, GitHub second, and the second one is what makes this a check.**
+This runs from a maintainer's machine and in CI, and only the first has the
+siblings beside it — so a disk-only reader skips all seven in CI, prints
+`0 of 7`, and exits green. That is the appearance of enforcement with none of
+it, and it is the exact failure `find-red-line-copies.sh` was written to avoid
+one file over: *"the copies nobody looked at were the copies that drifted."*
+
+So a repository that is not on disk is fetched from the API, the way the red
+lines already are. A maintainer editing a sibling still checks what they have in
+their working tree rather than what is pushed, which is the behaviour you want
+while you are mid-edit.
+
+**Skipped only when both are unavailable** — no local file *and* no reachable
+API — and the summary line says which of the two answered for each, so a run
+that fetched nothing cannot read as a run that verified seven.
 """
 
+import base64
 import json
 import re
 import subprocess
@@ -159,30 +171,60 @@ def blockquote_under(heading: str) -> str | None:
     return " ".join(line.lstrip("> ").strip() for line in match.group(1).splitlines()).strip()
 
 
-def description_in(repo: str) -> str | None:
-    """The `description:` line of a runtime's frontmatter slot."""
-    path = ROOT.parent / repo / "skill.runtime.md"
-    if not path.exists():
+def contents(repo: str, relative: str) -> tuple[str, str] | None:
+    """One file from a sibling repository, and where it came from.
+
+    Disk first — a maintainer mid-edit is checking their working tree, not what
+    is pushed. Falling back to the API is what makes this run in CI at all; see
+    the module docstring.
+    """
+    path = ROOT.parent / repo / relative
+    if path.exists():
+        return path.read_text(encoding="utf-8"), "disk"
+
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/Kolonie-AI/{repo}/contents/{relative}", "--jq", ".content"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
         return None
 
-    for line in path.read_text(encoding="utf-8").splitlines():
+    try:
+        return base64.b64decode(result.stdout).decode("utf-8"), "github"
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def description_in(repo: str) -> tuple[str, str] | None:
+    """The `description:` line of a runtime's frontmatter slot, and its source."""
+    found = contents(repo, "skill.runtime.md")
+    if found is None:
+        return None
+
+    body, source = found
+    for line in body.splitlines():
         if line.startswith("description:"):
-            return line[len("description:") :].strip()
-    return ""
+            return line[len("description:") :].strip(), source
+    return "", source
 
 
-def plugin_description(repo: str, relative: str, path: list[str | int]) -> str | None:
+def plugin_description(repo: str, relative: str, path: list[str | int]) -> tuple[str, str] | None:
     """One manifest's plugin description, or `None` when there is nothing to read.
 
-    A missing repository skips, exactly as `description_in` does. A missing key
-    is *not* a skip — a manifest that has stopped carrying a description is drift
-    of the kind this exists to catch, so it fails with the path it looked for.
+    An unreachable repository skips, exactly as `description_in` does. A missing
+    key is *not* a skip — a manifest that has stopped carrying a description is
+    drift of the kind this exists to catch, so it fails with the path it looked
+    for.
     """
-    file = ROOT.parent / repo / relative
-    if not file.exists():
+    found = contents(repo, relative)
+    if found is None:
         return None
 
-    node: object = json.loads(file.read_text(encoding="utf-8"))
+    raw, source = found
+    node: object = json.loads(raw)
     for step in path:
         try:
             node = node[step]  # type: ignore[index]
@@ -190,7 +232,7 @@ def plugin_description(repo: str, relative: str, path: list[str | int]) -> str |
             fail(f"{repo}/{relative} has no {'.'.join(str(one) for one in path)}")
             return None
 
-    return node if isinstance(node, str) else ""
+    return (node if isinstance(node, str) else ""), source
 
 
 def issue_is_open(number: int) -> bool | None:
@@ -227,13 +269,14 @@ def main() -> int:
         if trigger is None:
             return 1
 
-        print(f"\n── every runtime leads with it, and carries the trigger clause")
+        print("\n── every runtime leads with it, and carries the trigger clause")
         read = 0
         for repo in RUNTIMES:
-            found = description_in(repo)
-            if found is None:
-                print(f"   skip {repo} — not checked out beside this repository")
+            answer = description_in(repo)
+            if answer is None:
+                fail(f"{repo} could not be read from disk or from GitHub")
                 continue
+            found, source = answer
             read += 1
 
             if not found.startswith(text):
@@ -243,22 +286,23 @@ def main() -> int:
                 # being loaded when an agent asks to join.
                 fail(f"{repo} carries the sentence without the trigger clause")
             else:
-                print(f"   ok   {repo}")
+                print(f"   ok   {repo} ({source})")
         print(f"   ({read} of {len(RUNTIMES)} repositories read)")
 
         print("\n── every plugin manifest carries the sentence, and no trigger clause")
         manifests = 0
         for repo, entries in PLUGIN_DESCRIPTIONS.items():
             for relative, path in entries:
-                found = plugin_description(repo, relative, path)
-                if found is None:
-                    print(f"   skip {repo}/{relative}")
+                answer = plugin_description(repo, relative, path)
+                if answer is None:
+                    fail(f"{repo}/{relative} could not be read from disk or from GitHub")
                     continue
+                found, source = answer
                 manifests += 1
                 if found != text:
                     fail(f"{repo}/{relative} has its own description ({len(found)} characters)")
                 else:
-                    print(f"   ok   {repo}/{relative}")
+                    print(f"   ok   {repo}/{relative} ({source})")
         print(f"   ({manifests} manifest(s) read)")
     else:
         print("\n── publication is blocked, and the block names its reason")

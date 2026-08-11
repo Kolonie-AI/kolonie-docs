@@ -75,6 +75,7 @@ jobs:
           python3 .github/tests/build-readme.test.py
           python3 .github/tests/check-incident-order.test.py
           python3 .github/tests/check-brand-surfaces.test.py
+          python3 .github/tests/check-skill-description.test.py
           bash .github/tests/no-gateway-leak.test.sh
           bash .github/tests/opencode-worker.test.sh
           bash .github/tests/board-triage.test.sh
@@ -165,3 +166,17 @@ jobs:
           set -o pipefail
           bash .github/scripts/find-red-line-copies.sh "$RUNNER_TEMP/copies"
           python3 .github/scripts/red-lines.py "$RUNNER_TEMP/copies"
+
+      # `#252`. Not in `check.sh`'s image of CI until 2026-08-11 — the script was
+      # in `check.sh` alone, so the one description that reaches every arriving
+      # agent was verified on maintainers' machines and nowhere else.
+      #
+      # **The token is what makes it a check.** The seven runtimes are seven other
+      # repositories; this checkout has none of them, so without `GH_TOKEN` the
+      # script cannot read a single one and says so by failing. That is the same
+      # reason the red-lines step above carries one, and the same lesson: the
+      # copies nobody looked at were the copies that drifted.
+      - name: The marketplace description has one copy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/check-skill-description.py

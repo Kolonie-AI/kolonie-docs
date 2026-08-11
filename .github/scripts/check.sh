@@ -81,9 +81,11 @@ step "README.md carries the current Colony header" \
 
 # `#252`. Runs in both states: while publication is blocked it asserts the record
 # is intact and the blocker is real, and it needs neither a token nor the sibling
-# repositories to do that. When the flag flips it asserts all seven carry the
-# sentence, and skips the ones that are not checked out — which is why it is
-# here rather than behind the token guard below.
+# repositories to do that. Now that the flag is flipped it asserts all seven
+# carry the sentence — reading each from disk when the sibling is beside this
+# repository and from GitHub when it is not, so the answer is the same here and
+# in CI. It used to skip what was not checked out, which made CI green over
+# seven files it had never read.
 step "the marketplace description has one copy" \
   python3 .github/scripts/check-skill-description.py
 
