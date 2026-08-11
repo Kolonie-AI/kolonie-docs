@@ -6,6 +6,7 @@
 #   opencode-worker.sh claim <repo> <number>   # -> "held", or "lost" if another run got there first
 #   opencode-worker.sh verify-claim <repo> <number>  # -> "held", or "lost <run url>" if an earlier run claimed it too
 #   opencode-worker.sh blockers <repo> <number>  # -> the open issues it waits for, one per line
+#   opencode-worker.sh dependencies <repo> <number>  # -> every blocked-by relation as `<state> <repo>#<n>`
 #   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh move <repo> <number> Ready|Inbox  # -> the only board write triage may make (#262)
@@ -1226,16 +1227,29 @@ leak_check() {
 # *closed* may still proceed, because the field either exists on `main` or it
 # does not and the target's own check is what says so. Blocked or not blocked;
 # no degrees, nothing to interpret.
-blockers_of() {
+# Every blocked-by relation an issue carries, open and closed, one per line as
+# `<state> <owner/repo>#<number>`.
+#
+# The repository comes out of `repository_url`, which every issue object
+# carries, rather than out of `repository`, which only the search endpoints
+# add. A blocker in another repository is the case this has to get right —
+# `#660` and `#659` are both in `kolonie-platform`, but nothing says they must
+# be — and printing a bare number for it would name nothing (§4).
+#
+# **The closed ones are read too, and `kolonie-docs#289` is why.** *This issue has
+# dependencies and none of them is open* and *this issue never had any* are
+# different facts: the first is an issue whose reason for waiting has gone, the
+# second is an issue nobody ever said was waiting. The triage sweep moves a card on
+# the first and must not move one on the second, so the state travels with the
+# relation rather than being filtered away at the only place that reads it.
+dependencies_of() {
   local repo=$1 number=$2
-  # The repository comes out of `repository_url`, which every issue object
-  # carries, rather than out of `repository`, which only the search endpoints
-  # add. A blocker in another repository is the case this has to get right —
-  # `#660` and `#659` are both in `kolonie-platform`, but nothing says they must
-  # be — and printing a bare number for it would name nothing (§4).
   gh api "repos/$repo/issues/$number/dependencies/blocked_by" --paginate \
-    --jq '.[] | select(.state == "open")
-          | "\(.repository_url | sub("^.*/repos/"; ""))#\(.number)"'
+    --jq '.[] | "\(.state) \(.repository_url | sub("^.*/repos/"; ""))#\(.number)"'
+}
+
+blockers_of() {
+  dependencies_of "$1" "$2" | awk '$1 == "open" { print $2 }'
 }
 
 set_status() {
@@ -1516,6 +1530,17 @@ case "${1:-}" in
     exit 0
     ;;
 
+  dependencies)
+    # The same relation with the closed half kept (`kolonie-docs#289`), so that
+    # *waited for something and does not any more* can be told from *never waited
+    # for anything*. One endpoint, read one way, whichever question is being asked.
+    repo=${2:?dependencies needs a repository}
+    number=${3:?dependencies needs an issue number}
+    dependencies_of "$repo" "$number" ||
+      die "could not read what $repo#$number depends on" 1
+    exit 0
+    ;;
+
   forgotten-claims)
     # The other half of `#266`: `pick` skips a repository that has anything In
     # Progress, so an item left there holds its whole repository out of the
@@ -1706,6 +1731,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | leak-check <file>..."
     ;;
 esac

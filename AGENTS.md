@@ -873,6 +873,20 @@ forth with a comment every hour. Tightening converges after two steps. **Looseni
 a route is a person's**, which is the right way round for a label meaning *no coding
 agent may take this*.
 
+**And a pass only routes an issue that carries no route at all** (`kolonie-docs#289`,
+2026-08-11). Measured that day: fifteen out of fifteen candidates on the board were
+already routed, so forty-eight passes a day were paying the strongest model to
+re-decide decisions that existed. An issue carrying `agent:opencode`, `agent:claude`
+or `agent:human` is not briefed, not chunked and not asked about. Three things
+follow. A route you set by hand is the last word on that issue rather than the
+opening of a negotiation the machine wins every half hour. The first decision is
+the only one, so it has to be good — which is why the prompt now routes *the next
+concrete action* and makes every route away from `agent:opencode` name the fact that
+prevents it. And the ratchet above stays where it is as a guard that no longer
+fires: once a route is written once, there is nothing to trade. What still runs over
+a decided issue is the Ready ↔ Inbox move, from facts — an open blocker, a
+`blocked:human` label — and with no model call.
+
 **The worker still never labels anything** — it reads the queue, takes the oldest,
 and puts it back if it fails.
 

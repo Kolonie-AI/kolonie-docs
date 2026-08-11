@@ -534,16 +534,30 @@ workflow runs before it publishes anything.
 
 ## What triages
 
-`.github/workflows/board-triage.yml`, hourly at **:20** (`kolonie-docs#262`,
+`.github/workflows/board-triage.yml`, at **:20 and :50** (`kolonie-docs#262`,
 2026-08-10). Measured that day: 49 issues created in 24 hours, 46 closed, 21 of
 those by the opencode worker — and **fifteen sitting unread in Inbox while every
 issue the worker was given had been queued by hand.** The worker exited idle on two
 runs in three. The bottleneck was not execution; nothing decided.
 
-One pass over **Inbox and Ready** and nothing else. For each issue: provenance,
-route, readiness, dependencies, priority — then what it routed moves to Ready and
-the rest stays in Inbox with a reason. One comment when it changed something,
-silence otherwise.
+One pass over **Inbox and Ready** and nothing else, in two halves that cost
+differently (`kolonie-docs#289`, 2026-08-11).
+
+**Triage decides once.** The model is asked only about issues carrying no route.
+For those: provenance, route, readiness, dependencies, priority — then what it
+routed moves to Ready and the rest stays in Inbox with a reason, one comment when
+it changed something and silence otherwise. Measured on the live board that day,
+**fifteen of the twenty-two issues in the two columns were already routed**, so
+forty-eight passes a day were paying the strongest model on the gateway to
+re-decide decisions that existed, and a route set by hand survived at most half an
+hour. A decided issue is not briefed, not chunked and not asked about.
+
+**What a decided issue still needs is the Ready ↔ Inbox move**, and that turns on
+two facts rather than a judgement: an open blocker or `blocked:human` sends it to
+Inbox, every recorded dependency closed brings it to Ready, and an issue with no
+recorded dependencies is left where it is. `board-triage.sh sweep` makes that move
+over every routed candidate, at no token cost, **before** the model step — so a
+gateway that is down costs the pass its judgement and not its bookkeeping.
 
 | | |
 |---|---|
@@ -551,9 +565,10 @@ silence otherwise.
 | **What the model is given** | The board, the routing table quoted out of `AGENTS.md` §5, and `operations/worker-prohibitions.md`. **No copy of either rule lives in the prompt** — a third copy is the one that goes stale |
 | **Chunked, six at a time** | Measured 2026-08-10: 38 candidates and 47 open issues is a 154 KB brief and the gateway answers **524**, a proxy timeout. Six candidates against the *same whole-board index* is 54 KB and answers in about fifty seconds. Only the candidates are chunked; the dependency judgement always sees every open issue |
 | **What it may write** | Labels, GitHub dependency relations, one comment, and the Status field for **Ready and Inbox only**. `opencode-worker.sh move` refuses the other columns: In Progress and In Review belong to whoever holds them, and a triage pass that could write them could take work off an agent that has it |
-| **What overrules the model** | Every rule with a cost, in `board-triage.sh` and not in the prompt: a candidate comes from Inbox or Ready or is skipped; an unrecognised or absent route becomes `agent:claude`; `agent:opencode` is refused on `blocked:human`, `opencode:forbidden` or an open blocker; the route is a ratchet — a pass tightens it and only a person loosens it, or two passes would trade an issue back and forth hourly; a priority is never set on an issue that arrived from outside (`blocked:human` class 6); nothing is ever removed |
+| **What overrules the model** | Every rule with a cost, in `board-triage.sh` and not in the prompt: a candidate comes from Inbox or Ready or is skipped; an unrecognised or absent route becomes `agent:claude`; `agent:opencode` is refused on `blocked:human`, `opencode:forbidden` or an open blocker; a priority is never set on an issue that arrived from outside (`blocked:human` class 6); nothing is ever removed. The route ratchet — a pass tightens a route and only a person loosens it — stays as a second line and no longer fires, because since `#289` a routed issue is not a candidate at all |
+| **The routing cases** | `.github/tests/board-triage-cases.json`: eight issues the pass has to get right, each with the route it should produce and the one sentence that decides it. CI holds the half that needs no provider — which cases are briefed, that the brief quotes the routing table and the prohibitions, that each expected route is applied unchanged, that `opencode:forbidden` overrules any answer. `board-triage.sh cases-brief` builds the same brief from the file so the judgement half can be run by hand against a live model, touching no board |
 | **`from:external`** | From organisation membership, which the opener cannot supply and the model is not asked about (`kolonie-platform#686`). Membership rather than `authorAssociation`, which reads `NONE` for a colleague who has never touched that repository |
-| **When it cannot ask** | It writes no decisions and exits 0, per chunk. Twenty-four passes a day means a provider hiccup that turned red would produce red runs nobody believes — `watch-judge.py`'s policy, one workflow along. A pass that decided nothing says so in the log |
+| **When it cannot ask** | It writes no decisions and exits 0, per chunk. Forty-eight passes a day means a provider hiccup that turned red would produce red runs nobody believes — `watch-judge.py`'s policy, one workflow along. A pass that decided nothing says so in the log |
 | **Credentials** | The `kolonie-opencode` app token to read the board and move cards, and `WORKER_REPO_TOKEN` for the labels and comments it writes across the five board repositories. `github.token` can do neither |
 | **What it proposes** | A prohibition the list does not carry (`#264`). It reads the refusals on every open `opencode:failed` issue, and a reason that has appeared on **two or more** with no match in `operations/worker-prohibitions.md` becomes one comment on a collecting issue, labelled `agent:human`: the reason, the issues, the wording. **It proposes and stops** — accepting one is a person editing the document, because a worker that could widen its own constraints has none. Each proposal carries a key, so a rejected one is not proposed again |
 | **Logic** | `.github/scripts/board-triage.sh` and `.github/scripts/board-triage-decide.py`, tested against a stubbed `gh` in `.github/tests/board-triage.test.sh` — which asserts what happens when the model answers *wrongly*, since its judgement cannot be tested and every place the script overrules it can |

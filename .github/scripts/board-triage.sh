@@ -4,7 +4,9 @@
 # Usage:
 #   board-triage.sh candidates                        # -> the issues in Inbox and Ready, as JSON
 #   board-triage.sh brief <candidates.json> [offset] [count]  # -> what the model reads
+#   board-triage.sh cases-brief [cases.json]          # -> the same, over the routing cases (#289)
 #   board-triage.sh apply <candidates.json> <decisions.json>  # -> the labels, links and moves
+#   board-triage.sh sweep <candidates.json>           # -> the Ready <-> Inbox moves that need no model (#289)
 #   board-triage.sh provenance <login>                # -> member | outside
 #   board-triage.sh refusals                          # -> the issues the worker tried and did not finish
 #   board-triage.sh proposal-brief <refusals.json>    # -> what the model reads to propose a rule (#264)
@@ -26,6 +28,9 @@
 #
 # - a candidate comes from **Inbox or Ready** and nowhere else, so In Progress and
 #   In Review cannot be touched however the model answers
+# - a candidate **carries no route**: an issue already labelled `agent:human`,
+#   `agent:claude` or `agent:opencode` has been decided, and re-deciding it is what
+#   `#289` took out. The move it still needs is a fact, and `sweep` makes it
 # - a route that is missing, unrecognised or uncertain becomes **`agent:claude`**
 # - `agent:opencode` is refused on anything carrying `blocked:human`,
 #   `opencode:forbidden`, or an open blocker — whatever the model said
@@ -191,9 +196,11 @@ candidates() {
   jq -c --slurpfile board "$board" \
     --arg statuses "$TRIAGE_STATUSES" \
     --arg notwork "$NOT_WORK_TITLES" \
+    --arg routelist "$ROUTES" \
     --argjson candidate_chars "$CANDIDATE_BODY_CHARS" \
     --argjson index_chars "$INDEX_BODY_CHARS" '
     ($statuses | split("|")) as $triage
+    | ($routelist | split(" ")) as $routes
     | [ .[]
         | { repo: .repository.nameWithOwner,
             number: .number,
@@ -217,8 +224,23 @@ candidates() {
     | { candidates: [ .[]
           | select(.status as $s | $triage | index($s))
           | select(.title as $t | ($notwork | split("|") | index($t)) | not)
+          # **A pass may only route an issue that has no route** (`#289`). An
+          # issue already carrying one of `ROUTES` has been decided — by an
+          # earlier pass, or by a person overruling one — and re-deciding it is
+          # how a route gets widened, how a correction made by a person gets
+          # reverted, and how forty issues are paid for every half hour to be
+          # told what they already say. It is not briefed, not chunked, not paid
+          # for. What still runs over it is `sweep`, which needs no model.
+          | select(.labels | any(. as $l | $routes | index($l)) | not)
           | { repo, number, title, status, labels, author, bot, createdAt, url,
               body: (.body[0:$candidate_chars]) } ],
+        # Every issue in Inbox or Ready, routed or not: what the deterministic
+        # Ready ↔ Inbox sweep walks. Only what a fact-based move turns on, since
+        # nothing reads a body here.
+        queue: [ .[]
+          | select(.status as $s | $triage | index($s))
+          | select(.title as $t | ($notwork | split("|") | index($t)) | not)
+          | { repo, number, title, status, labels } ],
         index: [ .[]
           | { repo, number, title, status, labels, createdAt,
               body: (.body[0:$index_chars]) } ] }
@@ -289,6 +311,45 @@ Each one is in Inbox or in Ready. Nothing else is yours to touch.
 MIDDLE
 
   jq -r "$slice"' | .[] | "## \(.repo)#\(.number) — \(.title)\n\nstatus: \(.status)\nlabels: \(.labels | join(", "))\nopened by: \(.author) on \(.createdAt)\n\n\(.body)\n"' "$file"
+}
+
+# ## The routing cases, as a brief (`#289`)
+#
+# The eight cases in `.github/tests/board-triage-cases.json` are issues the pass
+# could be given, each with the route it should produce and the exact rule that
+# decides it. This turns them into a candidates file and hands it to `brief`, so
+# what the judgement half is asked about them is the same text the live pass
+# builds — the routing table and the prohibitions quoted from where they live, the
+# whole board as the index, the cases as the issues to decide about.
+#
+# **It touches nothing.** No board read, no search, no write: the fixtures are the
+# board. That is what makes it runnable against the provider on demand, which is
+# the only way a prompt change can be checked at all. CI holds the half of each
+# case that needs no provider; this is the half that does.
+cases_brief() {
+  local file=${1:-$ROOT/.github/tests/board-triage-cases.json}
+  [ -f "$file" ] || die "cases-brief needs the cases file" 1
+
+  local candidates
+  candidates=$(mktemp) || die "could not write a candidates file" 3
+  # The case that already carries a route is in the index and not in the
+  # candidates, exactly as `candidates()` would leave it.
+  jq '{ candidates: [ .cases[]
+          | select(.labels | test("agent:") | not)
+          | { repo: "Kolonie-AI/kolonie-docs", number, title, status,
+              labels: (.labels | split(" ") | map(select(length > 0))),
+              author: "colleague", bot: false,
+              createdAt: "2026-08-11T09:00:00Z",
+              url: "https://github.com/Kolonie-AI/kolonie-docs/issues/\(.number)",
+              body } ],
+        index: [ .cases[]
+          | { repo: "Kolonie-AI/kolonie-docs", number, title, status,
+              labels: (.labels | split(" ") | map(select(length > 0))),
+              body: (.body[0:400]) } ] }' "$file" > "$candidates" ||
+    die "the cases file could not be read" 3
+
+  brief "$candidates"
+  rm -f "$candidates"
 }
 
 # The writes. Everything above this line reads; everything below it is bounded by
@@ -508,6 +569,121 @@ apply_one() {
   fi
 
   comment "$repo" "$number" "$route" "$reason" "$why_not" "${said[@]:-}"
+}
+
+# ## The queue sweep: the half of the pass that needs no model (`#289`)
+#
+# The Ready ↔ Inbox move was the only reason a decided issue was read again — and
+# reading it again meant briefing it, chunking it and paying for it, forty times
+# an hour, to be told the route it already carries. **The move does not need a
+# judgement.** *Does it have an open blocker?* and *does it carry `blocked:human`?*
+# are facts; they are answered from GitHub and cost nothing.
+#
+# So this runs over every routed issue in Inbox and Ready, every pass, and the
+# model runs over the untriaged only.
+#
+# ## Why it walks the routed ones and not everything in the two columns
+#
+# An issue with no route is the model pass's this same run, and `apply_one` makes
+# the same move at the end of its own decision — sweeping it here as well would
+# move one card twice and comment on it twice about the one move. The two halves
+# partition the two columns between them, which is also what makes each of them
+# testable on its own.
+sweep() {
+  local candidates=$1
+  [ -f "$candidates" ] || die "sweep needs the file \`candidates\` wrote" 1
+
+  local rows moved=0
+  # `\x1f` for the same reason `apply` uses it: a run of tabs is one delimiter to
+  # `read` and an empty label list would shift every field after it.
+  rows=$(jq -r '.queue[]? | [.repo, (.number|tostring), .status, (" " + (.labels | join(" ")) + " ")] | join("\u001f")' "$candidates") ||
+    die "the queue could not be read out of the candidates file" 3
+
+  [ -n "$rows" ] || { echo "the sweep moved 0 card(s)"; return 0; }
+
+  local repo number status labels
+  while IFS=$'\x1f' read -r repo number status labels; do
+    [ -n "${repo:-}" ] && [ -n "${number:-}" ] || continue
+    sweep_one "$repo" "$number" "$status" "$labels" && moved=$((moved + 1))
+  done <<<"$rows"
+
+  echo "the sweep moved $moved card(s)"
+}
+
+# One issue. Returns 0 when a card was moved and 1 when nothing was, which is the
+# ordinary answer: the sweep is silent about an issue whose column already matches
+# the facts, however many passes look at it.
+sweep_one() {
+  local repo=$1 number=$2 status=$3 labels=$4
+
+  # Undecided is the model's half, and `apply_one` moves that card itself.
+  local route="" one
+  for one in $ROUTES; do
+    case "$labels" in *" $one "*) route=$one ;; esac
+  done
+  [ -n "$route" ] || return 1
+
+  local dependencies open closed
+  dependencies=$(bash "$HERE/opencode-worker.sh" dependencies "$repo" "$number" 2>/dev/null)
+  open=$(awk '$1 == "open" { printf "%s ", $2 }' <<<"$dependencies")
+  closed=$(awk '$1 != "open" && NF { print }' <<<"$dependencies")
+
+  local why=""
+  if [ -n "$open" ]; then
+    why="it waits for $(echo "$open" | sed 's/ *$//')"
+  elif has_any "$labels" "blocked:human"; then
+    why="it is \`blocked:human\`, which is a person's decision and not a queue position"
+  fi
+
+  if [ -n "$why" ]; then
+    [ "$status" = "Ready" ] || return 1
+    if move_card "$repo" "$number" Inbox >/dev/null 2>&1; then
+      sweep_comment "$repo" "$number" "**Out of the queue**: $why."
+      echo "$repo#$number: taken out of Ready, $why"
+      return 0
+    fi
+    note "$repo#$number should leave Ready and could not be moved"
+    return 1
+  fi
+
+  # ## The way back, and why it is narrower than the way out
+  #
+  # An issue this sweep took out of Ready must be able to return, or the first
+  # blocker an issue ever has is the last thing that happens to it: it carries a
+  # route, so no later pass briefs it, and nothing else moves a card. But *`#289`:
+  # a routed issue that a person parked in Inbox stays in Inbox* — a person put it
+  # there, and nothing here may overrule that.
+  #
+  # **The blocked-by relations tell the two apart.** An issue with dependencies
+  # recorded and none of them open is one whose stated reason for waiting has gone;
+  # an issue with none recorded never had a stated reason, so there is nothing here
+  # to undo and the column stands as somebody left it.
+  [ "$status" = "Inbox" ] || return 1
+  [ -n "$closed" ] || return 1
+
+  if move_card "$repo" "$number" Ready >/dev/null 2>&1; then
+    sweep_comment "$repo" "$number" \
+      "**Back in the queue**: every issue it waited for is closed ($(awk '{ printf "%s ", $2 }' <<<"$closed" | sed 's/ *$//'))."
+    echo "$repo#$number: back in Ready"
+    return 0
+  fi
+  note "$repo#$number could return to Ready and could not be moved"
+  return 1
+}
+
+# **One line, and only on the pass that moved the card.** The move is otherwise
+# invisible — a column is not in anybody's notifications — and a sweep that said
+# the same true thing every half hour would be the hourly *left in Inbox, it waits
+# for #693* that `#262` already had to delete.
+sweep_comment() {
+  local repo=$1 number=$2 body=$3
+  gh issue comment "$number" --repo "$repo" --body "$body
+
+<sub>Moved by the deterministic half of the triage pass (\`kolonie-docs#289\`): an open blocker and \`blocked:human\` are facts, so this move needed no model and cost no tokens. Nothing else about this issue was re-decided — the route it carries is the one it already had.</sub>" >/dev/null 2>&1 || {
+    note "the sweep comment on $repo#$number could not be written"
+    return 1
+  }
+  return 0
 }
 
 # `agent:claude` unless every reason to say otherwise holds. This function is the
@@ -875,6 +1051,12 @@ case "${1:-}" in
   apply)
     apply "${2:?apply needs the candidates file}" "${3:?apply needs the decisions file}"
     ;;
+  sweep)
+    sweep "${2:?sweep needs the file \`candidates\` wrote}"
+    ;;
+  cases-brief)
+    cases_brief "${2:-}"
+    ;;
   provenance)
     provenance "${2:?provenance needs a login}"
     ;;
@@ -888,6 +1070,6 @@ case "${1:-}" in
     propose "${2:?propose needs the file the model wrote}"
     ;;
   *)
-    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | apply <candidates.json> <decisions.json> | provenance <login> | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
+    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac

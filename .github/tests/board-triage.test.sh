@@ -269,6 +269,25 @@ run_apply() {
   bash "$SCRIPT" apply "$WORK/candidates.json" "$1" 2>"$WORK/stderr"
 }
 
+# `#289` took decided issues out of the candidate list, so `apply` can no longer be
+# reached over one by the ordinary path — the guard at the top of `apply_one` stops
+# it first. The guards *below* that one are still there, and they are still worth
+# holding to account: they are what a candidates file that ever names a decided
+# issue runs into. This promotes the queue rows the sweep walks into the list
+# `apply` reads, which is the only way to reach them from a test.
+run_apply_over_decided() {
+  bash "$SCRIPT" candidates 2>/dev/null \
+    | jq '.candidates = (.queue | map(. + { author: "colleague", bot: false, body: "a body" }))' \
+    > "$WORK/candidates.json"
+  bash "$SCRIPT" apply "$WORK/candidates.json" "$1" 2>"$WORK/stderr"
+}
+
+# The board the sweep walks is the one `candidates` just built.
+run_sweep() {
+  bash "$SCRIPT" candidates > "$WORK/candidates.json" 2>/dev/null
+  bash "$SCRIPT" sweep "$WORK/candidates.json" 2>"$WORK/stderr"
+}
+
 echo
 echo "what a pass may look at"
 
@@ -282,8 +301,15 @@ searched "$(issue 900 'in inbox' '')" \
 boarded "900|Inbox|" "901|Ready|agent:claude p1" "902|In Progress|agent:claude" "904|Inbox|" "905|Inbox|"
 found=$(bash "$SCRIPT" candidates 2>/dev/null)
 
-check "the issues in Inbox and Ready are the candidates" "900 901" \
+check "the undecided issues in Inbox and Ready are the candidates" "900" \
   "$(jq -r '[.candidates[].number] | join(" ")' <<<"$found")"
+# `#289` case 7, asserted here rather than against an answer: the point is that
+# no brief is built for a decided issue, so there is nothing for the model to be
+# right or wrong about.
+absent "an issue that already carries a route is not a candidate — it is decided" \
+  '"number":901' "$(jq -c '.candidates' <<<"$found")"
+check "but it is in the queue the sweep walks, both columns and routed or not" "900 901" \
+  "$(jq -r '[.queue[].number] | join(" ")' <<<"$found")"
 check "and every open issue is in the index, so a dependency can be noticed" "6" \
   "$(jq '.index | length' <<<"$found")"
 absent "an issue In Progress is not a candidate, whatever the model is asked" \
@@ -335,20 +361,34 @@ run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 absent "opencode:forbidden is never handed back to the worker" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
+# `#289`: the cheapest way not to re-decide a decided issue is not to show it to
+# the model at all, and that is where the guard now is — a routed issue is not a
+# candidate, so no answer about it can arrive in the first place. This is the
+# ordinary path, and it is the one that costs nothing.
 case_setup
 searched "$(issue 900 'already routed to a person' 'agent:human')"
 boarded "900|Inbox|agent:human"
 run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "an answer about a decided issue writes nothing" "issue edit" "$log"
+contains "and the run says it was not this pass's to decide" \
+  "not one of this pass's candidates" "$(cat "$WORK/stderr")"
+
+# The three cases below reach `apply_one` past that guard, because the ratchet is
+# the second line rather than the only one. The first live pass put `agent:human`
+# on nine issues that already carried `agent:claude` and left both on; the second
+# moved three back to `agent:claude`. Both are still refused here.
+case_setup
+searched "$(issue 900 'already routed to a person' 'agent:human')"
+boarded "900|Inbox|agent:human"
+run_apply_over_decided "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 absent "a route is never widened by a later pass" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
-# The second live pass moved three issues from `agent:human` back to `agent:claude`.
-# Two passes disagreeing about one issue would trade it back and forth with a
-# comment every hour, so the route only ever tightens.
 case_setup
 searched "$(issue 900 'reserved for a person' 'agent:human')"
 boarded "900|Ready|agent:human"
-run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
+run_apply_over_decided "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
 absent "a route is not loosened either, so two passes cannot trade an issue" \
   "--add-label agent:claude" "$log"
@@ -357,7 +397,7 @@ absent "and nothing is removed" "--remove-label" "$log"
 case_setup
 searched "$(issue 900 'was in the queue' 'agent:opencode')"
 boarded "900|Ready|agent:opencode"
-run_apply "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
+run_apply_over_decided "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
 contains "tightening is the direction that works" \
   "--add-label agent:human --remove-label agent:opencode" "$(cat "$GH_LOG")"
 
@@ -449,8 +489,8 @@ absent "a closed blocker is not recorded" "--method POST" "$log"
 contains "and the issue is moved to Ready" "single-select-option-id ee5ea42c" "$log"
 
 case_setup
-searched "$(issue 900 'in the queue and blocked' 'agent:opencode p1')"
-boarded "900|Ready|agent:opencode p1"
+searched "$(issue 900 'in the queue and blocked' '')"
+boarded "900|Ready|"
 cat > "$GH_FIXTURES/issue_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
 {"id": 55500, "state": "open"}
 JSON
@@ -459,7 +499,7 @@ cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
 JSON
 run_apply "$(decided 900 "agent:opencode" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
 log=$(cat "$GH_LOG")
-contains "an issue already in Ready that turns out to be blocked leaves the queue" \
+contains "an issue in Ready that turns out to be blocked leaves the queue" \
   "single-select-option-id b14e3c08" "$log"
 contains "and the comment says it is out of it" "Out of the queue" "$log"
 
@@ -469,7 +509,7 @@ contains "and the comment says it is out of it" "Out of the queue" "$log"
 case_setup
 searched "$(issue 900 'in the queue, and one pass disagrees' 'agent:claude p1')"
 boarded "900|Ready|agent:claude p1"
-run_apply "$(decided 900 "agent:claude" "" "" "" false)" >/dev/null
+run_apply_over_decided "$(decided 900 "agent:claude" "" "" "" false)" >/dev/null
 log=$(cat "$GH_LOG")
 absent "an opinion does not take a card out of Ready" "single-select-option-id b14e3c08" "$log"
 absent "and says nothing, because nothing changed" "issue comment" "$log"
@@ -478,9 +518,9 @@ absent "and says nothing, because nothing changed" "issue comment" "$log"
 # `postgres` and `traefik` each logging something unusual — into a chain, and took
 # all three out of Ready. A watcher reports; it creates nothing another one needs.
 case_setup
-searched "$(issue 900 'api is logging errors' 'from:watcher agent:claude')" \
-  "$(issue 800 'postgres is logging errors' 'from:watcher agent:claude')"
-boarded "900|Ready|from:watcher agent:claude" "800|Ready|from:watcher agent:claude"
+searched "$(issue 900 'api is logging errors' 'from:watcher')" \
+  "$(issue 800 'postgres is logging errors' 'from:watcher')"
+boarded "900|Ready|from:watcher" "800|Ready|from:watcher"
 cat > "$GH_FIXTURES/issue_Kolonie-AI_kolonie-docs_issues_800" <<'JSON'
 {"id": 55500, "state": "open"}
 JSON
@@ -537,7 +577,7 @@ contains "and the label is written as the repository token" "as=issues issue edi
 case_setup
 searched "$(issue 900 'routed once already' 'agent:claude p2')"
 boarded "900|Ready|agent:claude p2"
-run_apply "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
+run_apply_over_decided "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
 contains "a changed route removes the old one in the same call" \
   "--add-label agent:human --remove-label agent:claude" "$log"
@@ -548,7 +588,7 @@ contains "and the comment says what it replaced" "instead of" "$log"
 case_setup
 searched "$(issue 900 'unchanged' 'agent:claude')"
 boarded "900|Inbox|agent:claude"
-run_apply "$(decided 900 "agent:claude" "" "idea" "" false)" >/dev/null
+run_apply_over_decided "$(decided 900 "agent:claude" "" "idea" "" false)" >/dev/null
 log=$(cat "$GH_LOG")
 contains "an unchanged route adds the readiness label" "--add-label idea" "$log"
 absent "and removes nothing" "--remove-label" "$log"
@@ -671,6 +711,131 @@ printf '{"comments": []}\n' > "$GH_FIXTURES/comments"
 bash "$SCRIPT" propose "$(proposals '{"proposals":[]}')" >/dev/null 2>"$WORK/stderr"
 absent "nothing proposed opens nothing" "issue create" "$(cat "$GH_LOG")"
 contains "and says so" "no prohibition was proposed" "$(cat "$WORK/stderr")"
+
+echo
+echo "the half that needs no model: the Ready <-> Inbox sweep (#289)"
+
+# Out of the queue on a fact. The issue is decided — no pass will ever brief it
+# again — so if this did not run, an issue that acquired a blocker would sit in
+# Ready for ever and the worker would take it.
+case_setup
+searched "$(issue 900 'routed, in the queue, newly blocked' 'agent:claude')"
+boarded "900|Ready|agent:claude"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "open"}]
+JSON
+out=$(run_sweep)
+log=$(cat "$GH_LOG")
+contains "an open blocker takes a decided issue out of Ready" \
+  "single-select-option-id b14e3c08" "$log"
+contains "and the comment says what it waits for" "Kolonie-AI/kolonie-docs#800" "$log"
+contains "and the run counts the move" "the sweep moved 1 card(s)" "$out"
+absent "and nothing is re-labelled, because nothing was re-decided" "issue edit" "$log"
+
+case_setup
+searched "$(issue 900 'a person has to answer first' 'agent:claude blocked:human')"
+boarded "900|Ready|agent:claude blocked:human"
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+contains "blocked:human takes a decided issue out of Ready too" \
+  "single-select-option-id b14e3c08" "$log"
+contains "and the comment says whose decision it is" "not a queue position" "$log"
+
+# The way back, and the reason it is narrower: an issue whose recorded blockers
+# have all closed is one whose stated reason for waiting has gone. An issue with
+# none recorded never had a stated reason, so nothing here may guess that a person
+# who parked it in Inbox has changed their mind.
+case_setup
+searched "$(issue 900 'was waiting, and is not any more' 'agent:claude')"
+boarded "900|Inbox|agent:claude"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "closed"}]
+JSON
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+contains "an issue whose every blocker has closed comes back to Ready" \
+  "single-select-option-id ee5ea42c" "$log"
+contains "and the comment names what it was waiting for" "Back in the queue" "$log"
+
+case_setup
+searched "$(issue 900 'parked by a person' 'agent:claude')"
+boarded "900|Inbox|agent:claude"
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+absent "an issue that never had a blocker is left where a person put it" \
+  "single-select-option-id" "$log"
+absent "and is not commented on" "issue comment" "$log"
+
+# The two halves partition the two columns: the sweep walks the decided ones and
+# `apply_one` makes the same move at the end of its own decision. An undecided
+# issue swept as well would be moved twice and commented on twice about one move.
+case_setup
+searched "$(issue 900 'nobody has routed this yet' '')"
+boarded "900|Ready|"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "open"}]
+JSON
+out=$(run_sweep)
+absent "the sweep does not touch an undecided issue — that is the model's half" \
+  "single-select-option-id" "$(cat "$GH_LOG")"
+contains "and says it moved nothing" "the sweep moved 0 card(s)" "$out"
+
+echo
+echo "the routing cases (#289)"
+
+CASES=$ROOT/.github/tests/board-triage-cases.json
+cases_brief=$(bash "$SCRIPT" cases-brief "$CASES" 2>/dev/null)
+
+# Each case is an issue the pass could be given. What a provider decides about it
+# is not CI's to assert — `cases-brief` builds the brief for that, and it is run by
+# hand against the gateway when the prompt changes. What CI holds is the half that
+# needs no provider: the case reaches the model at all, the rule it turns on is
+# quoted in the brief, and the route the case expects is one the script would write.
+check "every case that is not case 7 is briefed" "7" \
+  "$(grep -c '^## Kolonie-AI/kolonie-docs#9' <<<"$cases_brief")"
+contains "the brief quotes the routing table rather than restating it" \
+  "### The three routes" "$cases_brief"
+contains "and the prohibitions, from where they live" \
+  "What no worker can do" "$cases_brief"
+contains "and the six ordered questions are in the prompt the cases are asked with" \
+  "What specific fact prevents" "$(python3 - <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location(
+    "decide", pathlib.Path(".github/scripts/board-triage-decide.py"))
+module = importlib.util.module_from_spec(spec)
+sys.modules["decide"] = module
+spec.loader.exec_module(module)
+print(module.SYSTEM)
+PY
+)"
+
+# Case 7, and the only one of the eight that is settled by code rather than by a
+# judgement: it carries a route, so no brief is built for it.
+absent "case 7 is not briefed, because it is already decided" \
+  "#907" "$(grep '^## ' <<<"$cases_brief")"
+
+# The other seven: the route each case expects is written when it is answered.
+# This is not a check on the model — it is the check that the script does not
+# override a well-formed answer with a rule of its own, which is what would make
+# the cases untestable in the first place.
+while IFS=$'\x1f' read -r number labels status want; do
+  case_setup
+  searched "$(issue "$number" 'a routing case' "$labels")"
+  boarded "$number|$status|$labels"
+  run_apply "$(decided "$number" "$want" "" "" "" true)" >/dev/null
+  contains "case #$number is routed $want when that is the answer" \
+    "--add-label $want" "$(cat "$GH_LOG")"
+done < <(jq -r '.cases[] | select(.expect.route != "")
+  | [(.number|tostring), .labels, .status, .expect.route] | join("\u001f")' "$CASES")
+
+# And the one hard override that no answer can talk its way past, which is what
+# case 6 protects once the prohibition is marked on the issue.
+case_setup
+searched "$(issue 906 'edits the worker constraints' 'opencode:forbidden')"
+boarded "906|Inbox|opencode:forbidden"
+run_apply "$(decided 906 "agent:opencode" "" "" "" true)" >/dev/null
+absent "case 6 never reaches the unattended worker, whatever is answered" \
+  "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

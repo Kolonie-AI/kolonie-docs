@@ -29,6 +29,13 @@ name: Triage the board
 # `.github/tests/board-triage.test.sh` can hold a script to account and cannot
 # hold a `run:` block to anything.
 #
+# ## Two halves, and only one of them costs anything (`#289`)
+#
+# The model is asked about **untriaged issues only** — an issue already carrying a
+# route has been decided and is not briefed, chunked or paid for again. What a
+# decided issue still needs is the Ready ↔ Inbox move, and that turns on two facts
+# rather than a judgement, so `sweep` makes it every pass for nothing.
+#
 # ## Two credentials, and neither can do the other's half
 #
 # Since `#270` the board is moved by the `kolonie-opencode` **GitHub App**, which
@@ -92,9 +99,26 @@ jobs:
           bash .github/scripts/board-triage.sh candidates > "$out" || exit 1
 
           waiting=$(jq '.candidates | length' "$out")
-          echo "$waiting issue(s) in Inbox or Ready, $(jq '.index | length' "$out") open in total"
+          echo "$waiting undecided issue(s), $(jq '.queue | length' "$out") in Inbox or Ready, $(jq '.index | length' "$out") open in total"
           echo "waiting=$waiting" >> "$GITHUB_OUTPUT"
           echo "file=$out" >> "$GITHUB_OUTPUT"
+
+      # ## The half that needs no model, and runs whether or not the model does
+      #
+      # `#289`: the Ready ↔ Inbox move was the only reason a decided issue was read
+      # again — and reading it again meant briefing it, chunking it and paying for
+      # it every half hour to be told the route it already carries. *Does it have
+      # an open blocker?* and *does it carry `blocked:human`?* are facts. They are
+      # answered from GitHub, at no token cost, over every routed issue in the two
+      # columns, and they run **before** the model step so that a gateway that is
+      # down costs the pass its judgement and not its bookkeeping.
+      - name: Move the cards the facts decide
+        env:
+          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
+        run: |
+          set -uo pipefail
+          bash .github/scripts/board-triage.sh sweep "${{ steps.candidates.outputs.file }}"
 
       # ## A few candidates at a time, against the whole board every time
       #
