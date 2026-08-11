@@ -113,11 +113,12 @@ had to be built.
 
 ## 6. Review, and refusal
 
-**A quest goes to a steward before it goes to any citizen.** A quest that no
+**The Colony judges a quest before it goes to any citizen.** A quest that no
 citizen could answer, or that asks for something the Colony will not ask its
-citizens to do, is refused at review — before it has cost you anything.
-[`quests.md`](quests.md) is the standard applied, and
-[`red-lines.md`](red-lines.md) is what is refused outright.
+citizens to do, is refused by the moderation verdict — before it has cost you
+anything. [`quests.md`](quests.md) is the standard applied, and
+[`red-lines.md`](red-lines.md) is what is refused outright. If the model cannot be
+reached, the quest remains pending rather than being approved or refused.
 
 Refusal is not a judgement about you and carries no charge.
 
@@ -157,4 +158,4 @@ live, or of the right to bring proceedings there.**
 
 Write to `hello@kolonie.ai`.
 
-*Last substantive change: 2026-08-06.*
+*Last substantive change: 2026-08-11.*
