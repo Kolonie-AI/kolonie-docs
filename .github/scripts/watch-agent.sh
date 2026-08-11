@@ -36,11 +36,22 @@
 # **Silence is still the healthy state.** There is no daily all-clear, no issue
 # on a good day and no comment on one. A quiet run is a quiet run.
 #
-# **One thing excuses a service from the alarm, and only one**: a line in
-# `watch-agent-retired.txt` beside this file, saying it was removed on purpose.
-# A service somebody deleted is silent for a reason the logs cannot hold, and
-# `kolonie-docs#191` is the morning that cost a `p1`. Nothing else quietens this
-# check, and a retired service is still named in the report.
+# **Two things excuse a service from the alarm, and only two.** Both are a line
+# in a file beside this one, both cover a silence the logs cannot explain, and
+# both leave the service named in the report — what a list buys is that nobody
+# is paged, never that something disappears.
+#
+# - `watch-agent-retired.txt` — **it was removed on purpose.** A service somebody
+#   deleted is silent for a reason that is an intention, and `kolonie-docs#191`
+#   is the morning that cost a `p1`.
+# - `watch-agent-silent-by-design.txt` — **the pipeline discards what it writes.**
+#   `kolonie-infra#81` drops `debug` and `info` from the log stack itself, so
+#   `promtail` is permanently silent while running perfectly, and
+#   `kolonie-docs#284` is the `p1` that cost. That file's header says what is
+#   given up by listing a service, because it is not nothing.
+#
+# **Nothing else quietens this check**, and neither list may be used to stop
+# hearing about something that ought to be logging.
 #
 # ## What it sends the model, and what it does not
 #
@@ -250,6 +261,32 @@ retired_stale() {
     "$RETIRED_FILE"
 }
 
+# --- services the pipeline silences on purpose ---------------------------------
+# **A third category, and it is neither of the two above** (`kolonie-docs#284`).
+# `promtail` was filed as a `p1` for having logged nothing in 24 hours, against a
+# shipper that was running, healthy, and tailing every file on the host. Its
+# lines never reached Loki because `kolonie-infra#81` drops `debug` and `info`
+# from the log stack itself at ingestion — merged 2026-08-05 17:27, which is the
+# hour the series stops.
+#
+# **The measurement was right and the question was wrong.** A dead runner and a
+# runner whose output is discarded are the same silence from inside Loki, exactly
+# as a dead runner and a retired one are. The difference is again not in the
+# logs: there it is an intention, here it is a rule in another repository's
+# pipeline.
+#
+# **Not an entry in the retired list**, which was the obvious move and is wrong
+# in three ways: an entry there expires after seven days and this condition does
+# not, that file's normal state is empty and this one's is not, and it records
+# something done to a *service* rather than something true of the *pipeline*.
+# The file's own header carries the rest, including the one thing given up.
+SILENT_FILE="${WATCH_SILENT_FILE:-$(dirname "${BASH_SOURCE[0]}")/watch-agent-silent-by-design.txt}"
+
+silent_by_design() {
+  [ -r "$SILENT_FILE" ] || return 0
+  awk '!/^[[:space:]]*#/ && NF { print $1 }' "$SILENT_FILE" | sort -u
+}
+
 cmd_gather() {
   local dir="$1"
   mkdir -p "$dir"
@@ -271,6 +308,14 @@ cmd_gather() {
   # reported, and why* without re-reading the retired list.
   comm -12 "$dir/quiet.txt" <(retired_services) > "$dir/retired.txt"
   comm -23 "$dir/quiet.txt" <(retired_services) > "$dir/silent.txt"
+
+  # The same split again, against the pipeline's own drops. Done second and
+  # against what the retired split left, so a service in both files is reported
+  # once and under the older reason rather than twice.
+  comm -12 "$dir/silent.txt" <(silent_by_design) > "$dir/by-design.txt"
+  comm -23 "$dir/silent.txt" <(silent_by_design) > "$dir/silent.next"
+  mv "$dir/silent.next" "$dir/silent.txt"
+
   retired_stale >&2
 
   # --- the errors, which are the larger half (`#236`) ------------------------
@@ -374,6 +419,17 @@ cmd_gather() {
       echo "(\`.github/scripts/watch-agent-retired.txt\` says by whom and when):"
       echo
       sed 's/^/- `/; s/$/`/' "$dir/retired.txt"
+    fi
+    # Named for the same reason the retired ones are: a service this check has
+    # stopped being able to speak about should be visible in the place the check
+    # reports, not only in a file somebody has to think to open.
+    if [ -s "$dir/by-design.txt" ]; then
+      echo
+      echo "Quiet and **not reported**, because the pipeline drops what they"
+      echo "ordinarily write (\`.github/scripts/watch-agent-silent-by-design.txt\`"
+      echo "names the rule, and what is given up by listing them):"
+      echo
+      sed 's/^/- `/; s/$/`/' "$dir/by-design.txt"
     fi
     # **The error volume per service, every day, whether or not anything is
     # filed** (`#236`). That alone turns 674 from invisible into a number
