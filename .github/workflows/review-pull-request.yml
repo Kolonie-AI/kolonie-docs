@@ -365,6 +365,18 @@ jobs:
                   f"{base}/chat/completions", data=body_for(model),
                   headers={"Authorization": f"Bearer {key}",
                            "Content-Type": "application/json",
+                           # **Not cosmetic — without it this call is refused.**
+                           # `urllib` sends `Python-urllib/3.x`, and the gateway
+                           # sits behind Cloudflare, which answers that signature
+                           # with `403` and error code 1010 whatever the source
+                           # address or the credential. Measured 2026-08-11: the
+                           # same key, model and body answer 200 under any other
+                           # user agent and 403 under this one, from a runner and
+                           # from a maintainer machine alike
+                           # (`kolonie-platform#728`). OpenRouter never minded, so
+                           # the default survived until `#721` made the provider
+                           # visible.
+                           "User-Agent": "Kolonie-Reviewer-Agent/1.0 (+https://github.com/Kolonie-AI)",
                            "HTTP-Referer": "https://github.com/Kolonie-AI",
                            "X-Title": "Kolonie Reviewer Agent"})
               try:

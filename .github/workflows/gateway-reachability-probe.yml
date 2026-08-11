@@ -1,7 +1,6 @@
-# Temporary diagnostic for kolonie-platform#728: the Reviewer Agent's call to the
-# LLM gateway is refused with 403 from a GitHub runner and answers 200 from a
-# maintainer machine. This says whether the refusal comes from the edge or from
-# the gateway itself. Delete it once #728 is closed.
+# Temporary diagnostic for kolonie-platform#728. Delete once #728 is closed.
+# It asks the gateway twice from a runner, with urllib's default user agent and
+# with the Reviewer Agent's own, and prints the status of each.
 name: Gateway reachability probe
 
 on:
@@ -14,21 +13,31 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Ask the gateway and report how it refused
+      - name: Ask the gateway with each user agent
         env:
           BASE: ${{ secrets.LLM_GATEWAY_BASE_URL }}
           KEY: ${{ secrets.LLM_GATEWAY_API_KEY_REVIEWER }}
           MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
         run: |
-          echo "egress address: $(curl -s https://api.ipify.org)"
-          code=$(curl -sS -o /tmp/body.txt -D /tmp/head.txt -w '%{http_code}' \
-            "$BASE/v1/chat/completions" \
-            -H "Authorization: Bearer $KEY" \
-            -H 'Content-Type: application/json' \
-            -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":1}" \
-            || echo "curl-failed")
-          echo "status: $code"
-          echo '--- edge headers ---'
-          grep -iE '^(server|cf-ray|cf-mitigated|cf-cache-status|x-cpa-|content-type):' /tmp/head.txt || true
-          echo '--- body, first 600 bytes ---'
-          head -c 600 /tmp/body.txt
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          base, key, model = os.environ["BASE"], os.environ["KEY"], os.environ["MODEL"]
+          body = json.dumps({"model": model,
+                             "messages": [{"role": "user", "content": "ping"}],
+                             "max_tokens": 8}).encode()
+
+          for label, ua in (("urllib default (nothing set)", None),
+                            ("Kolonie-Reviewer-Agent/1.0", "Kolonie-Reviewer-Agent/1.0 (+https://github.com/Kolonie-AI)")):
+              headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+              if ua:
+                  headers["User-Agent"] = ua
+              req = urllib.request.Request(f"{base}/v1/chat/completions", data=body, headers=headers)
+              try:
+                  r = urllib.request.urlopen(req, timeout=60)
+                  print(f"{label}: {r.status}")
+              except urllib.error.HTTPError as e:
+                  print(f"{label}: {e.code} — {e.read()[:120].decode(errors='replace')}")
+              except Exception as e:
+                  print(f"{label}: unreachable ({type(e).__name__})")
+          PY
