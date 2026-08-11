@@ -416,28 +416,47 @@ jobs:
           gateway_model = os.environ.get("LLM_GATEWAY_MODEL", "")
 
           verdict = None
+          provider = "OpenRouter"
           # All three together, or the gateway is not configured — an address with
           # no key is a service that falls back on every call, which is the
           # expensive way to be switched off. Removing the key is how this job is
           # put back on OpenRouter, with no change to this file.
           if gateway_base and gateway_key and gateway_model:
               verdict, why = ask(gateway_base, gateway_key, gateway_model)
+              provider = "the gateway"
               if verdict is None:
                   # A fallback is a thing that did not work even though the review
                   # still gets written. Said out loud, with its reason, so *the
                   # gateway was down all afternoon* is answerable afterwards.
                   print(f"the gateway did not answer ({why}) — asking OpenRouter instead", file=sys.stderr)
+          else:
+              # Said out loud for the same reason the failure is, and it was not:
+              # a caller that never inherited the three secrets produced reviews
+              # indistinguishable from a deliberate OpenRouter one, which is how
+              # this repository reviewed for a week without reaching the gateway
+              # (`kolonie-platform#721`).
+              missing = [
+                  name
+                  for name, value in (
+                      ("LLM_GATEWAY_BASE_URL", gateway_base),
+                      ("LLM_GATEWAY_API_KEY_REVIEWER", gateway_key),
+                      ("LLM_GATEWAY_MODEL", gateway_model),
+                  )
+                  if not value
+              ]
+              print(f"the gateway is not configured here ({', '.join(missing)}) — asking OpenRouter", file=sys.stderr)
 
           # One retry, not a loop: the same prompt runs at most twice, once per
           # provider. The model id is the caller's own here, never the gateway's.
           if verdict is None:
               verdict, why = ask("https://openrouter.ai/api/v1", openrouter_key, os.environ["MODEL"])
+              provider = "OpenRouter"
           if verdict is None:
               print(f"the model endpoint answered nothing usable ({why}) — no review was written", file=sys.stderr)
               sys.exit(0)
 
           json.dump(verdict, open("/tmp/review/verdict.json", "w"))
-          print("model answered:", verdict.get("verdict"))
+          print("model answered:", verdict.get("verdict"), "— via", provider)
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write("ok=yes\n")
           PY
