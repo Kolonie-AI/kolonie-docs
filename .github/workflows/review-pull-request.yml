@@ -76,6 +76,31 @@ on:
           clean, because a reviewer that cannot reach a model must not be the
           reason a pull request looks broken.
         required: false
+      LLM_GATEWAY_API_KEY_REVIEWER:
+        description: >-
+          This service's own key on the LLM gateway (`kolonie-platform#674`). One
+          key per service, so the Reviewer Agent's traffic can be read, capped or
+          revoked without stopping the moderation queue.
+
+          Not required, and that is the switch: with this unset the job talks to
+          OpenRouter exactly as it did before, with no change to this file. All
+          three gateway secrets are needed together — an address with no key is a
+          service that would fall back on every call, which is the expensive way
+          to be switched off.
+        required: false
+      LLM_GATEWAY_BASE_URL:
+        description: >-
+          Where the gateway is. **A secret rather than an input**, because it is a
+          host of ours and `kolonie-platform#676` keeps it out of everything a
+          reader can see — a workflow log is public on a public repository.
+        required: false
+      LLM_GATEWAY_MODEL:
+        description: >-
+          Which model the gateway is asked for, overriding `model` above when the
+          gateway answers. One variable for all four services: the point of the
+          switch is that a subscription answers, and a per-service model would
+          mean four things to change to find that out.
+        required: false
 
 permissions:
   contents: read
@@ -219,6 +244,12 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           MODEL: ${{ inputs.model }}
           TRUNCATED: ${{ steps.gather.outputs.truncated }}
+          # The gateway's three, all optional (`kolonie-platform#674`). Absent —
+          # any one of them — and the block below is the OpenRouter call it has
+          # always been.
+          LLM_GATEWAY_API_KEY_REVIEWER: ${{ secrets.LLM_GATEWAY_API_KEY_REVIEWER }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          LLM_GATEWAY_MODEL: ${{ secrets.LLM_GATEWAY_MODEL }}
         run: |
           set -euo pipefail
           if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -303,62 +334,106 @@ jobs:
           {read('/tmp/review/diff.txt')}
           ```"""
 
-          body = json.dumps({
-              "model": os.environ["MODEL"],
-              "messages": [{"role": "system", "content": system},
-                           {"role": "user", "content": user}],
-              "response_format": {"type": "json_object"},
-              # 4000 was the first value here and it was wrong, measured rather
-              # than guessed: against a 2 KB diff the model spent 979 tokens
-              # thinking and ran out mid-JSON, and OpenRouter returns
-              # `content: null` with `finish_reason: length` when that happens.
-              # The whole answer is then lost — there is no partial object to
-              # salvage — so the budget has to comfortably clear a criteria
-              # table plus findings, not just typically clear it.
-              "max_tokens": 16000,
-              "temperature": 0.2,
-          }).encode()
+          def body_for(model):
+              return json.dumps({
+                  "model": model,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": user}],
+                  "response_format": {"type": "json_object"},
+                  # 4000 was the first value here and it was wrong, measured rather
+                  # than guessed: against a 2 KB diff the model spent 979 tokens
+                  # thinking and ran out mid-JSON, and OpenRouter returns
+                  # `content: null` with `finish_reason: length` when that happens.
+                  # The whole answer is then lost — there is no partial object to
+                  # salvage — so the budget has to comfortably clear a criteria
+                  # table plus findings, not just typically clear it.
+                  "max_tokens": 16000,
+                  "temperature": 0.2,
+              }).encode()
 
-          req = urllib.request.Request(
-              "https://openrouter.ai/api/v1/chat/completions", data=body,
-              headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
-                       "Content-Type": "application/json",
-                       "HTTP-Referer": "https://github.com/Kolonie-AI",
-                       "X-Title": "Kolonie Reviewer Agent"})
-          try:
-              answer = json.load(urllib.request.urlopen(req, timeout=300))
-          except urllib.error.HTTPError as e:
-              # The status and nothing else. This log is public, and an error body
-              # from a provider can echo the request back with the key in it.
-              print(f"the model endpoint answered {e.code} — no review was written", file=sys.stderr)
-              sys.exit(0)
-          except Exception as e:
-              print(f"could not reach the model endpoint: {type(e).__name__} — no review was written", file=sys.stderr)
-              sys.exit(0)
+          # **Ask one provider once.** Returns the parsed verdict, or `None` and a
+          # reason class the caller decides what to do with. Nothing in here
+          # raises: every way this can go wrong is a value, because the two
+          # callers below want different things from a failure — the first falls
+          # back, the second gives up.
+          #
+          # **The reason is a class and never a body.** This log is public: an
+          # error body from a provider can echo the request back with the key in
+          # it, and the gateway's address is a host of ours (`#676`).
+          def ask(base, key, model):
+              req = urllib.request.Request(
+                  f"{base}/chat/completions", data=body_for(model),
+                  headers={"Authorization": f"Bearer {key}",
+                           "Content-Type": "application/json",
+                           "HTTP-Referer": "https://github.com/Kolonie-AI",
+                           "X-Title": "Kolonie Reviewer Agent"})
+              try:
+                  answer = json.load(urllib.request.urlopen(req, timeout=300))
+              except urllib.error.HTTPError as e:
+                  return None, f"status {e.code}"
+              except TimeoutError:
+                  return None, "timeout"
+              except Exception as e:
+                  # A connect timeout arrives wrapped in URLError rather than
+                  # raised as itself, so the class above does not catch it and
+                  # the slowest failure would otherwise read as "unreachable".
+                  if isinstance(getattr(e, "reason", None), TimeoutError):
+                      return None, "timeout"
+                  return None, f"unreachable ({type(e).__name__})"
 
-          # **An empty answer is a normal outcome, not an exception.** Reading
-          # `["message"]["content"]` straight through raised AttributeError on
-          # `None` the first time this met a real pull request, which under
-          # `set -e` fails the step and paints somebody's green build red — the
-          # exact thing the missing-key branch above exists to avoid. Every way
-          # the model can decline to answer ends here instead.
-          choice = answer.get("choices", [{}])[0]
-          text = (choice.get("message") or {}).get("content")
-          if not text:
-              reason = choice.get("finish_reason") or "unknown"
-              print(f"the model returned no content (finish_reason: {reason}) — no review was written", file=sys.stderr)
-              if reason == "length":
-                  print("it ran out of output budget before closing the JSON; raise max_tokens", file=sys.stderr)
-              sys.exit(0)
-          # A model asked for JSON usually returns JSON. "Usually" is not a
-          # contract, so a fenced block is unwrapped rather than crashing the job.
-          if text.strip().startswith("```"):
-              text = text.strip().strip("`")
-              text = text.split("\n", 1)[1] if "\n" in text else text
-          try:
-              verdict = json.loads(text)
-          except json.JSONDecodeError:
-              print("the model did not answer with JSON — no review was written", file=sys.stderr)
+              # **An empty answer is a normal outcome, not an exception.** Reading
+              # `["message"]["content"]` straight through raised AttributeError on
+              # `None` the first time this met a real pull request, which under
+              # `set -e` fails the step and paints somebody's green build red —
+              # the exact thing the missing-key branch above exists to avoid.
+              # Every way the model can decline to answer ends here instead.
+              choice = (answer.get("choices") or [{}])[0]
+              text = (choice.get("message") or {}).get("content")
+              if not text:
+                  reason = choice.get("finish_reason") or "unknown"
+                  if reason == "length":
+                      # Worth naming rather than classing as malformed: it is the
+                      # one failure a maintainer fixes by changing a number here.
+                      return None, "no content (finish_reason: length — raise max_tokens)"
+                  return None, f"no content (finish_reason: {reason})"
+
+              # A model asked for JSON usually returns JSON. "Usually" is not a
+              # contract, so a fenced block is unwrapped rather than crashing.
+              if text.strip().startswith("```"):
+                  text = text.strip().strip("`")
+                  text = text.split("\n", 1)[1] if "\n" in text else text
+              try:
+                  return json.loads(text), None
+              except json.JSONDecodeError:
+                  # The condition this whole arrangement is built for: 200, and
+                  # prose where a verdict was asked for. A review assembled out of
+                  # that would be a judgement nobody made.
+                  return None, "the reply was not JSON"
+
+          openrouter_key = os.environ["OPENROUTER_API_KEY"]
+          gateway_base = os.environ.get("LLM_GATEWAY_BASE_URL", "").rstrip("/")
+          gateway_key = os.environ.get("LLM_GATEWAY_API_KEY_REVIEWER", "")
+          gateway_model = os.environ.get("LLM_GATEWAY_MODEL", "")
+
+          verdict = None
+          # All three together, or the gateway is not configured — an address with
+          # no key is a service that falls back on every call, which is the
+          # expensive way to be switched off. Removing the key is how this job is
+          # put back on OpenRouter, with no change to this file.
+          if gateway_base and gateway_key and gateway_model:
+              verdict, why = ask(gateway_base, gateway_key, gateway_model)
+              if verdict is None:
+                  # A fallback is a thing that did not work even though the review
+                  # still gets written. Said out loud, with its reason, so *the
+                  # gateway was down all afternoon* is answerable afterwards.
+                  print(f"the gateway did not answer ({why}) — asking OpenRouter instead", file=sys.stderr)
+
+          # One retry, not a loop: the same prompt runs at most twice, once per
+          # provider. The model id is the caller's own here, never the gateway's.
+          if verdict is None:
+              verdict, why = ask("https://openrouter.ai/api/v1", openrouter_key, os.environ["MODEL"])
+          if verdict is None:
+              print(f"the model endpoint answered nothing usable ({why}) — no review was written", file=sys.stderr)
               sys.exit(0)
 
           json.dump(verdict, open("/tmp/review/verdict.json", "w"))
