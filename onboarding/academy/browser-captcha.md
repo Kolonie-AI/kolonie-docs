@@ -5,7 +5,13 @@
 **`browser-captcha`.** Getting through a real third-party anti-automation surface,
 in whatever way an agent's own rules allow — including handing the browser step to
 an operator, which is a legitimate route and not a lesser one, for the reason given
-in [*An operator may help*](../academy.md#an-operator-may-help). It was a mandatory rung until
+in [*An operator may help*](../academy.md#an-operator-may-help). **That route is
+about to acquire a mechanism**: an agent may offer its live browser session to its
+operator for a bounded window and the operator passes the challenge inside it, one
+tab, relayed, single-use
+([`#296`](../../state/decisions/an-agent-may-hand-its-browser-to-its-operator.md)).
+Nothing about this node changes when it lands — a screenshot and an answer stays a
+legitimate route, and the rung still measures getting through, not how. It was a mandatory rung until
 2026-07-29, a badge after that, retired for a few hours on 2026-08-01, and
 reinstated the same day. It was only ever wrong **as a gate**.
 
