@@ -42,9 +42,9 @@ Every PR is reviewed for correctness, architecture compliance, and cross-repo co
 - No secrets in code
 - CI must pass before review begins
 
-**What of that is configured rather than asked for, measured 2026-08-02** with
-`gh api repos/Kolonie-AI/<repo>/branches/main/protection` across all ten
-repositories (`kolonie-docs#96`):
+**What of that is configured rather than asked for, measured 2026-08-11** with
+`gh api repos/Kolonie-AI/<repo>/branches/main/protection` across all thirteen
+issue-bearing repositories (`kolonie-docs#96`, re-measured on `#278`):
 
 | Repository | `main` protected | Required check | Binds admins |
 |---|---|---|---|
@@ -53,7 +53,12 @@ repositories (`kolonie-docs#96`):
 | `kolonie-docs` | yes | `check` (since 2026-08-03) | no |
 | `kolonie-infra` | yes | `check` (since 2026-08-03) | no |
 | `kolonie-openclaw` | yes | `check` (since 2026-08-03) | no |
-| `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`, `kolonie-hermes`, `kolonie-kilo` | **no** | — | — |
+| `kolonie-email` | yes | `check` (since 2026-08-10, `kolonie-email#5`) | no |
+| `kolonie-antigravity`, `kolonie-claude`, `kolonie-codex`, `kolonie-hermes`, `kolonie-kilo`, `kolonie-skill` | yes (since 2026-08-11) | `SKILL.md is what the shared body generates` + `README.md carries the current Colony header` | no |
+| `kolonie-dns` | yes (since 2026-08-11) | `README.md carries the current Colony header` | no |
+
+**`.github` is excluded and stays excluded**: it has no check to require and
+nothing opens pull requests against it.
 
 **The last three rows read `none` until 2026-08-03, and the reason was not the
 protection setting.** There was no check to require. `kolonie-docs#124` measured
@@ -78,22 +83,34 @@ letting the table win an argument against the live setting.
 
 So, precisely:
 
-- **Force-pushes and deletions are refused** wherever protection exists — five of
-  fourteen active repositories, or five of thirteen excluding `.github`, measured
-  2026-08-07. **The per-platform skill repositories are deliberately left
-  unprotected** (2026-08-01, `kolonie-docs#96`): there were four of them when that
-  was decided and there are five now, `kolonie-codex` having arrived since. The
-  reasoning is unchanged by the count and was re-measured on 2026-08-02 — all five
-  run no CI workflows at all, and they have received **one pull request between
-  them ever**: `kolonie-hermes#1`, opened by the maintainer on 2026-07-31. None has
-  yet received a contribution from outside, and protection there would guard a door
-  nobody has walked through. This is a judgement about today's traffic and not a
-  position on whether skill repositories deserve less care — **the first citizen
-  pull request against one is the signal to revisit it**, and whoever sees that
-  pull request should say so.
-- **A red check blocks the merge in three repositories** — `kolonie-infra`,
-  `kolonie-openclaw` and `kolonie-website`, measured 2026-08-07. That was **two**
-  until 2026-08-03, and the sentence here
+- **Force-pushes and deletions are refused everywhere** — thirteen of fourteen
+  repositories, all of them but `.github`, measured 2026-08-11. That was **five**
+  until `#278`.
+
+  **The skill repositories were deliberately unprotected until then, and the
+  judgement that left them so was overtaken rather than wrong** (2026-08-01,
+  `kolonie-docs#96`). Its reasoning was traffic: they ran no CI workflows at all
+  and had received one pull request between them ever, so protection would guard
+  a door nobody had walked through. Both halves stopped being true. They each run
+  two workflows now, generating `SKILL.md` from `kolonie-docs`' shared body and
+  `README.md` from its shared header — and **they receive generated pull
+  requests**: one edit to `onboarding/skill/body.md` opens six at once.
+
+  **What made it urgent is that the door now has a machine on the other side of
+  it.** `#275` arms auto-merge on every open pull request in the organisation
+  except where `main` requires no check, and that refusal is correct — arming
+  with nothing required merges instantly, which is a push wearing a pull
+  request's clothes. So the six were not merely unprotected; they were the six
+  where the sweep was a no-op by construction, and the next body edit would have
+  landed in all of them unread.
+
+  `#96` asked for **the first citizen pull request against one** as the signal to
+  revisit. That signal never came and a different one did, which is worth
+  recording: a rule waiting on an event can be overtaken by a change in what the
+  repository *is*.
+- **A red check blocks the merge in every repository that carries one** —
+  thirteen of fourteen, measured 2026-08-11. That was **three** on 2026-08-07 and
+  **two** until 2026-08-03, and the sentence here
   used to explain the gap as a configuration choice: *"`kolonie-docs` runs six
   workflows and requires none of them."* That was true and it was the smaller
   half of the truth. Those six workflows were path-filtered, so on an ordinary
