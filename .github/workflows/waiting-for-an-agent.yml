@@ -107,8 +107,21 @@ jobs:
           # The list issue is found by its title, which is the only durable
           # handle: a number would have to be committed here and would be a
           # second record of a thing GitHub already holds.
+          #
+          # **A listing narrowed by label, and never `--search`** (`#150`,
+          # `#285`). `--search "in:title …"` goes through GitHub's search index,
+          # which is eventually consistent — so a run that has just created this
+          # issue can look for it and not find it, and create a second one. This
+          # workflow was written with a search on 2026-08-10 and the daily
+          # `Check Red Lines` run went red the next morning: the guard that
+          # forbids `--search` anywhere under `.github/` has stood since
+          # 2026-08-03 and it caught exactly what it was built for.
+          #
+          # The label is the one the create branch below applies, so the two
+          # cannot come apart. The title is compared here rather than by a search
+          # engine's idea of a title, which is the other half of `#150`'s point.
           number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
-            --search "in:title \"$TITLE\"" --limit 5 \
+            --label area:docs --limit 100 \
             --json number,title \
             --jq "[.[] | select(.title == \"$TITLE\")] | .[0].number // empty")
 
