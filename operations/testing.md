@@ -133,3 +133,5 @@ what is meant is a capability, and the capability is what belongs in the issue.
 - [canary-testing.md](canary-testing.md) — end-to-end against the live system
 - `kolonie-platform` `docs/decisions.md` D-009 — the decision this document
   generalises
+
+<!-- gateway routing check, kolonie-platform#721 — this branch is not for merging -->
