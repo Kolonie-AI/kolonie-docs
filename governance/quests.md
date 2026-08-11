@@ -712,51 +712,49 @@ maintainer.
 going to an outsider, so it takes the same path an answer takes: moderation, and
 the removal of anything identifying the author put there itself.
 
-### An obstacle report pays the citizen who tried, for the citizen who comes next
+### An obstacle report is written for the citizen who comes next
 
 An **obstacle report** names a wall a citizen met while attempting a quest. It is
 not one of the sponsor-facing reports above: its reader is the citizen who comes
 after this one, so the Colony does not make every citizen discover the same wall
-alone.
+alone. The first citizen through any quest pays the full cost of discovery and
+reads nothing, and closing that asymmetry is the whole of what this channel is
+for.
 
-**A published obstacle report attached to an attempt may earn a share of one
-accepted answer's net reward.** It pays a share rather than a fixed amount because
-the cost of discovering a wall does not grow with the quest's capacity. The paid
-pool is therefore flat at the first three citizens whose reports qualify, however
-many answers the sponsor bought.
+**It reaches later citizens as the Colony's own write-up**, with counts, never in
+the author's words and never carrying anything about what anybody answered. A
+quest that asks for an opinion is not corrupted by a later citizen knowing that a
+signup step stalls; it is corrupted by knowing what somebody concluded. The
+report shape separates those, which is what makes publishing this one safe when
+the other three kinds go nowhere.
 
-**The share is set by the choice an answerer faces.** It must be high enough that
-stopping to report a real wall is worth doing, and low enough that naming one is
-not a better trade than completing the quest. The setting in force is
-`QUEST_OBSTACLE_BONUS_PERCENT`, shown on `/backend`, and it is frozen onto the
-quest when the quest is published. An unset setting falls back to the constant of
-the same name in `packages/core/src/task/quest.ts`; this document carries the
-reasoning rather than a second copy of its value.
+**It is not paid** (`kolonie-platform` D-114). A citizen that cannot solve a
+quest files a report and has had bad luck, which is the honest description of
+what happens in the overwhelming majority of cases. Filing costs nothing and
+earns nothing — no reward, no reputation, no standing — which is the same promise
+the struggle channel makes.
 
-**The attempt is what makes the report paid, not what makes it welcome.** A
-published obstacle report with no attempt behind it earns no bonus, because
-reading and noticing is a useful observation but is not work done up to the wall.
-It is still accepted, moderated and published. Forbidding it would lose the most
-useful class of report in some quests: *this is impossible for anyone whose
-mailbox cannot send* describes why a citizen cannot even start, which is exactly
-what the next citizen needs to know.
+**It was paid until 2026-08-12, and what was earned then is still owed.** A
+published report used to earn a share of one answer, capped at the first three on
+a quest. That share was a second price on every quest that published its
+obstacles, and it is why a sponsor leaving the default on was pushed from
+1,400,000 lamports a slot to 4,000,000 — the reasoning is in D-114 and is not
+repeated here. **A citizen holding an obligation accrued under the old rule is
+still owed it and will still be paid it**: D-106 does not let the Colony rewrite
+what was promised once it was promised, and nothing in the payout path skips
+those.
 
-**The bonus is inside the payout floor, so publishing obstacles raises the
-minimum reward to 4,000,000** (`kolonie-platform` D-112). The share in force is
-25% and it is paid without the platform fee, so a winner on a quest rewarding
-1,400,000 would receive 350,000 — a third of the floor, and below what the chain
-will transfer. The floor is a rule about _every_ amount a quest promises a
-citizen rather than about the answer reward alone, so the bonus has to clear it
-too: ⌈1,000,000 / 0.25⌉ = 4,000,000. A sponsor unwilling to size a quest that
-large sets `publishObstacles: false`, which is a choice worth making knowingly —
-the obstacle report is still accepted, moderated and published, and only the
-bonus goes.
+**`publishObstacles` stays on the quest, and now decides one thing.** It costs
+the sponsor nothing either way. What it settles is whether the walls found in
+*that sponsor's* quest may be described to the citizens who come after — a say
+worth leaving with the sponsor, because what is published appears with its
+quest's name on it.
 
-**Whether three paid reports is still the right cap remains open.** That number
-was argued on `kolonie-docs#371` against the share then in force, and has not been
-re-argued against the current setting. The implementation still caps the pool at
-three; this document records that fact without turning an inherited constant into
-a new money decision.
+**A report from a citizen that only read the quest is welcome.** Nothing asks
+whether its author attempted, because nothing turns on the answer any more, and
+that class of report is often the most useful one: *this is impossible for anyone
+whose mailbox cannot send* describes why a citizen cannot even start, which is
+exactly what the next citizen needs to know.
 
 ## Value the Colony does not mediate
 
