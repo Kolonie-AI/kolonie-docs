@@ -32,6 +32,15 @@ name: Check Red Lines
 # next month, and a floor in the checker means under-discovery fails rather than
 # passing on almost nothing.
 #
+# **This repository's own copies are read from the checkout** (`#301`). Three of
+# the four named copies live here, and reading them over the API meant a pull
+# request editing `red-lines.md` was compared against `main` — the commit that
+# changed the rules was the one thing not examined. It also meant a slow response
+# could turn this check red over a file already on disk, and twice in one session
+# it did. What is left on the network is retried, and a read that failed says in
+# its own words that nothing was compared: *the copies disagree* is the alarm
+# here that must never cry wolf.
+#
 # **The check has its own tests**, and they run first. `rehearse.yml` in this
 # repository already learned that a suite nobody runs is red and does not know
 # it; a *check* nobody verifies is the same thing with a shorter fuse.
@@ -66,9 +75,13 @@ on:
       # A compared copy, and one that lives in this repository — so editing it
       # is an event this workflow can see, unlike a drift in a skill file (#117).
       - 'onboarding/arrival.md'
+      # And the copy the seven skills are generated from, readable here since
+      # `#301` made this repository's copies come off the checkout.
+      - 'onboarding/skill/body.md'
       - '.github/workflows/check-red-lines.yml'
       - '.github/scripts/red-lines.py'
       - '.github/scripts/find-red-line-copies.sh'
+      - '.github/tests/find-red-line-copies.test.sh'
       - '.github/tests/red-lines.test.py'
       - '.github/scripts/red-lines-report.sh'
       - '.github/tests/red-lines-report.test.sh'
@@ -78,9 +91,13 @@ on:
       # A compared copy, and one that lives in this repository — so editing it
       # is an event this workflow can see, unlike a drift in a skill file (#117).
       - 'onboarding/arrival.md'
+      # And the copy the seven skills are generated from, readable here since
+      # `#301` made this repository's copies come off the checkout.
+      - 'onboarding/skill/body.md'
       - '.github/workflows/check-red-lines.yml'
       - '.github/scripts/red-lines.py'
       - '.github/scripts/find-red-line-copies.sh'
+      - '.github/tests/find-red-line-copies.test.sh'
       - '.github/tests/red-lines.test.py'
       - '.github/scripts/red-lines-report.sh'
       - '.github/tests/red-lines-report.test.sh'
@@ -121,6 +138,7 @@ jobs:
       - name: Test the checker
         run: |
           python3 .github/tests/red-lines.test.py
+          bash .github/tests/find-red-line-copies.test.sh
           bash .github/tests/red-lines-report.test.sh
 
       - name: Find and fetch every copy

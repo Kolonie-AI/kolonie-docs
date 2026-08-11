@@ -66,6 +66,7 @@ npm run check
 # Test the checks themselves
 python3 .github/tests/check-links.test.py
 python3 .github/tests/red-lines.test.py
+bash .github/tests/find-red-line-copies.test.sh
 python3 .github/tests/build-skill.test.py
 python3 .github/tests/check-incident-order.test.py
 
@@ -73,9 +74,11 @@ python3 .github/tests/check-incident-order.test.py
 python3 .github/scripts/check-links.py .
 python3 .github/scripts/check-incident-order.py operations/incidents.md
 
-# The red lines check compares against origin, so it cannot see unpushed local edits
-bash .github/scripts/find-red-line-copies.sh /tmp/copies
-GH_TOKEN=<your-token> python3 .github/scripts/red-lines.py /tmp/copies
+# The red lines check reads this repository's three copies from your working tree,
+# so it sees unpushed edits; the copies in the other repositories come from their
+# default branch and need a token
+GH_TOKEN=<your-token> bash .github/scripts/find-red-line-copies.sh /tmp/copies
+python3 .github/scripts/red-lines.py /tmp/copies
 ```
 
 **Other repositories** (`kolonie-infra`, `kolonie-email`, `kolonie-dns`,

@@ -57,6 +57,7 @@ step "the checks are tested before they are trusted" bash -c '
   set -e
   python3 .github/tests/check-links.test.py
   python3 .github/tests/red-lines.test.py
+  bash .github/tests/find-red-line-copies.test.sh
   python3 .github/tests/build-skill.test.py
   python3 .github/tests/build-readme.test.py
   python3 .github/tests/check-incident-order.test.py
