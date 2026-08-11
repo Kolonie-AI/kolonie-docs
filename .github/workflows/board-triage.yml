@@ -1,6 +1,6 @@
 name: Triage the board
 
-# One pass an hour over Inbox and Ready, so that something decides
+# One pass every half hour over Inbox and Ready, so that something decides
 # (`kolonie-docs#262`).
 #
 # ## Why it exists
@@ -8,14 +8,16 @@ name: Triage the board
 # Measured 2026-08-10: 49 issues created in 24 hours, 46 closed, 21 of those by
 # the opencode worker — and **fifteen sitting unread in Inbox while every issue
 # the worker was given that day was queued by hand.** The worker exited idle on
-# two runs in three. The bottleneck was not execution.
+# two runs in three. The bottleneck was not execution. The maintainer increased
+# this pass from hourly to half-hourly on 2026-08-11 so newly filed work waits at
+# most one scheduling interval for a routing decision.
 #
 # ## Why :20
 #
 # After the hour's arrivals and clear of the checks on the hour, which is where
-# `opencode-worker.yml` and the watchers already are. The worker runs on the hour
-# and takes one issue from Ready; a triage pass twenty minutes later fills the
-# queue it will read next time rather than racing it for the same issue.
+# `opencode-worker.yml` and the watchers already are. Runs at :20 and :50 avoid
+# the worker's ten-minute boundaries while cutting the longest intended wait for
+# a new routing decision from one hour to thirty minutes.
 #
 # ## What it may write, and where that is enforced
 #
@@ -38,7 +40,7 @@ name: Triage the board
 
 on:
   schedule:
-    - cron: "20 * * * *"
+    - cron: "20,50 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -49,7 +51,7 @@ concurrency:
   # Two passes deciding about one issue would each comment on it. The board write
   # is the same shape as the worker's claim and this is the same protection one
   # level up: a queued pass is dropped rather than run late, because the next one
-  # is twenty minutes away and reads the board fresh.
+  # is at most thirty minutes away and reads the board fresh.
   group: board-triage
   cancel-in-progress: false
 
@@ -131,7 +133,7 @@ jobs:
             echo "issues $offset..$((offset + CHUNK - 1)): a $(wc -c < "$brief")-character brief"
 
             # It writes an empty decisions file and exits 0 when it cannot ask, and
-            # the reason is in its own header: this runs twenty-four times a day,
+            # the reason is in its own header: this runs forty-eight times a day,
             # and a provider hiccup that turned red would produce a red run nobody
             # believes. A chunk that fails costs its own issues and not the pass.
             python3 .github/scripts/board-triage-decide.py "$brief" "$parts/$offset.json"
