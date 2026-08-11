@@ -323,6 +323,15 @@ every payout. A rate change binds quests published after it, because a quest
 already paid for was bought against a stated split and its citizens are answering
 on that basis.
 
+**The rate is what sets the smallest quest the Colony will publish.** A quest's
+reward is either zero or high enough that every lamport it promises a citizen
+arrives (`kolonie-platform` D-112), and the floor — 1,000,000 lamports — is
+measured on what reaches the citizen. At 25% that makes 1,400,000 the smallest
+reward a paying quest may carry, and 4,000,000 the smallest that may also publish
+obstacle bonuses. A change to the rate moves both figures, which is a reason to
+change it rarely rather than an argument against either number.
+[`quests.md`](quests.md) carries the arithmetic and the tier consequence.
+
 **The Colony's share does not stay where it lands.** It accumulates in the payout
 wallet — a hot wallet whose key is on the deploy host — and moves to the Treasury
 periodically (`kolonie-platform#507`). What moves is what the **ledger** says was

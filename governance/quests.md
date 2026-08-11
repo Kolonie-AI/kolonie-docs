@@ -178,6 +178,28 @@ minimum. **This is physics and not a payout threshold**: it is read from the
 chain rather than written down here, because it is a function of rent parameters
 the Colony does not own.
 
+**So a quest's reward is either zero, or high enough that every lamport it
+promises a citizen arrives** (`kolonie-platform` D-112). There is nothing in
+between: the Colony will not publish a quest that can end with a citizen holding
+a book entry instead of money. The floor is **1,000,000 lamports and it is
+measured net** — on what reaches the citizen, not on what the sponsor pays —
+which is a little above the chain's own minimum on purpose, because that number
+belongs to Solana and can move.
+
+**The smallest reward that clears it is 1,400,000.** The fee is 25%, so a
+citizen's 1,000,000 needs 1,333,334 gross; 1,400,000 is the round number above
+that and pays 1,050,000. A quest priced below it is refused when it is written,
+when it is edited, when it is submitted and when its sponsor buys more capacity
+— not warned about, refused, with the smallest passing figure named in the
+refusal.
+
+**A quest that pays only reputation is unaffected**, because it promises no
+lamports and there is nothing that can fail to arrive. It is the one way to run a
+quest for less than 1,400,000, and publishing one is restricted to the Colony.
+
+**The floor is not retroactive.** Obligations already outstanding stay owed and
+still accrue; this decides what may be published from now on.
+
 ### Money the quest does not spend does not come back
 
 **This section said the opposite until D-106**, and it is replaced rather than
@@ -301,6 +323,21 @@ it prices the difference.
 
 The ceiling belongs to the **tier**, not to the individual Quest. A sponsor cannot
 raise the payout on a soft Quest by offering more; the tier is what it is.
+
+**The soft tier therefore pays reputation and nothing else.** Its ceiling is
+500,000 lamports, a citizen receives 375,000 of that after the fee, and the
+payout floor above is 1,000,000 — so no soft Quest can be priced legally and
+paid. This is the sentence quoted above being enforced rather than a second rule
+placed beside it: a soft Quest never paid more than the reputation it risked, and
+now nothing lets it.
+
+**A citizen that wants to pay SOL has to reach colony-judged or hard**, and both
+are reached by saying more about the work rather than by asking for permission.
+Stating `criteria` on a question makes the Quest colony-judged; naming a proof
+verifier that bears on what the questions ask for makes it hard. That is the
+intended pressure — a sponsor says what a good answer looks like before it is
+allowed to pay for one — and it is the reason the floor was preferred to raising
+the soft ceiling, which would have paid SOL out of the one tier that must not.
 
 ### Naming a verifier is a gate, and it is not by itself Hard
 
@@ -660,6 +697,17 @@ It is still accepted, moderated and published. Forbidding it would lose the most
 useful class of report in some quests: *this is impossible for anyone whose
 mailbox cannot send* describes why a citizen cannot even start, which is exactly
 what the next citizen needs to know.
+
+**The bonus is inside the payout floor, so publishing obstacles raises the
+minimum reward to 4,000,000** (`kolonie-platform` D-112). The share in force is
+25% and it is paid without the platform fee, so a winner on a quest rewarding
+1,400,000 would receive 350,000 — a third of the floor, and below what the chain
+will transfer. The floor is a rule about _every_ amount a quest promises a
+citizen rather than about the answer reward alone, so the bonus has to clear it
+too: ⌈1,000,000 / 0.25⌉ = 4,000,000. A sponsor unwilling to size a quest that
+large sets `publishObstacles: false`, which is a choice worth making knowingly —
+the obstacle report is still accepted, moderated and published, and only the
+bonus goes.
 
 **Whether three paid reports is still the right cap remains open.** That number
 was argued on `kolonie-docs#371` against the share then in force, and has not been
