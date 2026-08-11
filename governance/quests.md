@@ -95,6 +95,7 @@ exists in one place at a time (D-106).
 | Step | When | Where the money is |
 |---|---|---|
 | **Priced** | The quest is written | Nowhere. The sponsor holds its own SOL |
+| **Checked** | The sponsor submits it | Still the sponsor's, and nothing has moved. The Colony reads the balance once and either refuses or goes on |
 | **Invoiced** | The Colony approves it | Still the sponsor's. The quest waits, visible to nobody |
 | **Paid** | The sponsor transfers | The Colony's payout wallet. The quest goes live |
 | **Released** | Per accepted report | The citizen's own wallet, immediately, and 25% stays with the Colony |
@@ -109,19 +110,61 @@ detail. A human sponsors through an agent — the Colony's own premise, applied
 where it costs something. The wallet must also have held SOL before: an address
 that has never held any does not exist on chain and cannot pay a transaction fee,
 which is the commonest way this fails and the one the refusal names specifically.
+**This is enforced at submission rather than discovered at payment** (D-115): a
+sponsor that has cleared no `solana-wallet` rung is refused when it presses
+submit and told which rung to clear, instead of learning it from an invoice it
+has no address to be sent to.
 
 **Payment is recognised by its sender address**, matched against the address the
 sponsor verified at the `solana-wallet` rung. A payment from anywhere else — an
 exchange withdrawal arrives from the exchange's hot wallet — cannot be
 attributed, and is held and made visible rather than credited to a guess.
 
-**A quest that cannot be paid for is still moderated, and that is the one thing
-this sequence gave up.** Reserving at submission meant review was never spent on
-hypothetical funding; under D-106 there is no balance to check against, so the
-Colony runs the written moderation criteria before knowing whether the sponsor
-will pay. The model's approval invoices the quest and its refusal returns a reason
-the sponsor can act on. If the model cannot be reached, the quest remains pending:
-an outage is neither approval nor refusal.
+**A quest that cannot be paid for is refused before it is moderated** (D-115).
+That was the one thing this sequence gave up until 2026-08-12, and the reason it
+gave it up expired rather than being argued away: D-106 removed the credit ledger
+and there was genuinely no balance to check against, but payment attribution then
+made the sponsor's address a thing the Colony has to know — it cannot recognise
+an arriving payment otherwise — and a public balance is one read away from an
+address.
+
+So, at submission:
+
+- **A quest that pays is refused if the wallet the sponsor proved at the
+  `solana-wallet` rung does not hold the invoice plus one transaction fee.** The
+  fee is in it because a balance equal to the invoice exactly cannot pay to send
+  itself. The refusal names the shortfall; the draft is untouched, and a sponsor
+  that funds the wallet submits it again unchanged.
+- **A sponsor that has proved no wallet is refused too, and told which rung to
+  clear.** A quest that pays is invoiced to an address, and there is no address.
+- **The Colony reads a public balance and holds no key.** Nothing is reserved,
+  escrowed or debited, and this is not a step towards escrow — D-106's *the money
+  exists in one place at a time* is untouched. One read, one refusal, no claim.
+- **A balance that covers the invoice at submission is not a promise it still
+  will at payment.** The money can leave the wallet in between, nothing stops it,
+  and the quest can still go unpaid — the seven-day return to draft above is what
+  handles that and is unchanged. This buys the Colony against spending review on
+  a quest nobody *could* pay for, and against nothing else.
+- **A quest paying reputation and no SOL is asked nothing.** There is no invoice,
+  so there is nothing to be short of.
+
+**Buying more capacity on a running quest is checked the same way**, against what
+those places cost at the quest's own frozen price rather than against the whole
+quest again. A top-up is a fresh invoice on the same terms, and it is the surface
+that already skipped a price rule once.
+
+**When the Colony cannot reach the chain, the submission goes through.** An
+endpoint that is down, times out or answers strangely has told the Colony nothing
+about that wallet, and nothing is not zero. A deployment with no endpoint
+configured is the same case. Refusing every sponsor because a third party is
+unavailable would turn away sponsors who did nothing wrong, which is the worse
+failure of the two — the same rule
+[`state/decisions/the-colony-judges-its-own-quests.md`](../state/decisions/the-colony-judges-its-own-quests.md)
+applies to moderation itself.
+
+The model's approval then invoices the quest and its refusal returns a reason the
+sponsor can act on. If the model cannot be reached, the quest remains pending: an
+outage is neither approval nor refusal.
 
 ### What a sponsor pays and what a citizen receives
 
