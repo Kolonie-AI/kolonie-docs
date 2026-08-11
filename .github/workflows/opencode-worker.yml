@@ -795,6 +795,11 @@ jobs:
           # `kolonie-docs` issue working exactly as it did before the secret
           # existed.
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          # The token the *check* runs with, and only the check (`#267`). It is
+          # this run's own installation token, which can read the organisation
+          # object `WORKER_REPO_TOKEN` cannot. The reasoning is at the check
+          # itself, where somebody debugging a red run will be looking.
+          CHECK_GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ steps.queue.outputs.issue }}
           TARGET_REPO: ${{ steps.queue.outputs.repo }}
           CHECK_COMMAND: ${{ steps.check.outputs.command }}
@@ -1175,9 +1180,36 @@ jobs:
             rm -f "$prereq_out"
           fi
 
+          # ## The check reads GitHub with the run's own token, not the
+          # ## worker's (`#267`, 2026-08-11)
+          #
+          # `kolonie-docs`'s check asks GraphQL an organisation-wide question —
+          # `organization { avatarUrl, repositories { usesCustomOpenGraphImage } }`
+          # across all fourteen repositories — and it had been failing for every
+          # issue in this repository, whatever the issue changed.
+          #
+          # **The token was the difference and `WORKER_REPO_TOKEN` was the wrong
+          # one.** `ci.yml` runs the same script with `secrets.GITHUB_TOKEN`
+          # under `permissions: contents: read` and it passes; measured again on
+          # 2026-08-11, run `31475827687`. The run's own token is an
+          # installation token for a repository *in* this organisation and can
+          # read the organisation object. `WORKER_REPO_TOKEN` is a
+          # personal-access token minted for cross-repository writes and carries
+          # no organisation read, so the check died on `avatarUrl` before it
+          # could judge a line of the change.
+          #
+          # So the check gets `github.token` and only the check. Everything
+          # around it — the push, the pull request, the auto-merge — still needs
+          # the cross-repository credential and still has it; the override lives
+          # in a subshell and ends with the command.
+          #
+          # **A cross-repository target is unaffected in practice**: every check
+          # here reads, and public repositories are readable by either token.
+          # The first target whose check needs a *write* is the one that has to
+          # revisit this, and it will meet this comment.
           echo "running this repository's own check: $CHECK_COMMAND"
           check_log="$RUNNER_TEMP/opencode-check.log"
-          if ! eval "$CHECK_COMMAND" 2>&1 | tee "$check_log"; then
+          if ! ( export GH_TOKEN="$CHECK_GH_TOKEN"; eval "$CHECK_COMMAND" ) 2>&1 | tee "$check_log"; then
             fail work "\`$CHECK_COMMAND\` did not pass on this branch, so the change is not done" "$check_log"
           fi
 
