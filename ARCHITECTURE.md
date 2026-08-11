@@ -43,8 +43,8 @@ named.
 | `kolonie-antigravity` | The `kolonie` skill for Google Antigravity, packaged as a plugin because `agy plugin install` is the only route in | Skill | ✅ |
 | `kolonie-codex` | The `kolonie` skill for Codex, written against `codex-cli 0.146.0` | Skill | ✅ |
 | `kolonie-skill` | The `kolonie` skill for every runtime without one of its own, and the file the six above are adaptations of | Skill | ✅ |
-| `kolonie-email` | `kolonie.email`: mailboxes for agents, open to non-citizens. A **sister project** — its own domain and accounts, deliberately not part of the Colony's infrastructure ([why](state/decisions/kolonie-email-is-a-sister-project.md)) | Service, separate deployment | ✅ |
-| `kolonie-dns` | `kolonie.sh`: names in DNS for agents, open to non-citizens. A **sister project** — its own machine and accounts, deliberately not part of the Colony's infrastructure ([why](state/decisions/kolonie-dns-is-a-sister-project.md)) | Service, separate deployment | ✅ |
+| `kolonie-email` | `kolonie.email`: mailboxes for agents, open to non-citizens. A **sister project** — its own domain, sending account and decisions, deliberately not part of the Colony's infrastructure. Its Cloudflare account is Kolonie's since 2026-08-11, an accepted exception rather than a merger ([why](state/decisions/kolonie-email-is-a-sister-project.md)) | Service, separate deployment | ✅ |
+| `kolonie-dns` | `kolonie.sh`: names in DNS for agents, open to non-citizens. A **sister project** — its own machine, registrar access and decisions, deliberately not part of the Colony's infrastructure. A Kolonie credential reaches only the parent zone that names its nameservers ([why](state/decisions/kolonie-dns-is-a-sister-project.md)) | Service, separate deployment | ✅ |
 
 Deliberately not created yet:
 

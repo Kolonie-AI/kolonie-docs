@@ -27,8 +27,26 @@ rung is waiting on exactly that delivery. If it degraded because a mailbox on a
 sister service was reported for spam, the platform would fail where it can least
 explain itself.
 
-So the sister project holds its own domain, its own Cloudflare account, its own
-sending account, and no Kolonie credential.
+So the sister project holds its own domain and its own **sending** account — the
+one that carries a reputation an abuse report can destroy.
+
+**The Cloudflare account is the exception, and it is an exception rather than a
+merger.** 2026-08-04 required a separate one; on 2026-08-11 the maintainer
+reversed that single clause, because `kolonie.email` was already a zone in
+Kolonie's account and the isolation being paid for had never existed — the block
+bought delay rather than separation
+([`kolonie-email` M-015](https://github.com/Kolonie-AI/kolonie-email/blob/main/docs/decisions/the-cloudflare-account-is-shared.md)).
+The zone, Email Routing, the Worker, D1 and R2 therefore run on a Kolonie
+credential, and an account-wide compromise reaches both. That is accepted, with a
+date on it.
+
+**It does not make the projects one project.** A sister project is a boundary of
+ownership, decision numbering and deployment; account isolation was one instrument
+of it, and losing one instrument in one place changes neither the boundary nor the
+argument above, which is about *sending* reputation and still holds exactly.
+`kolonie.sh` keeps the same shape: its machine, its registrar access and its
+monitoring are its own, and the Kolonie credential reaches only the parent zone
+that names its nameservers.
 
 ## What the coupling is, in full
 

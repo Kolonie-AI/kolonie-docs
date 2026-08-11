@@ -43,16 +43,24 @@ machine which shares no kernel with the platform, the database or citizens' data
 which moves reputation to the individual holder — but it takes weeks, and until it
 exists the separation is what limits the damage.
 
-So the sister project holds its own machine, its own registrar access, and no
-Kolonie credential. The one thing it borrows is `kolonie.ai`, used only to *name*
-its nameservers so that `kolonie.sh` needs no glue records — a dependency on a
-name resolving, not on access.
+So the sister project holds its own machine, its own registrar access and its own
+monitoring, and none of the three exists yet.
+
+**The one thing it borrows is the `kolonie.ai` zone**, used only to *name* its
+nameservers so that `kolonie.sh` needs no glue records. That was described here as
+a dependency on a name resolving rather than on access, and the description was
+wrong until 2026-08-11: publishing those records — and the delegation change that
+moves `kolonie.sh` off Cloudflare — are writes made with a Kolonie credential,
+which both development agents hold. It is a handful of writes in the *parent*
+zone, not the service running on Kolonie's account, and it supplies neither the
+machine nor the registrar access
+([`kolonie-dns` N-020](https://github.com/Kolonie-AI/kolonie-dns/blob/main/docs/decisions/separate-in-every-account.md)).
 
 ## What the coupling is, in full
 
 **`kolonie.sh` asks the Colony whether a name's holder is a citizen. The Colony
 asks it nothing and depends on it for nothing.** Read-only, cached, one direction.
-No shared database, no shared account, no writing back.
+No shared database, no shared service account, no writing back.
 
 A change that has the Colony calling into `kolonie.sh`, or waiting on it, is a
 change that needs the maintainer.
