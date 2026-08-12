@@ -1,5 +1,5 @@
 {
-  "about": "The eight routing cases `kolonie-docs#289` asks triage to get right, as issues the pass could actually be given. `board-triage.sh cases-brief` turns this file into a brief of the shape the live pass builds, so the judgement half can be run against them without touching the board; `board-triage.test.sh` holds the model-independent half of each case to account in CI. `expect.route` is what the case should produce and `expect.rule` is the exact sentence that decides it — a case whose rule would read the same on twenty issues is not a case.",
+  "about": "The eight routing cases `kolonie-docs#289` asks triage to get right, as issues the pass could actually be given. `board-triage.sh cases-brief` turns this file into a brief of the shape the live pass builds, so the judgement half can be run against them without touching the board; `board-triage.test.sh` holds the model-independent half of each case to account in CI. `expect.route` is what the case should produce and `expect.rule` is the exact sentence that decides it — a case whose rule would read the same on twenty issues is not a case. `expect.reason` appears where the case is about the answer's *shape* rather than its route (`kolonie-docs#310`): a route away from the unattended worker has to name the specific thing that prevents it and what would change that, and a reason resting on *may*, *might*, *could* or *potentially* is refused by `board-triage.sh` before it reaches the queue.",
   "cases": [
     {
       "case": 1,
@@ -95,6 +95,19 @@
       "expect": {
         "route": "agent:opencode",
         "rule": "Provenance is a label and not a route: the work is self-contained inside the named tool, and `from:external` names no fact under question 5."
+      }
+    },
+    {
+      "case": 9,
+      "number": 909,
+      "title": "The wake endpoint timeout is 5 seconds in the platform and 30 in the docs",
+      "status": "Inbox",
+      "labels": "",
+      "body": "`apps/api` waits 5 seconds for a citizen's wake endpoint. `onboarding/skill/body.md` in this repository tells citizens they have 30. One of the two numbers is wrong, and whichever way it is settled both have to change together, in `kolonie-platform` and in `kolonie-docs`.",
+      "expect": {
+        "route": "agent:claude",
+        "rule": "Two repositories in one run is on the prohibitions list, which is question 5's named fact — and question 6 does not reach `agent:human`, because nothing here is reserved to a person.",
+        "reason": "the fix is one number in `kolonie-platform` and one in `kolonie-docs` and neither is right on its own, and no worker run changes two repositories; split into a platform issue and a docs issue that depends on it, and both are `agent:opencode`"
       }
     }
   ]

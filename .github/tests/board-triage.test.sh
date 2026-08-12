@@ -260,15 +260,38 @@ searched() {
   jq -s '.' <<<"$(printf '%s\n' "$@")" > "$GH_FIXTURES/issues"
 }
 
-# A decisions file of the shape `board-triage-decide.py` writes.
+# A decisions file of the shape `board-triage-decide.py` writes. The reason is the
+# last argument because most cases do not care what it says — the ones that do are
+# `#310`'s, where the sentence is what decides whether the issue moves.
 decided() {
   local number=$1 route=$2 priority=$3 readiness=$4 depends=$5 ready=$6
+  local reason=${7:-because the table says so}
   jq -cn --argjson n "$number" --arg r "$route" --arg p "$priority" \
-    --arg d "$readiness" --arg dep "$depends" --argjson ready "$ready" '
+    --arg d "$readiness" --arg dep "$depends" --argjson ready "$ready" \
+    --arg reason "$reason" '
     { decisions: [ { repo: "Kolonie-AI/kolonie-docs", number: $n, route: $r,
                      priority: $p, readiness: $d,
                      depends_on: ($dep | split(" ") | map(select(length > 0))),
-                     ready: $ready, reason: "because the table says so" } ] }' \
+                     ready: $ready, reason: $reason } ] }' \
+    > "$WORK/decisions.json"
+  echo "$WORK/decisions.json"
+}
+
+# The same, carrying what the call that produced it cost (`#310` §4). An empty
+# total is the ordinary answer with no `usage` block, which the gateway gives
+# whenever it wraps a CLI subscription (`kolonie-platform#716`).
+decided_costing() {
+  local number=$1 route=$2 model=$3 prompt=$4 completion=$5 total=$6 count=$7
+  jq -cn --argjson n "$number" --arg r "$route" --arg m "$model" \
+    --arg p "$prompt" --arg c "$completion" --arg t "$total" --argjson k "$count" '
+    { decisions: [ { repo: "Kolonie-AI/kolonie-docs", number: $n, route: $r,
+                     priority: "", readiness: "", depends_on: [], ready: true,
+                     reason: "because the table says so",
+                     model: $m, decided: $k,
+                     tokens: (if $t == "" then null
+                              else { prompt: ($p | tonumber),
+                                     completion: ($c | tonumber),
+                                     total: ($t | tonumber) } end) } ] }' \
     > "$WORK/decisions.json"
   echo "$WORK/decisions.json"
 }
@@ -360,7 +383,10 @@ run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
 contains "blocked:human is routed to a person however the model answered" \
   "--add-label agent:human" "$log"
-absent "and never to the queue" "agent:opencode" "$log"
+# The label, and not the whole log: since `#310` the comment names the route the
+# model proposed, so `agent:opencode` appears in the text of a comment that is
+# about refusing it. What must not happen is the label.
+absent "and never to the queue" "--add-label agent:opencode" "$log"
 absent "and it is not moved to Ready" "single-select-option-id ee5ea42c" "$log"
 
 case_setup
@@ -409,6 +435,115 @@ boarded "900|Ready|agent:opencode"
 run_apply_over_decided "$(decided 900 "agent:human" "" "" "" true)" >/dev/null
 contains "tightening is the direction that works" \
   "--add-label agent:human --remove-label agent:opencode" "$(cat "$GH_LOG")"
+
+echo
+echo "what the comment says when the script overruled the model (#310)"
+
+# Until `#310` the comment printed the applied route above the model's unchanged
+# sentence arguing for the route the issue did not get — which is exactly the
+# answer a maintainer asking *why was this human?* must not be given.
+case_setup
+searched "$(issue 900 'a person must decide' 'blocked:human')"
+boarded "900|Inbox|blocked:human"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "an overruled route comments the rule that overruled it" \
+  "**Overruled:** the model proposed \`agent:opencode\`" "$log"
+contains "and names what applied it" "\`blocked:human\` is on the issue" "$log"
+contains "and the model's sentence is kept below, as the proposal it was" \
+  "The model's proposal, which this replaces: because the table says so" "$log"
+
+case_setup
+searched "$(issue 900 'refused structurally' 'opencode:forbidden')"
+boarded "900|Inbox|opencode:forbidden"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+contains "each of the four rules names itself, not the other three" \
+  "the unattended worker is refused structurally" "$(cat "$GH_LOG")"
+
+case_setup
+searched "$(issue 900 'something' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a route the script did not touch is not labelled a proposal" "**Overruled:**" "$log"
+contains "and the reason is printed as the reason" "because the table says so" "$log"
+
+echo
+echo "a route out of the queue that names no fact does not reach it (#310)"
+
+# `Name the fact, or do not claim it` is in the prompt and was graded by the model
+# against itself: four of eleven live `agent:claude` routings rested on *may*. The
+# one half of it a machine can check is here, and it does not re-route — it
+# withholds the queue position, which is the shape `ready != true` already has.
+case_setup
+searched "$(issue 900 'something' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:claude" "" "" "" true \
+  "may require a maintainer question during implementation")" >/dev/null
+log=$(cat "$GH_LOG")
+contains "the route is still written, because refusing it would be guessing" \
+  "--add-label agent:claude" "$log"
+absent "but the issue does not move to Ready on a modal" \
+  "single-select-option-id ee5ea42c" "$log"
+contains "and the comment quotes the sentence back" "names no fact" "$log"
+
+case_setup
+searched "$(issue 900 'something' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true \
+  "the check at the end is the done condition and it may run unattended")" >/dev/null
+contains "the cheap direction is never asked to defend itself" \
+  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
+
+case_setup
+searched "$(issue 900 'something' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:claude" "" "" "" true \
+  "the done condition is a systemd unit state on the deploy host and no repository check observes it; an issue ending at a committed file would be the worker's")" >/dev/null
+contains "and a reason that names a fact reaches the queue position" \
+  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
+
+case_setup
+searched "$(issue 900 'already routed' 'agent:claude')"
+boarded "900|Inbox|agent:claude"
+run_apply_over_decided "$(decided 900 "agent:opencode" "" "" "" true \
+  "it might be mechanical")" >/dev/null
+log=$(cat "$GH_LOG")
+contains "an overruled route is defended by the rule, so the model's sentence is not held against it" \
+  "single-select-option-id ee5ea42c" "$log"
+contains "and the rule is what the comment carries" "never widened" "$log"
+
+echo
+echo "which model answered, and what the call cost (#310, ported from support triage)"
+
+case_setup
+searched "$(issue 900 'ordinary' '')"
+boarded "900|Inbox|"
+run_apply "$(decided_costing 900 "agent:opencode" "gpt-5.6-sol" 4213 190 4403 6)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "the comment names the model and what the call cost" \
+  "Judged by \`gpt-5.6-sol\` · 4213 prompt + 190 completion = 4403 tokens" "$log"
+contains "and says the count is the chunk's rather than this issue's" \
+  "which decided 6 issues" "$log"
+
+case_setup
+searched "$(issue 900 'ordinary' '')"
+boarded "900|Inbox|"
+run_apply "$(decided_costing 900 "agent:opencode" "gpt-5.6-sol" "" "" "" 6)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "a call the gateway reported no usage for still names the model" \
+  "Judged by \`gpt-5.6-sol\`" "$log"
+contains "and says the count is missing rather than dropping the line" \
+  "reported no token count" "$log"
+contains "and the issue is written all the same — accounting never vetoes a decision" \
+  "--add-label agent:opencode" "$log"
+
+case_setup
+searched "$(issue 900 'ordinary' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+absent "a decision carrying no record of a call says nothing about one" \
+  "Judged by" "$(cat "$GH_LOG")"
 
 echo
 echo "priority, and the one class it is not triage's to set"
@@ -830,7 +965,7 @@ cases_brief=$(bash "$SCRIPT" cases-brief "$CASES" 2>/dev/null)
 # hand against the gateway when the prompt changes. What CI holds is the half that
 # needs no provider: the case reaches the model at all, the rule it turns on is
 # quoted in the brief, and the route the case expects is one the script would write.
-check "every case that is not case 7 is briefed" "7" \
+check "every case that is not case 7 is briefed" "8" \
   "$(grep -c '^## Kolonie-AI/kolonie-docs#9' <<<"$cases_brief")"
 contains "the brief quotes the routing table rather than restating it" \
   "### The three routes" "$cases_brief"
@@ -875,6 +1010,18 @@ boarded "906|Inbox|opencode:forbidden"
 run_apply "$(decided 906 "agent:opencode" "" "" "" true)" >/dev/null
 absent "case 6 never reaches the unattended worker, whatever is answered" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
+
+# Case 9 is the one case about the shape of the answer rather than the route
+# (`#310`). Its expected reason is the defence `agent:claude` now owes: the fact
+# that prevents an unattended run, and what would change it. This asserts the half
+# a machine can hold — a reason of that shape is not refused on its way to Ready.
+case_setup
+searched "$(issue 909 'two repositories in one fix' '')"
+boarded "909|Inbox|"
+run_apply "$(decided 909 "agent:claude" "" "" "" true \
+  "$(jq -r '.cases[] | select(.case == 9) | .expect.reason' "$CASES")")" >/dev/null
+contains "case 9's defence is a reason the script accepts" \
+  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

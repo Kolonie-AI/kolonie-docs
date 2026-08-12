@@ -82,6 +82,14 @@ coding agent may take it at all, which is a strong claim. *This concerns money, 
 governance or security* is **not sufficient** unless the next action actually \
 commits money, makes the reserved decision, handles a credential, deletes data, or \
 performs another act the documents you were given reserve to a person.
+
+**`agent:human` is a one-way door.** A route may be tightened by a later pass and \
+never loosened, and an issue carrying a route is never shown to this pass again — \
+so an `agent:human` written by mistake stays on the issue until a person notices \
+it, and no machine will correct it. When the case for it rests on **one step** of \
+an issue rather than on the issue, the answer is question 3 above: name the \
+decision in `depends_on`, or say in `reason` that the issue should be split. Not \
+the label.
 2. **priority** — `p1` or `p2`, or `""` to leave it alone. Two priorities exist \
 and there is no third.
 3. **readiness** — `""` if it is specified well enough to act on, `decision` if \
@@ -98,8 +106,35 @@ services each logging something unusual are three reports, and a report creates 
 nothing another one needs.
 5. **ready** — true if it can be picked up now, false if it should stay in Inbox.
 
-And **reason** — one sentence, for a person reading the issue later. Say what \
-decided it. Not a summary of the issue.
+And **reason** — what decided it, for a person reading the issue later. Not a \
+summary of the issue. **What it has to carry depends on which way you routed**, \
+because the three directions do not cost the Colony the same thing:
+
+- **`agent:opencode`** — one sentence. This is the cheap direction and the wanted \
+one, and reaching it is not made expensive.
+- **`agent:claude`** — two clauses. First the **specific** thing an unattended run \
+cannot do *on this issue*: the host, the database, the browser, the credential, \
+the second repository, the named choice between two defensible options. Then \
+**what would have to be true** for `agent:opencode` to take it. As in: *"the done \
+condition is a systemd unit state on the deploy host and no repository check \
+observes it; an issue ending at a committed file, with the host step split off, \
+would be the worker's."*
+- **`agent:human`** — three clauses, because it is the strongest claim on the \
+board and no machine undoes it. Name the act reserved to a person — commits money, \
+makes a recorded decision, handles a credential, deletes data, reaches a device \
+nobody here can reach. **Quote the rule reserving it**, from the routing table or \
+the prohibitions you were given. Then say why `agent:claude` is not enough, given \
+that a person is reachable behind it.
+
+**A reason whose load-bearing word is *may*, *might*, *could* or *potentially* is \
+not a reason.** *May require clarification*, *may need a maintainer question \
+mid-work*, *could require judgement*: all true of every issue on the board, none \
+of them about this one, and each reads the same on twenty others. If the only \
+thing you can say against `agent:opencode` is that something might come up, that \
+is `agent:opencode` with a sentence saying what to do if it does. So do not use \
+those four words in a reason for `agent:claude` or `agent:human` at all — \
+`board-triage.sh` reads one as a reason that named nothing, and leaves the issue \
+in Inbox with your sentence quoted back.
 
 Rules you must not break:
 
@@ -163,8 +198,65 @@ def nothing(path: str, field: str, why: str) -> int:
     return 0
 
 
+def read_model_call(answer: object) -> dict:
+    """What the call cost: `{"model": str, "tokens": {...} | None}`.
+
+    A port of `readModelCall()` in kolonie-platform
+    (`packages/core/src/llm/read-model-call.ts`), and the two properties worth
+    porting are both about restraint.
+
+    **It cannot throw.** A record of what a call cost must never be able to veto
+    the call — routing six issues is the work, and the accounting line under it is
+    not worth losing them for. Every field is read through an `isinstance` and a
+    shape this does not recognise leaves the field out.
+
+    **And it invents nothing.** A missing `usage` block is ordinary rather than a
+    fault (`kolonie-platform#716`: the gateway wraps a CLI subscription that bills
+    nothing per token), so the absence is reported as an absence. A zero written
+    where nothing was measured would be indistinguishable from a measured zero in
+    a log query, which is the one thing this must not produce.
+    """
+    record = {"model": "", "tokens": None}
+    if not isinstance(answer, dict):
+        return record
+
+    model = answer.get("model")
+    if isinstance(model, str):
+        record["model"] = model.strip()
+
+    usage = answer.get("usage")
+    if not isinstance(usage, dict):
+        return record
+
+    def count(*names: str):
+        for name in names:
+            value = usage.get(name)
+            # `bool` is an `int` in Python and `True` is not one token.
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                return value
+        return None
+
+    # Two vocabularies reach this gateway — OpenAI's `prompt_tokens` and the
+    # `input_tokens` an Anthropic-shaped response carries — and the pass should not
+    # lose the count to whichever provider is behind it today.
+    prompt = count("prompt_tokens", "input_tokens")
+    completion = count("completion_tokens", "output_tokens")
+    total = count("total_tokens")
+    if total is None and prompt is not None and completion is not None:
+        total = prompt + completion
+    if total is None:
+        return record
+
+    record["tokens"] = {"prompt": prompt, "completion": completion, "total": total}
+    return record
+
+
 def ask(system: str, brief: str, budget: int) -> tuple:
-    """(answer-text, why-not). Exactly one of the two is non-empty."""
+    """(answer-text, why-not, call). Exactly one of the first two is non-empty.
+
+    `call` is what `read_model_call` made of the response, and it is empty on
+    every path that did not get one.
+    """
     key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("OPENCODE_LLM_API_KEY", "")
     base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("OPENCODE_LLM_BASE_URL", "")).rstrip("/")
     # `#262` asks for the strongest model available and gives the reason: the
@@ -172,8 +264,9 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     # setting, so the strongest model in six months is one variable away; the
     # default is what was strongest on 2026-08-10.
     model = os.environ.get("TRIAGE_LLM_MODEL", "gpt-5.6-sol")
+    empty = {"model": "", "tokens": None}
     if not key or not base:
-        return "", "no gateway credentials — nothing was asked for"
+        return "", "no gateway credentials — nothing was asked for", empty
 
     body = json.dumps({
         "model": model,
@@ -210,21 +303,28 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     except urllib.error.HTTPError as exc:
         # The status and nothing else. This log is public, and a provider's error
         # body can echo the request back with the key inside it.
-        return "", f"the gateway answered {exc.code}"
+        return "", f"the gateway answered {exc.code}", empty
     except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
-        return "", f"could not reach the gateway: {type(exc).__name__}"
+        return "", f"could not reach the gateway: {type(exc).__name__}", empty
+
+    call = read_model_call(answer)
+    # The name that was configured, when the answer did not carry one back. It is
+    # what was asked for rather than what replied, which is the honest reading of
+    # a gateway that may route the request on.
+    if not call["model"]:
+        call["model"] = model
 
     choice = (answer.get("choices") or [{}])[0]
     text = (choice.get("message") or {}).get("content")
     if not text:
         return "", ("the model returned no content"
-                    f" (finish_reason: {choice.get('finish_reason') or 'unknown'})")
+                    f" (finish_reason: {choice.get('finish_reason') or 'unknown'})"), call
 
     text = text.strip()
     if text.startswith("```"):
         text = text.strip("`")
         text = text.split("\n", 1)[1] if "\n" in text else text
-    return text, ""
+    return text, "", call
 
 
 def read_brief(path: str, marker: str) -> tuple:
@@ -243,7 +343,7 @@ def route(brief_path: str, out_path: str) -> int:
     if why:
         return nothing(out_path, "decisions", f"{why} — nothing was triaged")
 
-    text, why = ask(SYSTEM, brief, 16000)
+    text, why, call = ask(SYSTEM, brief, 16000)
     if why:
         return nothing(out_path, "decisions", f"{why} — nothing was triaged this pass")
 
@@ -282,12 +382,28 @@ def route(brief_path: str, out_path: str) -> int:
             "reason": str(one.get("reason") or "").strip(),
         })
 
+    # ## What the call cost, on every decision it paid for (`#310`)
+    #
+    # **One call decides a chunk**, so the count belongs to the chunk and not to
+    # any one issue — `decided` is how the comment says that out loud rather than
+    # implying each issue cost the whole thing. It is written onto every entry
+    # because the workflow merges the chunks with `jq -s '{decisions:
+    # map(.decisions[]?)}'`, and an entry that carries its own call survives that
+    # merge with no change to the workflow: each decision then names the call that
+    # actually produced it, which a file-level field could not do.
+    for one in kept:
+        one["model"] = call["model"]
+        one["tokens"] = call["tokens"]
+        one["decided"] = len(kept)
+
     dropped = len(decisions) - len(kept)
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump({"decisions": kept}, fh)
+    tokens = call["tokens"]
     print(f"{len(kept)} decision(s) written"
           + (f", {dropped} dropped for naming no issue" if dropped else "")
-          + f" (model: {os.environ.get('TRIAGE_LLM_MODEL', 'gpt-5.6-sol')})")
+          + f" (model: {call['model'] or 'unnamed'},"
+          + (f" {tokens['total']} tokens)" if tokens else " no token count reported)"))
     return 0
 
 
@@ -296,7 +412,7 @@ def propose(brief_path: str, out_path: str) -> int:
     if why:
         return nothing(out_path, "proposals", f"{why} — nothing was proposed")
 
-    text, why = ask(PROPOSE_SYSTEM, brief, 4000)
+    text, why, _ = ask(PROPOSE_SYSTEM, brief, 4000)
     if why:
         return nothing(out_path, "proposals", f"{why} — nothing was proposed this pass")
 

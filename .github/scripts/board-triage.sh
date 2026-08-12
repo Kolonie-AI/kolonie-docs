@@ -391,15 +391,20 @@ apply() {
   # issue in Inbox with a plausible reason. `\x1f` is the unit separator, is not
   # IFS whitespace, and preserves an empty field.
   local rows changed=0
-  rows=$(jq -r '.decisions[]? | [.repo, (.number|tostring), (.route // ""), (.priority // ""), (.readiness // ""), ((.depends_on // []) | join(" ")), (.ready // false | tostring), ((.reason // "") | gsub("[\n\r]+"; " "))] | join("\u001f")' "$decisions") ||
+  rows=$(jq -r '.decisions[]? | [.repo, (.number|tostring), (.route // ""), (.priority // ""), (.readiness // ""), ((.depends_on // []) | join(" ")), (.ready // false | tostring), ((.reason // "") | gsub("[\n\r]+"; " ")), (.model // ""), ((.tokens.prompt // "") | tostring), ((.tokens.completion // "") | tostring), ((.tokens.total // "") | tostring), ((.decided // "") | tostring)] | join("\u001f")' "$decisions") ||
     die "the model's answer is not the shape this script applies" 3
 
   [ -n "$rows" ] || { note "the model decided nothing this pass"; return 0; }
 
   local repo number route priority readiness depends ready reason
-  while IFS=$'\x1f' read -r repo number route priority readiness depends ready reason; do
+  local model prompt completion total decided cost
+  while IFS=$'\x1f' read -r repo number route priority readiness depends ready reason \
+    model prompt completion total decided; do
     [ -n "${repo:-}" ] && [ -n "${number:-}" ] || continue
-    apply_one "$candidates" "$repo" "$number" "$route" "$priority" "$readiness" "$depends" "$ready" "$reason" &&
+    # Rendered here rather than inside the comment, because what a call cost is one
+    # sentence about one call and every issue that call decided carries the same one.
+    cost=$(model_call_line "$model" "$prompt" "$completion" "$total" "$decided")
+    apply_one "$candidates" "$repo" "$number" "$route" "$priority" "$readiness" "$depends" "$ready" "$reason" "$cost" &&
       changed=$((changed + 1))
   done <<<"$rows"
 
@@ -414,6 +419,7 @@ apply() {
 # nobody reads.
 apply_one() {
   local candidates=$1 repo=$2 number=$3 route=$4 priority=$5 readiness=$6 depends=$7 ready=$8 reason=$9
+  local cost=${10:-}
 
   local candidate labels status
   candidate=$(jq -c --arg repo "$repo" --argjson number "$number" \
@@ -471,7 +477,13 @@ apply_one() {
     case "$labels" in *" $candidate_route "*) current_route=$candidate_route ;; esac
   done
 
-  route=$(sane_route "$route" "$labels" "$current_route" "$depends")
+  # **The rule comes back beside the route** (`#310`): when the script overrules the
+  # answer, the model's sentence argues for a route the issue did not get, and a
+  # maintainer asking *why was this human?* reads it and gets the wrong answer. So
+  # `sane_route` says which of its four rules fired, and the comment prints that
+  # instead — with the model's sentence kept below, marked as the proposal it was.
+  local rule=""
+  IFS=$'\x1f' read -r route rule < <(sane_route "$route" "$labels" "$current_route" "$depends")
   local -a remove=()
   if [ "$route" != "$current_route" ]; then
     add+=("$route")
@@ -556,6 +568,26 @@ apply_one() {
     fact=yes
   elif [ "$ready" != "true" ]; then
     why_not="it is not specified well enough to act on"
+  elif [ -z "$rule" ] && undefended "$route" "$reason"; then
+    # ## A route out of the queue that did not defend itself (`#310` §5)
+    #
+    # *Name the fact, or do not claim it* is in the prompt and nothing enforced it,
+    # so the model graded its own compliance — and four of eleven live
+    # `agent:claude` routings rested on *may require clarification*, *may require
+    # judgement*, *a maintainer may need to answer mid-work*: available about any
+    # issue, naming nothing about this one. One part of that is machine-checkable,
+    # and `board-triage.sh` is where a rule with a cost belongs.
+    #
+    # **It does not re-route.** Refusing a reason says nothing about where the issue
+    # should go, and choosing for it would be the guessing this pass exists to
+    # avoid. The route is written; what is withheld is the queue position, with the
+    # sentence quoted back — the pass saying it could not justify itself. This is
+    # the shape `ready != true` above already has.
+    #
+    # **Only where the model's reason is the reason.** An overruled route is
+    # defended by the rule that overruled it, and holding the model's sentence for a
+    # route the issue did not get against it would park the issue twice over.
+    why_not="the route away from the unattended worker names no fact — \"$reason\" rests on *may*, *might*, *could* or *potentially*, or says nothing, and reads the same on twenty issues (\`kolonie-docs#310\`)"
   fi
 
   # **Ready is read as well as written, so the queue can be left as well as
@@ -594,7 +626,7 @@ apply_one() {
     return 1
   fi
 
-  comment "$repo" "$number" "$route" "$reason" "$why_not" "${said[@]:-}"
+  comment "$repo" "$number" "$route" "$reason" "$why_not" "$rule" "$cost" "${said[@]:-}"
 }
 
 # ## The queue sweep: the half of the pass that needs no model (`#289`)
@@ -715,11 +747,20 @@ sweep_comment() {
 
 # `agent:claude` unless every reason to say otherwise holds. This function is the
 # safety property of the whole pass, which is why it is one place.
+#
+# **It answers two fields, `\x1f` apart: the route, and the rule that changed it**
+# (`#310`). An empty second field means the model's answer survived, which is the
+# ordinary case; a non-empty one is what the comment prints instead of a sentence
+# arguing for the route the issue did not get.
 sane_route() {
   local proposed=$1 labels=$2 current=$3 depends=$4
+  local answered=$proposed rule=""
 
   # An answer that is not one of the three is not an answer.
-  in_list "$proposed" "$ROUTES" || proposed="agent:claude"
+  if ! in_list "$proposed" "$ROUTES"; then
+    proposed="agent:claude"
+    rule="the model answered \`$answered\`, which is not one of the three routes, so this is \`agent:claude\` (\`AGENTS.md\` §5)"
+  fi
 
   # ## The route is a ratchet: it may tighten and never loosen
   #
@@ -736,6 +777,7 @@ sane_route() {
   # for the label that means *no coding agent may take this*.
   if [ -n "$current" ] && [ "$(route_rank "$proposed")" -gt "$(route_rank "$current")" ]; then
     proposed=$current
+    rule="the model proposed \`$answered\`; \`$current\` is already on the issue and a route is tightened by a pass and never widened, so it stays \`$current\` — only a person loosens a route"
   fi
 
   # The three things that make the unattended queue the wrong place, whatever the
@@ -743,14 +785,92 @@ sane_route() {
   # that cannot be finished until something else exists.
   if [ "$proposed" = "agent:opencode" ]; then
     if has_any "$labels" "blocked:human opencode:forbidden"; then
+      # ## Why `blocked:human` alone lands on `agent:human` and not on `agent:claude`
+      #
+      # Asked and answered under `#310` §5: `AGENTS.md` §5 says classes 1 to 5 and 7
+      # are `agent:human`, and that class 6 — priority on an issue that arrived from
+      # outside — *"gates a field rather than the issue"*, so the work itself may
+      # still be a worker's. Demoting a class-6 issue all the way to `agent:human` is
+      # the widest reading of the narrowest class.
+      #
+      # **The label does not carry its class, and nothing else on the issue does
+      # either.** `blocked:human` is one label for seven conditions; `from:citizen`
+      # narrows nothing, because a citizen's issue can be class 1 as easily as class
+      # 6. So the guard stays where it is: erring towards a person on an issue
+      # somebody has already marked as needing one costs a route a person can loosen
+      # in one edit, and the other error hands the unattended worker an issue in
+      # class 1 to 5. If the classes are ever recorded — a `blocked:human:6`, or the
+      # class in the body — this is the line that reads them.
       proposed="agent:human"
-      has_any "$labels" "opencode:forbidden" && proposed="agent:claude"
+      rule="the model proposed \`$answered\`; \`blocked:human\` is on the issue, so the route is \`agent:human\` (\`AGENTS.md\` §5 — its seven classes are a person's decision, and the label does not say which)"
+      if has_any "$labels" "opencode:forbidden"; then
+        proposed="agent:claude"
+        rule="the model proposed \`$answered\`; \`opencode:forbidden\` is on the issue, so the unattended worker is refused structurally and the route is \`agent:claude\` (\`operations/worker-prohibitions.md\`)"
+      fi
     elif [ -n "$depends" ]; then
       proposed="agent:claude"
+      rule="the model proposed \`$answered\` and named $(echo "$depends" | sed 's/ *$//') as a blocker; the unattended queue is for work that can be finished, so the route is \`agent:claude\`"
     fi
   fi
 
-  echo "$proposed"
+  printf '%s\x1f%s\n' "$proposed" "$rule"
+}
+
+# ## What the call cost, in one sentence (`#310`)
+#
+# A port of `modelCallLine()` in kolonie-platform
+# (`apps/support-triage-runner/src/triage.ts`), and it keeps that function's one
+# property: **the absence of a count is reported rather than hidden.** A missing
+# `usage` block is ordinary — the gateway wraps a CLI subscription that bills
+# nothing per token (`kolonie-platform#716`) — so the line still says which model
+# answered, and says the count is missing rather than dropping itself.
+#
+# **And the count is the chunk's.** One call decides up to six issues, so the
+# sentence names how many it decided; a bare token count on one issue would read as
+# the price of that issue.
+model_call_line() {
+  local model=$1 prompt=$2 completion=$3 total=$4 decided=$5
+
+  # **No record at all is not the same as a record with no counts.** A decision
+  # written before this existed, or by anything other than `board-triage-decide.py`,
+  # carries neither a model nor a usage block — and the footer says nothing about a
+  # call rather than reporting an absence it cannot vouch for.
+  [ -n "$model" ] || [ -n "$total" ] || return 0
+
+  local who="a model the gateway did not name"
+  [ -n "$model" ] && who="\`$model\`"
+
+  local scope="this pass's call"
+  case "$decided" in
+    '' | 0 | 1) : ;;
+    *) scope="this pass's call, which decided $decided issues" ;;
+  esac
+
+  if [ -z "$total" ]; then
+    echo "Judged by $who · the gateway reported no token count for $scope (\`kolonie-platform#716\`)."
+    return 0
+  fi
+  if [ -n "$prompt" ] && [ -n "$completion" ]; then
+    echo "Judged by $who · $prompt prompt + $completion completion = $total tokens for $scope."
+    return 0
+  fi
+  echo "Judged by $who · $total tokens for $scope."
+}
+
+# Is a route out of the unattended queue left undefended? The one half of *name the
+# fact, or do not claim it* a machine can check (`#310` §5).
+#
+# **`agent:opencode` is never asked to defend itself**, which is the asymmetry the
+# whole change is about: it is the direction the Colony wants and it is not made
+# expensive to reach.
+undefended() {
+  local route=$1 reason=$2
+  case "$route" in agent:opencode | '') return 1 ;; esac
+  [ -n "$reason" ] || return 0
+  # Word boundaries, so *maybe* and *Maypole* are not modals — and the prompt names
+  # these four words in these terms, so the model is refused against the contract it
+  # was given rather than against a rule it could not have read.
+  grep -qiE '(^|[^[:alpha:]])(may|might|could|potentially)([^[:alpha:]]|$)' <<<"$reason"
 }
 
 # Where a route sits in `ROUTES`: 0 is the least autonomous. An unknown route ranks
@@ -840,20 +960,31 @@ link_blocker() {
 
 # One comment, and only when something was written (`#262`).
 comment() {
-  local repo=$1 number=$2 route=$3 reason=$4 why_not=$5
-  shift 5
+  local repo=$1 number=$2 route=$3 reason=$4 why_not=$5 rule=${6:-} cost=${7:-}
+  shift 7
   local -a said=("$@")
   local body
 
   body="**Triaged.** $(printf '%s' "${said[*]}" | sed 's/  */ /g')"
-  [ -n "$reason" ] && body+=$'\n\n'"$reason"
+  if [ -n "$rule" ]; then
+    # **The rule that overruled, and the model's sentence demoted to what it was**
+    # (`#310`). The alternative is what this comment used to print: the applied
+    # route above a sentence arguing for a different one, which is precisely the
+    # answer a maintainer asking *why was this human?* must not be given.
+    body+=$'\n\n'"**Overruled:** $rule."
+    [ -n "$reason" ] && body+=$'\n\n'"> The model's proposal, which this replaces: $reason"
+  elif [ -n "$reason" ]; then
+    body+=$'\n\n'"$reason"
+  fi
   if [ -n "$why_not" ]; then
     case " ${said[*]} " in
       *"taken out of Ready"*) body+=$'\n\n'"**Out of the queue**: $why_not." ;;
       *) body+=$'\n\n'"**Left in Inbox**: $why_not." ;;
     esac
   fi
-  body+=$'\n\n'"<sub>Routed against \`AGENTS.md\` §5 and \`operations/worker-prohibitions.md\` by \`.github/workflows/board-triage.yml\` (\`kolonie-docs#262\`). Wrong route? Change the label and say why — an inherited label is not evidence.</sub>"
+  body+=$'\n\n'"<sub>Routed against \`AGENTS.md\` §5 and \`operations/worker-prohibitions.md\` by \`.github/workflows/board-triage.yml\` (\`kolonie-docs#262\`). Wrong route? Change the label and say why — an inherited label is not evidence."
+  [ -n "$cost" ] && body+=" $cost"
+  body+="</sub>"
 
   gh issue comment "$number" --repo "$repo" --body "$body" >/dev/null 2>&1 || {
     refused "the triage comment on $repo#$number could not be written"
