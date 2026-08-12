@@ -1291,6 +1291,55 @@ check "and the sweep still exits 0" "0" "$rc"
 contains "and says it said nothing rather than guessing" "rather than guessing" "$(cat "$WORK/err")"
 
 echo
+echo "a board read by somebody else (BOARD_FILE)"
+
+# The sweep needs the board *and* permission to comment in another repository,
+# and one step holds one `GH_TOKEN`. `WORKER_REPO_TOKEN` lost `read:project`
+# between 14:31 and 15:01 UTC on 2026-08-12 and every run since said *the
+# forgotten-claim sweep could not read the board*, under a green tick. So the
+# workflow reads the board in its own step, under the board app, and hands the
+# file over.
+case_setup
+boarded "10:In Progress"
+bash "$SCRIPT" board-read > "$WORK/handed-over.json" 2>/dev/null
+
+# A fresh case: no board fixture at all, so anything that queries for itself sees
+# nothing. Only the handed-over file can produce a finding here.
+case_setup
+aged "Kolonie-AI/kolonie-docs|10|9"
+out=$(BOARD_FILE="$WORK/handed-over.json" bash "$SCRIPT" forgotten-claims 2>/dev/null)
+contains "a handed-over board is what the sweep reads" "Kolonie-AI/kolonie-docs	10	9" "$out"
+absent "and the board is not asked for again" "projectV2" "$(cat "$GH_LOG")"
+
+# The issue itself is still read with the step's own credential — that is the
+# half the board app cannot do, and the reason this is a file and not a token.
+contains "and the issue is still read for itself" "api repos/Kolonie-AI/kolonie-docs/issues/10" \
+  "$(cat "$GH_LOG")"
+
+# *Nobody could look* must not arrive as *nobody is In Progress*: an empty file
+# falls through to the query rather than answering with an empty board.
+case_setup
+boarded "10:In Progress"
+aged "Kolonie-AI/kolonie-docs|10|9"
+: > "$WORK/empty.json"
+out=$(BOARD_FILE="$WORK/empty.json" bash "$SCRIPT" forgotten-claims 2>/dev/null)
+contains "an empty hand-over falls through to the query" "Kolonie-AI/kolonie-docs	10	9" "$out"
+
+case_setup
+boarded "10:In Progress"
+aged "Kolonie-AI/kolonie-docs|10|9"
+out=$(BOARD_FILE="$WORK/there-is-no-such-file.json" bash "$SCRIPT" forgotten-claims 2>/dev/null)
+contains "and so does a file that is not there" "Kolonie-AI/kolonie-docs	10	9" "$out"
+
+# Every other caller reads the board itself, which is why the workflow sets the
+# variable on one step rather than on the job.
+case_setup
+boarded "10:In Progress"
+issued "10|2026-08-01T00:00:00Z|agent:opencode"
+check "an unset BOARD_FILE changes nothing about the queue" "" \
+  "$(BOARD_FILE= bash "$SCRIPT" pick 2>/dev/null)"
+
+echo
 echo "a refusal that names a rule rather than the issue (#250)"
 
 case_setup

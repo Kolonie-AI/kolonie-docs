@@ -263,7 +263,33 @@ GRAPHQL
 # long` — after which `pick` prints nothing and the run reports an empty queue.
 # The test for that case caught this before it shipped. A here-string is fine,
 # because it is a pipe rather than an argument.
+# A board somebody else already read, when `BOARD_FILE` names one.
+#
+# **This exists because reading the board and writing to an issue are two
+# credentials, and one step can hold one `GH_TOKEN`.** The board app is
+# Projects-only and cannot comment; `WORKER_REPO_TOKEN` can comment and — since
+# it lost `read:project` between 14:31 and 15:01 UTC on 2026-08-12 — can no
+# longer read the board at all. The forgotten-claim sweep needs both, so the
+# workflow reads the board in its own step under the app token and hands the file
+# to the sweep under the repo token.
+#
+# **Set it on the one step that needs it, never on the job.** Every other caller
+# reads the board itself, and a file left in the environment would be a board
+# from earlier in the run answering a question asked later — the class of defect
+# `#266` is about, arriving by a different door.
+#
+# An empty or missing file falls through to the query rather than answering with
+# an empty board: *nobody is In Progress* and *nobody could look* must not be the
+# same answer, which is the whole reason the sweep warns today instead of
+# reporting all-clear.
+BOARD_FILE=${BOARD_FILE:-}
+
 board_read() {
+  if [ -n "$BOARD_FILE" ] && [ -s "$BOARD_FILE" ]; then
+    cat "$BOARD_FILE"
+    return 0
+  fi
+
   local after="" page pages rc=0
   pages=$(mktemp) || return 1
   while :; do
