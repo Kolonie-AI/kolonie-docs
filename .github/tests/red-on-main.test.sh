@@ -228,6 +228,48 @@ expect "on one issue, not two" \
   "$([ "$(grep -c 'issue comment' "$GH_LOG")" -eq 1 ] && echo yes || echo no)" "$(cat "$GH_LOG")"
 
 echo
+echo "the body says what is red now, not what was red when it was filed (#315)"
+
+# `#285` was reopened on 2026-08-12 over a failure in `Triage inbound`, while its
+# body still read *Check Red Lines — last completed run on main failed*. That
+# workflow had been green since the day before. The issue was then claimed and
+# worked twice: once against `Check Red Lines`, and once against a completely
+# different cause, with the body still naming the first.
+setup
+jq -n '[{number:285, state:"CLOSED", title:"whatever it was called",
+          body:"- **Check Red Lines** — last completed run on `main` failed, at `7a7da07`.\n\n<!-- watch-finding: workflow-red-on-main -->"}]' > $FIX/existing
+printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
+bash "$SCRIPT" check "$WORK/report.md" >/dev/null
+bash "$SCRIPT" report "$WORK/report.md" >/dev/null
+
+expect "a reopen rewrites the body" "$(logged "issue edit 285" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "to the workflow that is red now" \
+  "$(grep -q 'Rehearse' "$GH_LOG" && echo yes || echo no)" "$(cat "$GH_LOG")"
+# `pipefail` is on in this file, so `grep -c … | grep -q` reports the *first*
+# grep's exit status and reads as a failure whenever the count is zero — which is
+# the answer this assertion wants. Written as a plain negation for that reason.
+expect "and the workflow that is green again is gone from it" \
+  "$(grep -q 'Check Red Lines' "$GH_LOG" && echo no || echo yes)" "$(cat "$GH_LOG")"
+# The reopen comment is the chronicle and is unchanged: how often this recurs
+# staying readable in one place is the point of reusing the issue.
+expect "the reopen still happens, and still comments" \
+  "$(logged "issue reopen 285" && logged "issue comment 285" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# The same, for an issue that never closed: an open finding whose red set has
+# changed is exactly as stale, and `#315`'s rule is about the body rather than
+# about the reopen.
+setup
+jq -n '[{number:285, state:"OPEN", title:"whatever it was called",
+          body:"- **Check Red Lines** — last completed run on `main` failed.\n\n<!-- watch-finding: workflow-red-on-main -->"}]' > $FIX/existing
+printf 'failure\tdef5678\thttps://example.invalid/rehearse/12\t2026-08-06T10:00:00Z\n' > "$FIX/runs.12"
+bash "$SCRIPT" check "$WORK/report.md" >/dev/null
+bash "$SCRIPT" report "$WORK/report.md" >/dev/null
+
+expect "a still-open finding is rewritten too" "$(logged "issue edit 285" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and is still commented on rather than silently edited" \
+  "$(logged "issue comment 285" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+echo
 echo "it reads, and does nothing else (#193)"
 
 expect "it never closes an issue" "$(logged "issue close" && echo no || echo yes)" "$(cat "$GH_LOG")"
@@ -235,7 +277,14 @@ expect "it re-runs nothing" \
   "$( { logged "run rerun" || logged "run watch" || logged "workflow run"; } && echo no || echo yes)" "$(cat "$GH_LOG")"
 expect "it enables and disables no workflow" \
   "$( { logged "workflow enable" || logged "workflow disable"; } && echo no || echo yes)" "$(cat "$GH_LOG")"
-expect "it edits nothing" "$(logged "issue edit" && echo no || echo yes)" "$(cat "$GH_LOG")"
+# **It edits its own issue's body, and nothing else** (`#315`). This assertion
+# used to be `issue edit` appearing nowhere at all, which is the constraint `#315`
+# reverses: the body is a reference and a reference that is never rewritten
+# answers a lookup with yesterday's fact. What must still be true is that the
+# edit is the finding's own body — no labels, no title, no other issue.
+expect "the only thing it edits is its own issue's body" \
+  "$(grep 'issue edit' "$GH_LOG" | grep -qv -- '--body-file' && echo no || echo yes)" \
+  "$(grep 'issue edit' "$GH_LOG" || true)"
 
 echo
 echo "an unreadable workflow list is a configuration gap, not a finding"

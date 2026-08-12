@@ -108,6 +108,7 @@ cmd_place() {
     state=$(jq -r '.state' <<<"$found")
 
     if [ "$state" = OPEN ]; then
+      rewrite_body "$number" "$identity" "$body_file"
       gh issue comment "$number" --repo "$REPO" --body \
 "**Still true today.** $(date -u +%Y-%m-%d): the condition behind this issue is still there.
 
@@ -121,6 +122,7 @@ This is a comment rather than an edit on purpose — the body dates when this wa
     # Closed, and the condition is back. Reopen: a recurrence is the same fact,
     # and the history is the useful part.
     gh issue reopen "$number" --repo "$REPO" >/dev/null
+    rewrite_body "$number" "$identity" "$body_file"
     gh issue comment "$number" --repo "$REPO" --body \
 "**Reopened — this came back.** $(date -u +%Y-%m-%d): the condition this issue describes is true again, having been closed.
 
@@ -139,6 +141,48 @@ Reopened rather than filed again, so that how often this recurs stays readable i
   # *was* filed, and failing here would send the caller down its error path over
   # a successful write.
   await_visible "$identity" || true
+}
+
+# **The body is a reference, so it is rewritten in place** (`kolonie-docs#315`).
+#
+# ## What it cost to not do this
+#
+# `red-on-main.yml` reopened `#285` on 2026-08-12 over a failure in `Triage
+# inbound`, while its body still read *"Check Red Lines — last completed run on
+# `main` failed"*. That workflow had been green since the day before. The issue
+# was claimed and worked twice: once against `Check Red Lines`, and once against a
+# completely different cause, with the body still naming the first.
+#
+# ## Why here and not in each caller
+#
+# `AGENTS.md` §3 is the rule and it is not about reopens: *"a file that is
+# appended to and never rewritten is a chronicle. Anything read as a reference is
+# rewritten in place."* An issue body is a reference — a reader arrives and looks
+# something up — and the comments are the chronicle, which they already do well.
+# Every caller here builds its body from the measurement it has just taken, so
+# every one of them was throwing away the current answer on every path but the
+# first. `#315` names the reopen because that is where it was caught.
+#
+# **The comments are untouched.** How often a condition recurs staying readable in
+# one place is the point of reusing the issue, and that is what they carry.
+#
+# ## The one thing that could go wrong, refused rather than trusted
+#
+# The identity marker lives *in the body*, so a rewrite that dropped it would make
+# the issue unfindable and the next run would file a duplicate — the exact failure
+# this whole file exists against. So a body with no marker is not written, and the
+# run says so instead of failing: the comment below is still worth having, and a
+# stale body is better than a lost issue.
+rewrite_body() {
+  local number=$1 identity=$2 body_file=$3
+
+  if ! grep -qF "$(key_line "$identity")" "$body_file"; then
+    echo "refusing to rewrite #$number: the new body carries no $identity marker" >&2
+    return 0
+  fi
+
+  gh issue edit "$number" --repo "$REPO" --body-file "$body_file" >/dev/null &&
+    echo "rewrote the body of #$number ($identity)"
 }
 
 VISIBILITY_ATTEMPTS=${VISIBILITY_ATTEMPTS:-30}
