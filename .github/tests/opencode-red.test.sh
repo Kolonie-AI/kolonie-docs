@@ -156,7 +156,7 @@ boarded "42:In Review"
 bash "$SCRIPT" handle "$GITHUB_REPOSITORY" 9 failure >/dev/null 2>&1
 log=$(cat "$GH_LOG")
 contains "closes the pull request" "pr close 9" "$log"
-contains "moves the item back to Ready" "single-select-option-id ee5ea42c" "$log"
+contains "moves the item back to Ready" "single-select-option-id 0ce10d81" "$log"
 contains "moves the item it looked up, not another" "--id PVTI_42" "$log"
 contains "says why, on the issue" "issue comment 42" "$log"
 

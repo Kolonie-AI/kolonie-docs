@@ -118,8 +118,8 @@ case "$1 $2" in
       esac
     done
     case "$option" in
-      ee5ea42c) status="Ready" ;;
-      b14e3c08) status="Inbox" ;;
+      0ce10d81) status="Ready" ;;
+      78639a6d) status="Inbox" ;;
       *)        status="" ;;
     esac
     if [ -n "$item" ] && [ -n "$status" ]; then
@@ -387,7 +387,7 @@ contains "blocked:human is routed to a person however the model answered" \
 # model proposed, so `agent:opencode` appears in the text of a comment that is
 # about refusing it. What must not happen is the label.
 absent "and never to the queue" "--add-label agent:opencode" "$log"
-absent "and it is not moved to Ready" "single-select-option-id ee5ea42c" "$log"
+absent "and it is not moved to Ready" "single-select-option-id 0ce10d81" "$log"
 
 case_setup
 searched "$(issue 900 'refused structurally' 'opencode:forbidden agent:claude')"
@@ -529,7 +529,7 @@ log=$(cat "$GH_LOG")
 contains "the route is still written, because refusing it would be guessing" \
   "--add-label agent:claude" "$log"
 absent "but the issue does not move to Ready on a modal" \
-  "single-select-option-id ee5ea42c" "$log"
+  "single-select-option-id 0ce10d81" "$log"
 contains "and the comment quotes the sentence back" "names no fact" "$log"
 
 case_setup
@@ -538,7 +538,7 @@ boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:opencode" "" "" "" true \
   "the check at the end is the done condition and it may run unattended")" >/dev/null
 contains "the cheap direction is never asked to defend itself" \
-  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
+  "single-select-option-id 0ce10d81" "$(cat "$GH_LOG")"
 
 case_setup
 searched "$(issue 900 'something' '')"
@@ -546,7 +546,7 @@ boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "" "" "" true \
   "the done condition is a systemd unit state on the deploy host and no repository check observes it; an issue ending at a committed file would be the worker's")" >/dev/null
 contains "and a reason that names a fact reaches the queue position" \
-  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
+  "single-select-option-id 0ce10d81" "$(cat "$GH_LOG")"
 
 case_setup
 searched "$(issue 900 'already routed' 'agent:claude')"
@@ -555,7 +555,7 @@ run_apply_over_decided "$(decided 900 "agent:opencode" "" "" "" true \
   "it might be mechanical")" >/dev/null
 log=$(cat "$GH_LOG")
 contains "an overruled route is defended by the rule, so the model's sentence is not held against it" \
-  "single-select-option-id ee5ea42c" "$log"
+  "single-select-option-id 0ce10d81" "$log"
 contains "and the rule is what the comment carries" "never widened" "$log"
 
 echo
@@ -662,7 +662,7 @@ log=$(cat "$GH_LOG")
 contains "the blocker is linked" \
   "--method POST repos/Kolonie-AI/kolonie-docs/issues/900/dependencies/blocked_by" "$log"
 absent "an issue with an open blocker is not moved to Ready" \
-  "single-select-option-id ee5ea42c" "$log"
+  "single-select-option-id 0ce10d81" "$log"
 absent "and it does not reach the unattended queue" "--add-label agent:opencode" "$log"
 contains "and the comment says what it waits for" "Left in Inbox" "$log"
 
@@ -675,7 +675,7 @@ JSON
 run_apply "$(decided 900 "agent:claude" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
 log=$(cat "$GH_LOG")
 absent "a closed blocker is not recorded" "--method POST" "$log"
-contains "and the issue is moved to Ready" "single-select-option-id ee5ea42c" "$log"
+contains "and the issue is moved to Ready" "single-select-option-id 0ce10d81" "$log"
 
 case_setup
 searched "$(issue 900 'in the queue and blocked' '')"
@@ -689,7 +689,7 @@ JSON
 run_apply "$(decided 900 "agent:opencode" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
 log=$(cat "$GH_LOG")
 contains "an issue in Ready that turns out to be blocked leaves the queue" \
-  "single-select-option-id b14e3c08" "$log"
+  "single-select-option-id 78639a6d" "$log"
 contains "and the comment says it is out of it" "Out of the queue" "$log"
 
 # Two passes judged `kolonie-platform#702` differently within an hour, so it went to
@@ -700,7 +700,7 @@ searched "$(issue 900 'in the queue, and one pass disagrees' 'agent:claude p1')"
 boarded "900|Ready|agent:claude p1"
 run_apply_over_decided "$(decided 900 "agent:claude" "" "" "" false)" >/dev/null
 log=$(cat "$GH_LOG")
-absent "an opinion does not take a card out of Ready" "single-select-option-id b14e3c08" "$log"
+absent "an opinion does not take a card out of Ready" "single-select-option-id 78639a6d" "$log"
 absent "and says nothing, because nothing changed" "issue comment" "$log"
 
 # Measured 2026-08-10: the pass linked three independent watcher findings — `api`,
@@ -727,7 +727,7 @@ boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "" "idea" "" false)" >/dev/null
 log=$(cat "$GH_LOG")
 contains "an issue that is not ready gets the readiness label" "--add-label idea" "$log"
-absent "and is not moved" "single-select-option-id ee5ea42c" "$log"
+absent "and is not moved" "single-select-option-id 0ce10d81" "$log"
 contains "and the comment says why it stayed" "not specified well enough" "$log"
 
 case_setup
@@ -916,7 +916,7 @@ JSON
 out=$(run_sweep)
 log=$(cat "$GH_LOG")
 contains "an open blocker takes a decided issue out of Ready" \
-  "single-select-option-id b14e3c08" "$log"
+  "single-select-option-id 78639a6d" "$log"
 contains "and the comment says what it waits for" "Kolonie-AI/kolonie-docs#800" "$log"
 contains "and the run counts the move" "the sweep moved 1 card(s)" "$out"
 absent "and nothing is re-labelled, because nothing was re-decided" "issue edit" "$log"
@@ -927,7 +927,7 @@ boarded "900|Ready|agent:claude blocked:human"
 run_sweep >/dev/null
 log=$(cat "$GH_LOG")
 contains "blocked:human takes a decided issue out of Ready too" \
-  "single-select-option-id b14e3c08" "$log"
+  "single-select-option-id 78639a6d" "$log"
 contains "and the comment says whose decision it is" "not a queue position" "$log"
 
 # The way back, and the reason it is narrower: an issue whose recorded blockers
@@ -943,7 +943,7 @@ JSON
 run_sweep >/dev/null
 log=$(cat "$GH_LOG")
 contains "an issue whose every blocker has closed comes back to Ready" \
-  "single-select-option-id ee5ea42c" "$log"
+  "single-select-option-id 0ce10d81" "$log"
 contains "and the comment names what it was waiting for" "Back in the queue" "$log"
 
 case_setup
@@ -1066,7 +1066,7 @@ boarded "909|Inbox|"
 run_apply "$(decided 909 "agent:claude" "" "" "" true \
   "$(jq -r '.cases[] | select(.case == 9) | .expect.reason' "$CASES")")" >/dev/null
 contains "case 9's defence is a reason the script accepts" \
-  "single-select-option-id ee5ea42c" "$(cat "$GH_LOG")"
+  "single-select-option-id 0ce10d81" "$(cat "$GH_LOG")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

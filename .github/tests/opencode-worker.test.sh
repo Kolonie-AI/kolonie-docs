@@ -135,9 +135,9 @@ case "$1 $2" in
       esac
     done
     case "$option" in
-      ee5ea42c) status="Ready" ;;
-      39185de7) status="In Progress" ;;
-      d66d01e2) status="In Review" ;;
+      0ce10d81) status="Ready" ;;
+      604be33b) status="In Progress" ;;
+      bd543ca4) status="In Review" ;;
       *)        status="" ;;
     esac
     if [ -n "$item" ] && [ -n "$status" ] && [ -s "$GH_FIXTURES/board" ]; then
@@ -411,8 +411,8 @@ check "a finished issue does not hold its repository" "$(q 11)" "$(bash "$SCRIPT
 
 case_setup
 issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
-boarded "10:Backlog"
-check "only Ready is the queue — Backlog is not" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
+boarded "10:Inbox"
+check "only Ready is the queue — Inbox is not" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
 issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,blocked:human" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
@@ -457,7 +457,7 @@ boarded "10:Ready"
 bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 >/dev/null 2>&1
 rc=$?
 check "a claim that works exits 0" "0" "$rc"
-contains "a claim moves the issue to In Progress" "39185de7" "$(cat "$GH_LOG")"
+contains "a claim moves the issue to In Progress" "604be33b" "$(cat "$GH_LOG")"
 
 case_setup
 boarded "10:Ready"
@@ -478,7 +478,7 @@ echo "releasing a failed run"
 case_setup
 boarded "10:In Progress"
 bash "$SCRIPT" release Kolonie-AI/kolonie-docs 10 >/dev/null 2>&1
-contains "a release puts the issue back in Ready" "ee5ea42c" "$(cat "$GH_LOG")"
+contains "a release puts the issue back in Ready" "0ce10d81" "$(cat "$GH_LOG")"
 
 case_setup
 boarded "10:In Progress"
@@ -1164,7 +1164,7 @@ boarded "10:In Progress"
 out=$(bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 2>"$WORK/err"); rc=$?
 check "an issue already In Progress is not claimed" "lost" "$out"
 check "and losing is not a failure" "0" "$rc"
-absent "and the column is not overwritten" "39185de7" "$(cat "$GH_LOG")"
+absent "and the column is not overwritten" "604be33b" "$(cat "$GH_LOG")"
 contains "and the log says who has it" "another run took it" "$(cat "$WORK/err")"
 
 # A write that reports success and does not take is not a claim. Before `#266`

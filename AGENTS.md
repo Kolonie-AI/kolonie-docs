@@ -254,12 +254,28 @@ rejected for the coin ledger. One record, or none.
 | Column | Meaning |
 |--------|---------|
 | **Inbox** | Raw idea or open question, not yet specified |
-| **Backlog** | Understood, not scheduled |
 | **Ready** | Spec is complete — any agent can pick this up without asking |
 | **In Progress** | Someone is working on it |
 | **In Review** | A pull request is open |
 | **Blocked** | Waiting on a dependency, a decision, or a human |
 | **Done** | Issue closed |
+
+**There is no Backlog column, and its removal on 2026-08-12 is worth one
+paragraph because deleting it cost something.** It held 0 of 135 items and
+`board-triage.sh` reads `Inbox|Ready` and nothing else, so anything that landed
+there was invisible to every pass and stayed there — a column that only loses
+issues. Six columns say everything seven did: not specified yet is **Inbox**,
+specified is **Ready**.
+
+The deletion goes through `updateProjectV2Field`, and that call **does not match
+single-select options by name**. It replaces the whole option set: all six
+survivors came back with new ids, and every one of the 135 items lost its status
+in the same transaction. Building the payload with `jq` from the live field does
+not prevent it. **If a column is ever added, renamed or removed again, snapshot
+every item's column first** — `board-item-id.sh --map` writes exactly that file
+for 2 points — and expect to re-apply all of them afterwards, verifying each
+against the snapshot rather than trusting the exit code: `gh project item-edit`
+returned 0 for five items whose value did not stick.
 
 The board mostly maintains itself. GitHub's built-in workflows move items on close,
 on PR link and on merge, and add new issues from **five of the organisation's
@@ -475,10 +491,13 @@ already In Progress, means you have the wrong item — an issue you are picking 
 is open and unclaimed. That is one field in the query above and it is the cheapest
 guard available.
 
-Option ids: Inbox `b14e3c08`, Backlog `774c5381`, Ready `ee5ea42c`,
-In Progress `39185de7`, In Review `d66d01e2`, Blocked `535fb10b`, Done `9b67912d`.
+Option ids, re-read 2026-08-12 after the Backlog column was removed: Inbox
+`78639a6d`, Ready `0ce10d81`, In Progress `604be33b`, In Review `bd543ca4`,
+Blocked `9caff3d3`, Done `d37dbc2a`.
 
-**All seven, and this is what regenerates them** if a column is ever added or
+**All six were replaced by that removal** — every id above is new, not only the
+one that went — which is why `opencode-worker.sh` and `opencode-red.sh` carry
+them as defaults and had to change with it. **This is what regenerates them** if a column is ever added or
 renamed. Same shape as §6: the command is the procedure rather than an
 illustration of it, so the next reader can *check* this list instead of trusting
 it — which is the only defence against a line of hexadecimal that has quietly
@@ -1524,7 +1543,7 @@ project. That means:
 - **Definition of done** — the repository's own check command, tests including at
   least one rejection case, and the no-secrets rule
 
-An issue that does not meet this bar stays in Backlog or Blocked. Do not move
+An issue that does not meet this bar stays in Inbox or Blocked. Do not move
 something to Ready to make the board look better; a badly specified issue costs
 more than an unwritten one.
 

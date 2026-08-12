@@ -47,7 +47,7 @@ ORG=${ORG:-Kolonie-AI}
 WAITING_LABELS=${WAITING_LABELS:-agent:claude agent:human}
 
 # The columns that mean *somebody already has this*. Everything else — Inbox,
-# Backlog, Ready, Blocked — is waiting for somebody, and a `blocked:human` issue
+# Ready, Blocked — is waiting for somebody, and a `blocked:human` issue
 # in Blocked is exactly what the `agent:human` half of this list is for.
 # Pipe separated rather than an array, because an array cannot come in from the
 # environment and every other setting in this file can.

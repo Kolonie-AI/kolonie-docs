@@ -86,7 +86,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # needs it separately — the one lookup takes the repository name off that.
 PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
 STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
-STATUS_READY=${STATUS_READY:-ee5ea42c}
+STATUS_READY=${STATUS_READY:-0ce10d81}
 # No `BOARD_LIMIT`. Nothing here reads the board any more (`#271`); the one item
 # this script wants is asked for by repository and number.
 
