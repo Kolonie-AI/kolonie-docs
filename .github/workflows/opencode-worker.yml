@@ -50,31 +50,32 @@ name: opencode worker
 
 on:
   schedule:
-    # Every ten minutes, the maintainer's instruction on 2026-08-10.
+    # Every fifteen minutes, the maintainer's instruction on 2026-08-12.
     #
-    # **The measurement says this may not buy what it asks for, and it is set
-    # anyway because that is a decision rather than a fact.** Between 20:12 and
-    # 23:51 UTC on 2026-08-09 the worker ran six times on a twenty-minute
-    # schedule — forty-four minutes apart on average — and then not at all for an
-    # hour while three runs were due. GitHub delays scheduled runs under load and
-    # drops them, so asking more often has already once produced fewer runs.
+    # **The measurement was taken and it settled the question against `*/10`.**
+    # That setting asked for 144 runs a day on the reasoning that asking more
+    # often costs nothing to be wrong. Counted over the 24 hours to 2026-08-12
+    # 06:11 UTC: **22 runs actually started of 144 scheduled**, 15%, a median gap
+    # of 59 minutes and a longest gap of 149. The test the previous note set for
+    # itself was whether the ratio beat the six-runs-in-four-hours it replaced —
+    # 1.5 an hour then, 0.92 an hour on `*/10`. It did not, so the trigger count
+    # is not the limit and the honest setting is the slower one.
     #
-    # What makes this worth trying rather than arguing about: **it costs nothing
-    # to be wrong.** A trigger that does not fire leaves no trace and no work
-    # undone, a run that finds an empty queue exits in seconds, and two firings
-    # cannot overlap on one issue — the claim below decides that, and since
-    # `#266` it decides it honestly.
+    # GitHub delays scheduled runs under load and drops the delayed ones rather
+    # than backfilling. Past some point more triggers is more work for the
+    # scheduler to shed, and this repository was past it.
     #
-    # **What to measure, so this is not settled by impression.** Count runs
-    # actually started over a full day against the 144 scheduled. If the ratio is
-    # no better than the 6-in-4-hours this replaces, the trigger count is not the
-    # limit and the honest setting is the slower one.
+    # **Nothing about the slower schedule risks work being lost.** A run that
+    # finds an empty queue exits in seconds, and two firings cannot overlap on
+    # one issue — the claim below decides that, and since `#266` it decides it
+    # honestly. What a dropped trigger costs is latency on a queued issue, which
+    # was already an hour in practice and is now asked for honestly.
     #
     # `:00` collides with `check-red-lines` (04:00) and `board-self-check`
-    # (05:00), which share one GraphQL budget — six of 144 runs a day. A run
+    # (05:00), which share one GraphQL budget — four of 96 runs a day. A run
     # whose board read is throttled exits on `pick` failing, which is loud, and
-    # the next one is ten minutes away.
-    - cron: '*/10 * * * *'
+    # the next one is fifteen minutes away.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 # ## Nothing stops a second run any more, and that is the point (`#266`)
@@ -170,7 +171,7 @@ jobs:
       # a judgement, and a reaper would eventually take an issue away from
       # somebody mid-thought. The comment is the whole action, and writing it
       # touches the issue — which is also what keeps this quiet for another four
-      # hours rather than saying the same thing every ten minutes.
+      # hours rather than saying the same thing every fifteen minutes.
       #
       # Never fatal, for the sweep above's reason: this run's issue must not be
       # lost to a report about a different one.
@@ -834,7 +835,7 @@ jobs:
           # was committed and nothing explained it, which is a defect in the run.
           # **`work`** — a commit exists and the target's own check went red: the
           # issue genuinely is not done. **`worker`** — the issue was never the
-          # problem, and that one fails the same way every ten minutes until
+          # problem, and that one fails the same way every fifteen minutes until
           # somebody looks.
           #
           # The first two were `work` until `#253`, so a refusal was announced as

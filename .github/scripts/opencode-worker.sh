@@ -162,7 +162,7 @@ SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 #
 # It exists only to keep a *previous* attempt's claim out of the comparison — an
 # issue that failed and was tried again carries one, hours or days old. The race
-# it is actually deciding is seconds wide, and the schedule is ten minutes, so
+# it is actually deciding is seconds wide, and the schedule is fifteen minutes, so
 # anything between the two works and there is no edge to tune. Ten.
 CLAIM_RACE_WINDOW_MINUTES=${CLAIM_RACE_WINDOW_MINUTES:-10}
 
@@ -857,7 +857,7 @@ WORKER_PR_MARKER=${WORKER_PR_MARKER:-opencode worker for}
 # issue timeline is a record that already exists and cannot drift from itself.
 COMPLETION_MARKER=${COMPLETION_MARKER:-Completed by the opencode worker in}
 
-# How far back the completion sweep looks. A run every ten minutes only ever
+# How far back the completion sweep looks. A run every fifteen minutes only ever
 # needs to cover the gap since the last one; a day is two orders of magnitude of
 # slack against that and still bounds the work at *what the worker merged in a
 # day*, which has been about fifteen.
@@ -872,7 +872,7 @@ REPORT_WINDOW_DAYS=${REPORT_WINDOW_DAYS:-1}
 #
 # **Over REST search rather than the board or GraphQL**, for AGENTS.md §6's
 # reason: the board is the whole of the GraphQL bill and this runs on a schedule
-# every ten minutes. `search/issues` costs nothing from that pool.
+# every fifteen minutes. `search/issues` costs nothing from that pool.
 #
 # **The index is a minute or two behind**, which is the one property worth
 # stating: a pull request opened by *this* run cannot be found by *this* run.
@@ -942,7 +942,7 @@ issue_of_body() {
 # `unknown` and starts the computation. A sweep that read that as *not dirty*
 # would be correct by luck, and one that read it as *dirty* would close pull
 # requests that merge perfectly well. It is skipped, out loud, and the next run
-# ten minutes later gets a real answer.
+# fifteen minutes later gets a real answer.
 stale_pull_requests() {
   local repo number body state ref issue
   while IFS=$'\t' read -r repo number body; do
@@ -1089,7 +1089,7 @@ required_contexts_of() {
 # ## `dirty` is skipped, and `unknown` is not an answer
 #
 # GitHub refuses to arm a conflicting pull request outright, so a run that tried
-# would spend a call to be told so and warn about it again ten minutes later,
+# would spend a call to be told so and warn about it again fifteen minutes later,
 # forever. `blocked` and `unstable` are **not** skipped — a check that has not
 # reported yet is precisely what auto-merge is for. `unknown` means GitHub has
 # not computed mergeability, and reading it either way would be a guess:
