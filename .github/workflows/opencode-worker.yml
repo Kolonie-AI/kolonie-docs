@@ -71,11 +71,22 @@ on:
     # honestly. What a dropped trigger costs is latency on a queued issue, which
     # was already an hour in practice and is now asked for honestly.
     #
-    # `:00` collides with `check-red-lines` (04:00) and `board-self-check`
-    # (05:00), which share one GraphQL budget — four of 96 runs a day. A run
-    # whose board read is throttled exits on `pick` failing, which is loud, and
-    # the next one is fifteen minutes away.
-    - cron: '*/15 * * * *'
+    # **Offset by three minutes, so nothing here lands on a boundary anything
+    # else is on.** `*/15` on its own put this on the same four minutes an hour
+    # as `board-triage.yml`, which moved to the same interval on 2026-08-12, and
+    # kept the `:00` collision with `check-red-lines` (04:00) and
+    # `board-self-check` (05:00). All four read the board and the org has one
+    # GraphQL budget between them; a run whose board read is throttled exits on
+    # `pick` failing, which is loud but is a run spent on nothing.
+    #
+    # It buys less than it looks like it does, and it is worth saying so: GitHub
+    # scatters a scheduled run by anything from four to forty-eight minutes, so
+    # two workflows on different minutes still collide sometimes and two on the
+    # same minute usually do not. What the offset removes is the *systematic*
+    # case — the one that happens by construction rather than by luck.
+    #
+    # Still every fifteen minutes, which is what the interval was set to.
+    - cron: '3,18,33,48 * * * *'
   workflow_dispatch:
 
 # ## Nothing stops a second run any more, and that is the point (`#266`)
