@@ -479,10 +479,20 @@ open decision), `decision` (needs an architectural decision recorded before work
 starts), plus the GitHub defaults `bug` and `documentation`.
 
 **Origin** — `from:citizen`, `from:external`, `from:maintainer`, `from:agent`,
-`from:watcher`, and `needs-triage` in `kolonie-platform` (measured across the five
-board repositories on 2026-08-10; the first five exist in all of them). Where an
-issue came from, which changes how it is read and what may be done to it — and,
-for the last two rows of the routing table below, what may be done to it *at all*.
+`from:watcher`, and `needs-triage` (measured across the five board repositories on
+2026-08-12; all six now exist in all of them). Where an issue came from, which
+changes how it is read and what may be done to it — and, for the last two rows of
+the routing table below, what may be done to it *at all*.
+
+**`needs-triage` existed in `kolonie-platform` alone until 2026-08-12**, and the
+gap was not harmless. `inbound-triage.yml` applies it to every issue from outside
+and is called by four repositories; `gh issue edit` applies its labels in one
+call, so in the other three the whole triage failed and the issue got *no*
+`area:` and *no* comment either. It fired on `#313` and reported itself through
+`#285`. The label is now in all five, and the workflow creates any of its own
+labels that a repository is missing — because the hand fix leaves the next
+repository to call it broken in exactly the same way, and the failure is silent
+from where an outside contributor is standing.
 
 **Route** — `agent:opencode`, `agent:claude`, `agent:human`. **Who may pick the
 issue up**, which is a different question from what column it is in. Exactly one,

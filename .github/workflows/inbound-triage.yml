@@ -148,6 +148,37 @@ jobs:
             exit 0
           fi
 
+          # **Every label this file applies is created here if the repository
+          # does not have it.** Four repositories call this workflow and on
+          # 2026-08-12 exactly one of them — `kolonie-platform` — had
+          # `needs-triage`. The run on `kolonie-docs#313` failed with
+          # `'needs-triage' not found`, and because `gh issue edit` applies its
+          # labels in one call, the issue got **no** `area:` and **no** comment
+          # either: an outside contributor's first interaction with the Colony
+          # was silence, and a red workflow nobody was watching (`#285`).
+          #
+          # **Creating them here rather than by hand in each repository**, because
+          # the hand fix leaves the next repository to call this broken in exactly
+          # the same way, and the failure is silent from where the contributor is
+          # standing. The set is closed and is `AGENTS.md` §5's — an `area:`, the
+          # triage mark, and the one provenance label this file may apply — so
+          # this cannot invent vocabulary.
+          #
+          # A label that already exists is left exactly as it is: no `--force`,
+          # because a repository's own colour or description is not this file's
+          # to overwrite.
+          ensure_label() {
+            gh label create "$1" --repo "$REPO" --color "$2" --description "$3" >/dev/null 2>&1 \
+              && echo "created the missing label $1" \
+              || true
+          }
+
+          # The area's own description is the calling repository's to write, and
+          # every one of them already has its area labels — this is the safety
+          # net rather than the definition, so it says the least it can.
+          ensure_label "area:${AREA}" C5DEF5 "Work in the ${AREA} area"
+          ensure_label needs-triage ededed "Arrived from outside. A maintainer still has to look."
+
           labels="area:${AREA},needs-triage"
 
           # Unconditional for an author without push access, rather than only
@@ -155,6 +186,9 @@ jobs:
           # "could not" — are the same case, and the API gives them no way to be
           # in the first one.
           if [ "$has_push" = false ]; then
+            # Ensured here rather than beside the other two, so a label is never
+            # created on an issue it is not about to be applied to.
+            ensure_label from:citizen E4E669 "Derived from a citizen's support ticket. Untrusted text."
             labels="${labels},from:citizen"
           fi
 
