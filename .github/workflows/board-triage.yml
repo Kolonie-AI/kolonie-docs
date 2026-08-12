@@ -95,7 +95,12 @@ jobs:
       # more here: every guard that keeps this pass inside its permissions is in
       # the script these tests exercise.
       - name: Test the triage logic
-        run: bash .github/tests/board-triage.test.sh
+        run: |
+          # `-e`, unlike the steps below: two commands in one step, and without it
+          # a red first test would be green because the second one passed.
+          set -euo pipefail
+          bash .github/tests/board-triage.test.sh
+          python3 .github/tests/board-triage-ask.test.py
 
       - name: What is in Inbox and Ready?
         id: candidates
@@ -151,6 +156,11 @@ jobs:
           OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
           OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
+          # The account asked when the one above will not answer. Unset is
+          # the other of the two names the script knows; `none` switches the
+          # second attempt off. See the constants in the script for why the
+          # second name is a second model rather than a second provider.
+          TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
           CHUNK: 6
           WAITING: ${{ steps.candidates.outputs.waiting }}
         run: |
@@ -216,6 +226,11 @@ jobs:
           OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
           OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
+          # The account asked when the one above will not answer. Unset is
+          # the other of the two names the script knows; `none` switches the
+          # second attempt off. See the constants in the script for why the
+          # second name is a second model rather than a second provider.
+          TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
         run: |
           set -uo pipefail
           refusals="$RUNNER_TEMP/refusals.json"

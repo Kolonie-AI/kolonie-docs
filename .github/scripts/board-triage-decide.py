@@ -35,6 +35,7 @@ with tests. This file's whole job is to turn a board into an opinion.
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -251,23 +252,59 @@ def read_model_call(answer: object) -> dict:
     return record
 
 
-def ask(system: str, brief: str, budget: int) -> tuple:
-    """(answer-text, why-not, call). Exactly one of the first two is non-empty.
+# `#262` asks for the strongest model available and gives the reason: the
+# dependency step is a judgement over the whole board at once. The name is a
+# setting, so the strongest model in six months is one variable away; the default
+# is what was strongest on 2026-08-10.
+DEFAULT_MODEL = "gpt-5.6-sol"
 
-    `call` is what `read_model_call` made of the response, and it is empty on
-    every path that did not get one.
+# ## The second model is a second upstream account, and that is the whole point
+#
+# Measured 2026-08-12: the gateway's 502 and 503 are one exhausted upstream
+# account. `gpt-5.6-*` is served by a **single** ChatGPT credential shared by
+# nineteen API keys, so `cli-proxy-api`'s `max-retry-credentials` has nothing to
+# rotate to and answers 503 until the cooldown clears; `grok-4.5` has its own
+# account and its own quota. Asking the other one is the rotation the gateway
+# cannot do for us, done here, over the same key and the same endpoint.
+#
+# **It is not a weaker model, deliberately.** The docstring above refuses to fall
+# back to a rule of thumb, and a small model routing the board unnoticed would be
+# that in a more expensive form: a wrong route looks exactly like a right one
+# until someone reads it. Both names here are models `#262` would accept.
+ACROSS_ACCOUNTS = "grok-4.5"
+
+# ## A fast failure is retried and a slow one is not
+#
+# Measured 2026-08-12 in Loki and in the run logs: the 502/503 a cooled-down
+# account produces comes back in **one to three seconds** — a support-triage call
+# succeeded at 07:35:44 and the next one failed at 07:35:45 — and the window
+# clears inside a minute, so asking again costs almost nothing and usually works.
+# A 524 is the opposite: Cloudflare cuts the connection at about a hundred
+# seconds, and asking the same model the same brief again buys another hundred
+# seconds of the same answer. So a slow failure skips the retries and spends what
+# is left on the other account instead, which is both cheaper and likelier.
+#
+# Both models get the same two retries, so the arithmetic worth knowing is the
+# worst case for one chunk: three fast failures on each account is six calls and
+# thirty seconds of waiting — under a minute, and it is the case that actually
+# happens. A chunk that fails *slowly* on both accounts spends about two hundred
+# seconds instead, one Cloudflare cut each, and six of those would reach the
+# workflow's twenty-minute timeout. That is accepted rather than guarded: it needs
+# every chunk to hang on both accounts, which is the gateway being down, and a
+# pass that is cut short there had nothing to write anyway.
+SLOW_FAILURE_SECONDS = 30
+RETRY_PAUSES = (3, 12)
+
+
+def ask_once(endpoint: str, key: str, model: str, system: str, brief: str, budget: int) -> tuple:
+    """(answer-text, why-not, call, worth-asking-again).
+
+    Exactly one of the first two is non-empty. `call` is what `read_model_call`
+    made of the response, and it is empty on every path that did not get one. The
+    fourth is whether the failure was the kind that a second attempt could answer
+    differently — a 4xx that is not a rate limit never is.
     """
-    key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("OPENCODE_LLM_API_KEY", "")
-    base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("OPENCODE_LLM_BASE_URL", "")).rstrip("/")
-    # `#262` asks for the strongest model available and gives the reason: the
-    # dependency step is a judgement over the whole board at once. The name is a
-    # setting, so the strongest model in six months is one variable away; the
-    # default is what was strongest on 2026-08-10.
-    model = os.environ.get("TRIAGE_LLM_MODEL", "gpt-5.6-sol")
     empty = {"model": "", "tokens": None}
-    if not key or not base:
-        return "", "no gateway credentials — nothing was asked for", empty
-
     body = json.dumps({
         "model": model,
         "messages": [{"role": "system", "content": system},
@@ -279,14 +316,6 @@ def ask(system: str, brief: str, budget: int) -> tuple:
         "max_tokens": budget,
         "temperature": 0.1,
     }).encode()
-
-    # **`/v1` if it is not already there.** The same gateway is configured two ways
-    # in this organisation: `opencode.json` hands its base URL to an
-    # OpenAI-compatible provider, which appends the path itself and is therefore
-    # usually given the `/v1` root, while the image calls in the maintainer's notes
-    # use the bare host. A run that guessed wrong would 404 hourly, and the 404
-    # would be indistinguishable from a gateway that is down.
-    endpoint = base if base.endswith("/v1") else f"{base}/v1"
 
     # **The `User-Agent` is not decoration.** Measured 2026-08-10 against the
     # gateway: the identical request answers 200 with a named agent and **403**
@@ -303,9 +332,15 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     except urllib.error.HTTPError as exc:
         # The status and nothing else. This log is public, and a provider's error
         # body can echo the request back with the key inside it.
-        return "", f"the gateway answered {exc.code}", empty
+        #
+        # A 5xx is the gateway or its upstream and may well answer differently in
+        # three seconds; a 429 is a rate limit, which is the same thing said
+        # politely. Every other 4xx is this file's own request being wrong — a
+        # revoked key, a model name that no longer exists — and asking again
+        # would turn a configuration fault into a slow one.
+        return "", f"the gateway answered {exc.code}", empty, exc.code >= 500 or exc.code == 429
     except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
-        return "", f"could not reach the gateway: {type(exc).__name__}", empty
+        return "", f"could not reach the gateway: {type(exc).__name__}", empty, True
 
     call = read_model_call(answer)
     # The name that was configured, when the answer did not carry one back. It is
@@ -317,14 +352,67 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     choice = (answer.get("choices") or [{}])[0]
     text = (choice.get("message") or {}).get("content")
     if not text:
+        # Not worth asking the same model again — it answered, and this is what it
+        # had to say. The other account gets a turn instead.
         return "", ("the model returned no content"
-                    f" (finish_reason: {choice.get('finish_reason') or 'unknown'})"), call
+                    f" (finish_reason: {choice.get('finish_reason') or 'unknown'})"), call, False
 
     text = text.strip()
     if text.startswith("```"):
         text = text.strip("`")
         text = text.split("\n", 1)[1] if "\n" in text else text
-    return text, "", call
+    return text, "", call, False
+
+
+def ask(system: str, brief: str, budget: int) -> tuple:
+    """(answer-text, why-not, call). Exactly one of the first two is non-empty.
+
+    The configured model, then the same model again while the failures are fast,
+    then the other account once. Every attempt is the same brief over the same
+    key — nothing about the question changes, only who is asked.
+    """
+    key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("OPENCODE_LLM_API_KEY", "")
+    base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("OPENCODE_LLM_BASE_URL", "")).rstrip("/")
+    empty = {"model": "", "tokens": None}
+    if not key or not base:
+        return "", "no gateway credentials — nothing was asked for", empty
+
+    # **`/v1` if it is not already there.** The same gateway is configured two ways
+    # in this organisation: `opencode.json` hands its base URL to an
+    # OpenAI-compatible provider, which appends the path itself and is therefore
+    # usually given the `/v1` root, while the image calls in the maintainer's notes
+    # use the bare host. A run that guessed wrong would 404 hourly, and the 404
+    # would be indistinguishable from a gateway that is down.
+    endpoint = base if base.endswith("/v1") else f"{base}/v1"
+
+    model = os.environ.get("TRIAGE_LLM_MODEL", "").strip() or DEFAULT_MODEL
+    # Unset picks the model that is not the one being used, because either name
+    # alone is served by one account and the point of the second call is that it is
+    # not that account. **The word that switches it off is `none`, not an empty
+    # string**: a workflow writing `${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}` hands
+    # this an empty string whenever the variable does not exist, and an empty
+    # string that means *off* would silently undo the whole change the first time
+    # someone wired the setting up.
+    named = os.environ.get("TRIAGE_LLM_FALLBACK_MODEL", "").strip()
+    other = "" if named == "none" else named or (
+        ACROSS_ACCOUNTS if model == DEFAULT_MODEL else DEFAULT_MODEL)
+
+    why, call = "nothing was asked", empty
+    for attempt_model in [model] + ([other] if other and other != model else []):
+        pauses = list(RETRY_PAUSES)
+        while True:
+            began = time.monotonic()
+            text, why, call, again = ask_once(endpoint, key, attempt_model, system, brief, budget)
+            if text:
+                return text, "", call
+            slow = time.monotonic() - began >= SLOW_FAILURE_SECONDS
+            print(f"{attempt_model}: {why}"
+                  + (" — too slow to be worth asking twice" if slow and again else ""),
+                  file=sys.stderr)
+            if not again or slow or not pauses:
+                break
+            time.sleep(pauses.pop(0))
+    return "", why, call
 
 
 def read_brief(path: str, marker: str) -> tuple:
