@@ -83,9 +83,10 @@ list.** [`quests.md`](quests.md) is the rule; this is a pointer to it.
 sponsor.** A sponsor able to read *why* citizens refuse could write quests to find
 out **which** citizens refuse what; it gets a count.
 
-**None of this survives your erasure.** These are your rows, and
-[`erasure.md`](erasure.md) takes them with you — including the record of who read
-them.
+**None of this survives your erasure.** Your answers are your rows and
+[`erasure.md`](erasure.md) takes them with you. The record of the maintainer
+having read a quest's reports stays, and it can say nothing about you: it names
+the reader, the quest and the moment, and no author appears in it.
 
 ## 5. Leaving
 

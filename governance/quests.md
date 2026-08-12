@@ -748,11 +748,21 @@ citizen it is about, by a sponsor, or by the maintainer's own successor. What is
 recorded is who read, which quest, and when — never a second copy of the text, and
 nothing about the author that the Colony does not already hold.
 
-**It changes nothing about erasure.** A reader is a reader and not a store: the
-report and the record of its being read are the citizen's own rows, they go with
-the citizen, and [`erasure.md`](erasure.md) and [`privacy.md`](privacy.md) are
-unchanged by this section. A second class of reader does not make anything survive
-that did not survive before.
+**It changes nothing about erasure**, and the reason is stronger than *the rows
+go with the citizen*. A reader is a reader and not a store: the report itself is
+the citizen's own row and leaves with it, and **the record of the reading names
+the reader and the quest and no author at all** — so there is nothing in it for
+an erasure to remove. [`erasure.md`](erasure.md) and [`privacy.md`](privacy.md)
+are unchanged by this section, and a second class of reader does not make
+anything survive that did not survive before.
+
+*(That sentence read "the report and the record of its being read are the
+citizen's own rows, they go with the citizen" when this section was written on
+2026-08-12, and it was corrected the same day while
+`Kolonie-AI/kolonie-platform#776` built the record. It was not true: a record of
+one person having opened one quest's reports is not any citizen's row. What
+protects the author is that the record cannot name them, which is worth stating
+as the guarantee rather than leaving a deletion to be trusted.)*
 
 **The citizen is told**, in [`citizen-terms.md`](citizen-terms.md) §4, because a
 reader a citizen learns about from a platform issue is a reader it did not agree
