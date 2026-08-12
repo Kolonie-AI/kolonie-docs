@@ -12,7 +12,27 @@ name: Triage the board
 # this pass from hourly to half-hourly on 2026-08-11 so newly filed work waits at
 # most one scheduling interval for a routing decision.
 #
-# ## Why every fifteen minutes to get one every thirty
+# ## The cadence comes from the deploy host, not from the block below
+#
+# **Read this before changing the `cron:`.** Since 2026-08-12 a systemd timer on
+# the deploy host — `kolonie-board-triage-dispatch.timer` in `kolonie-infra`,
+# `OnCalendar=*:0/30` — sends a `workflow_dispatch` every half hour. That is what
+# actually paces this workflow. The `schedule:` block below is the **fallback**
+# for a night when that host is down, and it is set to the same half hour so the
+# two do not claim two different cadences.
+#
+# The reason is measured rather than assumed. `board-triage.yml` on `*/15`, over
+# the 12.5 hours to 2026-08-12 17:26 UTC: **twelve firings**, gaps of 74, 107, 69,
+# 71, 56, 43, 66, 86, 58, 55 and 61 minutes — a median of 66 against a cron asking
+# for 15. A `workflow_dispatch` is not rationed that way; the same host's timer
+# for `opencode-worker.yml` logged 121 dispatches and zero failures that day.
+#
+# **So a run that did not happen is a question for `journalctl -u
+# kolonie-board-triage-dispatch` on the host**, not for this file. Adding
+# attempts here does not buy any: that was tried, and the section below is what
+# it bought.
+#
+# ## Why every fifteen minutes to get one every thirty — the attempt this replaces
 #
 # `20,50` was the first attempt at half-hourly and it asked for the wrong thing.
 # Measured 2026-08-12 over the preceding sixteen hours: the `:50` pass never
@@ -23,8 +43,12 @@ name: Triage the board
 # is not the concurrency guard below, which never fired: every pass finishes in
 # under a minute.
 #
-# So the schedule is now four attempts an hour rather than two, to land the two
-# that were asked for. **The extra attempts are close to free.** `decide` is
+# That produced four attempts an hour rather than two, to land the two that were
+# asked for — and it landed about one. The host timer above is the answer that
+# worked; this block is now the fallback and asks for the cadence it wants rather
+# than for double it, because a fallback that fires four times an hour on the one
+# night the host is down is not what it was raised to. **The extra attempts were
+# close to free either way.** `decide` is
 # gated on `candidates.waiting != '0'`, so a pass over an Inbox with nothing
 # untriaged pays no model at all; what it costs is a runner minute and one board
 # read. A pass that finds work is the pass that was wanted.
@@ -56,8 +80,12 @@ name: Triage the board
 # one. `board-triage.sh` takes both and uses the app for exactly one call.
 
 on:
+  # The fallback, not the cadence. `kolonie-board-triage-dispatch.timer` on the
+  # deploy host is what paces this — see the header.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/30 * * * *"
+  # What the host's timer calls. Everything about which issues get decided lives
+  # in `board-triage.sh`; a dispatch carries no input and decides nothing.
   workflow_dispatch:
 
 permissions:

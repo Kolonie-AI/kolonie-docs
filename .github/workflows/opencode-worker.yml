@@ -50,6 +50,26 @@ name: opencode worker
 
 on:
   schedule:
+    # ## The cadence comes from the deploy host, not from this block
+    #
+    # **Read this before changing the `cron:`.** A systemd timer on the deploy
+    # host — `kolonie-opencode-dispatch.timer` in `kolonie-infra`,
+    # `OnCalendar=*:0/10` — sends a `workflow_dispatch` every ten minutes, and
+    # that is what actually paces this workflow. Measured 2026-08-12: **121
+    # dispatches, zero failures**, against twelve runs from the block below.
+    #
+    # This block is the **fallback** for a night when that host is down. Two
+    # firings cannot collide: `Am I already running?` exits the second one.
+    #
+    # **So a run that did not happen is a question for `journalctl -u
+    # kolonie-opencode-dispatch` on the host**, not for this file — and a worker
+    # that starts but takes nothing is a question for the queue, which is a
+    # different thing again: `pick` skips a whole repository while anything in it
+    # is In Progress (`#266`).
+    #
+    # Everything below is the reasoning that set this fallback's interval, kept
+    # because it is what taught us the trigger count was never the limit.
+    #
     # Every fifteen minutes, the maintainer's instruction on 2026-08-12.
     #
     # **The measurement was taken and it settled the question against `*/10`.**
