@@ -810,6 +810,46 @@ sane_route() {
     elif [ -n "$depends" ]; then
       proposed="agent:claude"
       rule="the model proposed \`$answered\` and named $(echo "$depends" | sed 's/ *$//') as a blocker; the unattended queue is for work that can be finished, so the route is \`agent:claude\`"
+    elif has_any "$labels" "$OUTSIDE_PROVENANCE" && ! has_any "$labels" "bug"; then
+      # ## A citizen's proposal is not a defect, and only one of the two is the
+      # worker's (`#313`)
+      #
+      # The path this closes ran end to end and was written down as correct: a
+      # citizen files a support ticket asking for a feature, the runner files it
+      # as an issue with `from:citizen`, this pass finds a self-contained change
+      # in one repository with a decisive check and answers `agent:opencode`, the
+      # worker implements it and the sweep arms auto-merge on green. **Nobody
+      # decided that feature, and it is in `main`.**
+      #
+      # **This is a cap and not a `blocked:human` class**, and the difference is
+      # the whole of why it lands here rather than three lines up. A Claude
+      # agent's run is attended — the maintainer is in it — so capping at
+      # `agent:claude` already puts a person in front of the change while keeping
+      # the issue in the ordinary board flow. `blocked:human` would additionally
+      # take it out of that flow, for nothing.
+      #
+      # **`bug` is the exception because that is the channel's value.** A citizen
+      # who finds a defect should get it fixed quickly, and a defect is a change
+      # nobody has to decide. The label is written by the support-triage runner
+      # only where the citizen declared `defect` *and* the model agreed
+      # (`kolonie-platform#783`) — so while that is unimplemented no citizen issue
+      # carries it, every one of them caps here, and that is the conservative
+      # answer rather than a gap.
+      #
+      # **It hangs on `$OUTSIDE_PROVENANCE` and not on `from:citizen` alone**,
+      # which is one word wider than `#313` wrote it and is deliberate. That
+      # constant already exists here for exactly this question — *did this arrive
+      # from outside the Colony* — and is what the priority guard forty lines up
+      # reads. `#313`'s own worked example is case 8 in
+      # `board-triage-cases.json`, which carries `from:external`: implementing the
+      # narrower word would have left the demonstration of the defect passing
+      # unchanged, which is the shape of a fix that does not fix anything.
+      #
+      # Our own issues are untouched either way: an issue we open ourselves
+      # carries none of the three and routes exactly as it did. A maintainer
+      # loosens it in one edit, as with every other route.
+      proposed="agent:claude"
+      rule="the model proposed \`$answered\`; this issue arrived from outside the Colony and is not labelled \`bug\`, so it is a proposal rather than a defect and caps at \`agent:claude\` — nobody has decided this change yet, and an attended run is where that decision gets made (\`AGENTS.md\` §5). Adding \`bug\` is what would let it reach the unattended worker"
     fi
   fi
 

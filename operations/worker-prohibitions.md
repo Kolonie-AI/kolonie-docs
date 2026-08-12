@@ -65,6 +65,14 @@ well the issue is written.
 | **A field or behaviour a still-open issue creates** | The check cannot pass against something that does not exist yet, and reading the issue is not enough to notice — the dependency is usually one line of prose in a body | `kolonie-platform#660`, 2026-08-10 |
 | **Changes in more than one repository** | A run has one target checkout and one target check, so no single repository's result can satisfy the whole acceptance criterion. The half it can reach passes and the issue is still not done | `kolonie-platform#686` and `#674`, proposed by the triage pass and accepted 2026-08-11 (`kolonie-docs#273`) |
 | **A database schema migration** | Deployment applies it to production before the new image is healthy, so the pull request cannot merge unattended and no run can reach the issue's done condition without a person | `kolonie-platform#654` and `#637`, the same pass and the same day |
+| **A capability no decision records** | The check answers *does this work*, and never *did anybody want it*. An issue from outside asking for something new has a perfectly reachable done condition and no record that the Colony decided to have the thing — so a green run puts a feature nobody chose into `main`, and every check passes on the way | `kolonie-docs#313`, 2026-08-12 |
+
+**The last row is the one that does not look like the others**, and it is worth
+saying why it belongs. Every other condition here is one a run *cannot satisfy*;
+this one a run satisfies easily, which is exactly the danger. The triage pass
+enforces it as a route cap rather than as a refusal — an issue from outside that
+is not labelled `bug` caps at `agent:claude` — because what is missing is a
+decision, and an attended run is where one gets made.
 
 **A dependency on a still-open issue is the one the queue can now answer by
 itself**, and the next section is how.

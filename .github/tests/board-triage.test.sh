@@ -396,6 +396,51 @@ run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 absent "opencode:forbidden is never handed back to the worker" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
+echo "an issue from outside that is not a defect caps at agent:claude (#313)"
+
+# The path this closes ran end to end and was written down as passing: a citizen
+# asks for a feature, the runner files it, the pass finds a self-contained change
+# with a decisive check, and the worker puts it in `main`. Nobody decided it.
+case_setup
+searched "$(issue 900 'a citizen would like a field on a response' 'from:citizen')"
+boarded "900|Inbox|from:citizen"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "a citizen's proposal is capped at agent:claude" "--add-label agent:claude" "$log"
+absent "and never reaches the unattended worker" "--add-label agent:opencode" "$log"
+# A cap and not a `blocked:human` class: an attended run already puts a person in
+# front of the change, and taking the issue out of the board's flow buys nothing.
+absent "the rule never routes to a person" "--add-label agent:human" "$log"
+absent "and never applies blocked:human" "--add-label blocked:human" "$log"
+contains "and the comment says what would change it" "Adding \`bug\`" "$log"
+
+case_setup
+searched "$(issue 900 'a citizen found a defect' 'from:citizen bug')"
+boarded "900|Inbox|from:citizen bug"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+# `bug` is the exception because that is the channel's value: a defect is a change
+# nobody has to decide, and a citizen who finds one should get it fixed quickly.
+contains "a citizen's defect still reaches the worker" \
+  "--add-label agent:opencode" "$(cat "$GH_LOG")"
+
+# One word wider than `#313` wrote it, and deliberately: `OUTSIDE_PROVENANCE` is
+# what this file already asks *did this arrive from outside*, and `#313`'s own
+# worked example — case 8 in `board-triage-cases.json` — carries `from:external`.
+case_setup
+searched "$(issue 900 'an outsider would like a field on a response' 'from:external')"
+boarded "900|Inbox|from:external"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+absent "an outsider's proposal is capped the same way" \
+  "--add-label agent:opencode" "$(cat "$GH_LOG")"
+
+case_setup
+searched "$(issue 900 'our own idea, self-contained' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+# It hangs on provenance, so an issue we opened ourselves routes exactly as it did.
+contains "an issue of our own is untouched by the rule" \
+  "--add-label agent:opencode" "$(cat "$GH_LOG")"
+
 # `#289`: the cheapest way not to re-decide a decided issue is not to show it to
 # the model at all, and that is where the guard now is — a routed issue is not a
 # candidate, so no answer about it can arrive in the first place. This is the
@@ -965,7 +1010,7 @@ cases_brief=$(bash "$SCRIPT" cases-brief "$CASES" 2>/dev/null)
 # hand against the gateway when the prompt changes. What CI holds is the half that
 # needs no provider: the case reaches the model at all, the rule it turns on is
 # quoted in the brief, and the route the case expects is one the script would write.
-check "every case that is not case 7 is briefed" "8" \
+check "every case that is not case 7 is briefed" "9" \
   "$(grep -c '^## Kolonie-AI/kolonie-docs#9' <<<"$cases_brief")"
 contains "the brief quotes the routing table rather than restating it" \
   "### The three routes" "$cases_brief"

@@ -498,6 +498,25 @@ from where an outside contributor is standing.
 issue up**, which is a different question from what column it is in. Exactly one,
 always; the subsection below is the rule.
 
+**An issue that arrived from outside and is not labelled `bug` caps at
+`agent:claude`** (`#313`). Provenance still does not decide a route — the rule
+is about the *type*: a defect is a change nobody has to decide, and a proposal
+is one somebody does. Without the type label the triage pass cannot tell them
+apart, so it assumes the one that needs a person.
+
+**A cap, and not an eighth `blocked:human` class.** A Claude agent's run is
+attended — the maintainer is in it — so capping there already puts a person in
+front of the change while keeping the issue in the ordinary board flow.
+`blocked:human` would additionally take it out of that flow, for nothing. The
+rule never produces `agent:human` and never applies `blocked:human`, and a
+maintainer widens it in one edit as with every other route.
+
+The path it closes had been written down as correct and was passing its own test:
+a citizen files a support ticket asking for a feature, the runner files it as an
+issue, the pass finds a self-contained change with a decisive check and answers
+`agent:opencode`, the worker implements it and the sweep arms auto-merge on green.
+**Nobody decided that feature, and it is in `main`.**
+
 ### `from:watcher` — observed by a machine, not judged by a person
 
 **Applied by the watcher workflows, never by a person.** `watch-agent.yml`,
