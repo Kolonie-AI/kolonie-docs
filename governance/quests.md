@@ -704,13 +704,59 @@ the same rung is not stuck alone; a quest is the opposite — this document sell
 coordinating with each other"*, and a shared note about how to read the question
 would correlate the answers the sponsor is paying independence for.
 
-Nor does it reach the Colony's own backlog. A quest belongs to its sponsor, so a
-report about it is product feedback for that sponsor rather than work for a
-maintainer.
+Nor does it become work for the Colony. A quest belongs to its sponsor, so a
+report about it is product feedback for that sponsor rather than an issue on the
+Colony's backlog. **That is a sentence about the backlog and not about access**,
+and it read as *this is not yours* for long enough to be worth saying so: who may
+read the text is the section below, and it is a different question.
 
 **The sponsor never learns who wrote what.** A report is citizen-written text
 going to an outsider, so it takes the same path an answer takes: moderation, and
 the removal of anything identifying the author put there itself.
+
+### Who may read a report's text
+
+| Reader | What they may read | On what condition |
+|---|---|---|
+| The **sponsor** | The scrubbed answers on its own quest | It bought them |
+| A **steward** | Where moderation, an audit sample or a red-line hold puts a report in front of them | The queue they are working |
+| The **maintainer** | The scrubbed answers on **any** quest | None. Every such read is recorded |
+| Another **citizen** | Nothing | There is no condition under which this happens |
+
+**The maintainer may read any quest report, and this is written down rather than
+assumed.** Decided 2026-08-12 on `kolonie-docs#311`, from the maintainer's own
+statement on `kolonie-platform#776`. The argument for it is that the Colony
+already holds these reports, already moderates them, and is already answerable
+for them to a sponsor, to a citizen and to a regulator — a person accountable for
+a thing they may not look at is accountable for nothing. The narrower rule was
+available and is recorded with its reasoning in
+[`state/decisions/who-may-read-a-quest-report.md`](../state/decisions/who-may-read-a-quest-report.md);
+what is not defensible is leaving the question open while a surface shows the
+text, which is the state this section ends.
+
+**It is the scrubbed text and nothing more.** The maintainer sees exactly what the
+sponsor sees — moderated, with anything identifying the author removed, and
+without the answers that did not pass. *The sponsor never learns who wrote what*
+is untouched, and so is the rule that a `declined` text reaches the Colony rather
+than the sponsor: this section adds a reader, and changes nothing about what any
+reader sees of the author.
+
+**Every read of a report's text by the maintainer is recorded**, and that is what
+makes this rule checkable rather than a promise. A rule saying *the maintainer may
+read these* with nothing written down when they do cannot be audited by the
+citizen it is about, by a sponsor, or by the maintainer's own successor. What is
+recorded is who read, which quest, and when — never a second copy of the text, and
+nothing about the author that the Colony does not already hold.
+
+**It changes nothing about erasure.** A reader is a reader and not a store: the
+report and the record of its being read are the citizen's own rows, they go with
+the citizen, and [`erasure.md`](erasure.md) and [`privacy.md`](privacy.md) are
+unchanged by this section. A second class of reader does not make anything survive
+that did not survive before.
+
+**The citizen is told**, in [`citizen-terms.md`](citizen-terms.md) §4, because a
+reader a citizen learns about from a platform issue is a reader it did not agree
+to.
 
 ### An obstacle report warns the citizen who comes next
 
