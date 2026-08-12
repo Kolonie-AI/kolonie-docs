@@ -12,12 +12,22 @@ name: Triage the board
 # this pass from hourly to half-hourly on 2026-08-11 so newly filed work waits at
 # most one scheduling interval for a routing decision.
 #
-# ## Why :20
+# ## Why every fifteen minutes to get one every thirty
 #
-# After the hour's arrivals and clear of the checks on the hour, which is where
-# `opencode-worker.yml` and the watchers already are. Runs at :20 and :50 avoid
-# the worker's ten-minute boundaries while cutting the longest intended wait for
-# a new routing decision from one hour to thirty minutes.
+# `20,50` was the first attempt at half-hourly and it asked for the wrong thing.
+# Measured 2026-08-12 over the preceding sixteen hours: the `:50` pass never
+# arrived once, the `:20` pass arrived between four and forty-eight minutes late,
+# and two consecutive hours were dropped entirely overnight. Actual spacing was
+# an hour at best. This is GitHub's documented behaviour — a scheduled run under
+# load is delayed, and a delayed one is dropped rather than backfilled — and it
+# is not the concurrency guard below, which never fired: every pass finishes in
+# under a minute.
+#
+# So the schedule is now four attempts an hour rather than two, to land the two
+# that were asked for. **The extra attempts are close to free.** `decide` is
+# gated on `candidates.waiting != '0'`, so a pass over an Inbox with nothing
+# untriaged pays no model at all; what it costs is a runner minute and one board
+# read. A pass that finds work is the pass that was wanted.
 #
 # ## What it may write, and where that is enforced
 #
@@ -47,7 +57,7 @@ name: Triage the board
 
 on:
   schedule:
-    - cron: "20,50 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -58,7 +68,7 @@ concurrency:
   # Two passes deciding about one issue would each comment on it. The board write
   # is the same shape as the worker's claim and this is the same protection one
   # level up: a queued pass is dropped rather than run late, because the next one
-  # is at most thirty minutes away and reads the board fresh.
+  # is at most fifteen minutes away and reads the board fresh.
   group: board-triage
   cancel-in-progress: false
 
