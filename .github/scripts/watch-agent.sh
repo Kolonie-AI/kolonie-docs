@@ -69,12 +69,19 @@
 # condition it can re-measure as gone, while a bad day in the logs is not
 # something that becomes untrue. Whoever reads the issue decides when it is done.
 #
-# ## There are no thresholds in this file, deliberately
+# ## No threshold says how many errors are too many, deliberately
 #
-# Grep it: no number says how many errors are too many. A threshold per service
-# is wrong on the first day and stale on the second. What the model gets instead
-# is seven days of the same counts beside today's, and the question *is today
-# normal* — which is the question a person would ask, and needs no maintenance.
+# Grep it: no number here answers that. A threshold per service is wrong on the
+# first day and stale on the second. What the model gets instead is seven days of
+# the same counts beside today's, and the question *is today normal* — which is
+# the question a person would ask, and needs no maintenance.
+#
+# **`FALLBACK_BURST` is not a counter-example and it is worth saying why**
+# (`#312`). It does not answer *how many is too many*; it answers *was this one
+# event or several ordinary days*, on a signal that has no per-service baseline
+# because a healthy week has none of it at all. It carries the measurement it was
+# set from, and the day that measurement is stale is a day the number is wrong in
+# a way somebody can see — which is the property the paragraph above is protecting.
 #
 # The one thing decided without the model is silence, because silence is a
 # boolean and it is the signal error-watching structurally misses: a dead runner
@@ -151,6 +158,53 @@ q_slugs() {
   loki /loki/api/v1/query \
     'query=topk(30, sum by (service, event) (count_over_time({job="containers", level="error"} | json [24h])))' \
     "time=$NOW"
+}
+
+# --- query 2a: the gateway's fallbacks, per service and per reason ------------
+# **A fallback is a `warn` by design, so nothing above sees it** (`#312`).
+# `packages/core/src/llm/gateway.ts` says every one is logged *"so the gateway
+# was down for two hours is answerable afterwards rather than invisible"* —
+# and answerable is not the same as answered. Query 1 folds them into a number in
+# a service's `warn` row and names nothing; query 2 filters `level="error"` and
+# never sees them at all.
+#
+# **Not solved by raising the level.** A fallback is not an error: the call
+# succeeded and the citizen was served, and `gateway.ts` draws that line
+# deliberately against `model.route.refused`, which *is* one. Promoting the level
+# to make an existing query see it would put a wrong word in every log line to
+# save writing one query.
+#
+# Broken down by `reason`, because the four classes mean four different things —
+# `unreachable`, `timeout`, `status`, `malformed`.
+q_fallbacks() {
+  loki /loki/api/v1/query \
+    'query=sum by (service, reason) (count_over_time({job="containers", level="warn"} | json | event="model.route.fallback" [24h]))' \
+    "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.metric.reason // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
+
+}
+
+# --- query 2a-bis: the same, hourly, which is what the threshold reads --------
+# **A burst and a trickle are different events and only the shape says which.**
+# Measured over the seven days to 2026-08-12: ten fallbacks in total, nine of
+# them inside one ten-minute window. A rule on the total would have fired on a
+# week that was fine; a rule on a single fallback would have fired on three
+# separate ordinary days. The hour is the bucket that tells them apart.
+q_fallbacks_hourly() {
+  loki /loki/api/v1/query_range \
+    'query=sum(count_over_time({job="containers", level="warn"} | json | event="model.route.fallback" [1h]))' \
+    "start=$1" "end=$2" "step=3600" \
+    | jq -r '[.data.result // [] | .[] | .values[][1] | tonumber] | max // 0' 2>/dev/null
+}
+
+# --- query 2a-ter: calls that were refused outright --------------------------
+# **The no-fallback path**, and the reason it is counted beside the fallbacks
+# rather than left to the error queries: a quest left `pending_review` because
+# the gateway was down is *a thing that did not happen*, and a thing that did not
+# happen shows up as nothing at all unless it is asked for by name.
+q_refusals() {
+  loki /loki/api/v1/query \
+    'query=sum by (service) (count_over_time({job="containers"} | json | event="model.route.refused" [24h]))' \
+    "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
 }
 
 # --- query 2b: errors per service, over a window ------------------------------
@@ -369,6 +423,19 @@ cmd_gather() {
   # which is the only version of a rehearsal worth having.
   [ -n "${WATCH_FORCE_SILENT:-}" ] && echo "$WATCH_FORCE_SILENT" >> "$dir/silent.txt"
 
+  # --- what the gateway did, which is a `warn` and therefore invisible above ---
+  q_fallbacks "$NOW" > "$dir/fallbacks.tsv"
+  q_refusals  "$NOW" > "$dir/refusals.tsv"
+  q_fallbacks_hourly "$DAY_AGO" "$NOW" > "$dir/fallback-peak.txt"
+
+  # The rehearsal reaches this the same way it reaches a silent service, and for
+  # the same reason: injected here it takes the path a real burst takes, which is
+  # the only version of a rehearsal worth having.
+  if [ -n "${WATCH_FORCE_FALLBACKS:-}" ]; then
+    printf 'a-service-that-does-not-exist\tstatus\t%s\n' "$WATCH_FORCE_FALLBACKS" >> "$dir/fallbacks.tsv"
+    echo "$WATCH_FORCE_FALLBACKS" > "$dir/fallback-peak.txt"
+  fi
+
   q_hourly > "$dir/hourly.json"
   q_slugs  > "$dir/slugs.json"
   # Seven days of the same counts, one point per day. This is what replaces a
@@ -402,6 +469,30 @@ cmd_gather() {
            | [(.metric.service // "«unlabelled»"), (.metric.event // "«no event field»"), .value[1]]
            | @tsv' "$dir/slugs.json" 2>/dev/null \
       | sort -k3 -rn | awk -F'\t' '{printf "| `%s` | `%s` | %s |\n", $1, $2, $3}'
+    echo
+    # **Printed whether or not it is zero** (`#312`). *The gateway served
+    # everything yesterday* is the sentence that makes a non-zero day legible —
+    # a section that appears only on a bad day is one a reader has no baseline
+    # for, and its absence is indistinguishable from the query having broken.
+    echo "### The LLM gateway, last 24 hours"
+    echo
+    if [ -s "$dir/fallbacks.tsv" ]; then
+      echo "| service | reason | fell back to OpenRouter |"
+      echo "|---|---|---|"
+      awk -F'\t' '{printf "| `%s` | `%s` | %s |\n", $1, $2, $3}' "$dir/fallbacks.tsv"
+      echo
+      echo "Most in one hour: **$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)**."
+    else
+      echo "The gateway served everything — no call fell back to OpenRouter."
+    fi
+    echo
+    if [ -s "$dir/refusals.tsv" ]; then
+      echo "Calls **refused outright**, with no fallback — work that did not happen:"
+      echo
+      awk -F'\t' '{printf "- `%s` — %s\n", $1, $2}' "$dir/refusals.tsv"
+    else
+      echo "No call was refused outright."
+    fi
     echo
     echo "### Services that logged nothing in 24 hours, having logged in the last 7 days"
     echo
@@ -577,6 +668,41 @@ cmd_summary() {
 ERROR_SPIKE_FACTOR=${ERROR_SPIKE_FACTOR:-5}
 ERROR_FLOOR=${ERROR_FLOOR:-10}
 
+# **The one threshold in this file, and it is written down with what it was set
+# from** (`#312`).
+#
+# The gateway falling back is not an error and does not belong to the shape rules
+# above: it is a `warn`, it means the citizen *was* served, and there is no
+# per-service baseline to compare it against because a healthy week has none at
+# all.
+#
+# Measured over the seven days to 2026-08-12: **ten fallbacks in total, nine of
+# them inside one ten-minute window** — the gateway answering 502 and 503 between
+# 07:35 and 07:45 UTC, across `support-triage-runner` and `verifier-runner`, plus
+# a tenth in `moderation-runner` the night before. Everything kept working, which
+# is the fallback doing its job, and nobody noticed until the next morning.
+#
+# So: five in one hour. On that week it fires exactly once, on the burst, and
+# says nothing on the three days that carried one fallback each. A rule on a
+# single fallback would have filed three times and taught nobody anything; a rule
+# on the daily total would have needed to be under ten to catch the burst, and
+# then the three ordinary days would have been under it by luck.
+#
+# **Both queries were run against production before this was set**, because a
+# LogQL expression that does not parse returns nothing and is indistinguishable
+# from a good week — which is the exact failure this issue is about. Asked on
+# 2026-08-12 over the preceding seven days: fourteen fallbacks, every one
+# `reason=status`, across `moderation-runner`, `support-triage-runner` and
+# `verifier-runner` — and **a maximum of nine in any one hour**. So this fires on
+# that hour and on nothing else in the week.
+FALLBACK_BURST=${FALLBACK_BURST:-5}
+
+# **A refusal is not a fallback and does not share its threshold.** Nothing was
+# served: `model.route.refused` is the moderation runner's path with no plan B,
+# so one of them is one piece of work that did not happen and nobody was told.
+# One is enough to say out loud.
+REFUSAL_FLOOR=${REFUSAL_FLOOR:-1}
+
 # The floor is not a threshold on badness — it is a guard against arithmetic on
 # tiny numbers. A service that normally logs 1 error and logs 6 today is 6× its
 # baseline and is still nothing. Without it the shape rules fire on noise and the
@@ -614,11 +740,70 @@ cmd_errors_changed() {
   return $((1 - found))
 }
 
+# **Was the Colony served by its second choice yesterday?** (`#312`)
+#
+# 0 means *yes, and it is worth saying* — a predicate, like `cmd_errors_changed`
+# beside it, and the early-out has to say the opposite: a day with no fallback
+# produces no finding, which is the rejection case the issue names.
+#
+# Two triggers, and they are separate because they are different claims: a burst
+# of fallbacks means the gateway was down and everything still worked, and a
+# refusal means something did not happen at all.
+cmd_gateway_wobbled() {
+  local dir="$1" peak refusals
+
+  peak=$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)
+  case "$peak" in ''|*[!0-9]*) peak=0 ;; esac
+
+  refusals=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/refusals.tsv" 2>/dev/null)
+  refusals=${refusals:-0}
+
+  [ "$peak" -ge "$FALLBACK_BURST" ] && return 0
+  [ "$refusals" -ge "$REFUSAL_FLOOR" ] && return 0
+  return 1
+}
+
+report_gateway_finding() {
+  local dir="$1" peak refusals body_file
+
+  cmd_gateway_wobbled "$dir" || return 0
+
+  peak=$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)
+  case "$peak" in ''|*[!0-9]*) peak=0 ;; esac
+  refusals=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/refusals.tsv" 2>/dev/null)
+  refusals=${refusals:-0}
+
+  body_file=$(mktemp)
+  {
+    if [ "$peak" -ge "$FALLBACK_BURST" ]; then
+      printf '%s\n\n' "The LLM gateway stopped answering and the Colony was served by **OpenRouter** instead — **$peak fallbacks in one hour**, against a threshold of $FALLBACK_BURST."
+      printf '%s\n\n' "**Everything kept working, which is the fallback doing its job.** This is not an outage report; it is the sentence that was missing on 2026-08-12, when nine fallbacks in ten minutes were found the next morning by somebody reading an accounting line under an issue body and asking why a support ticket had been judged by the wrong model."
+    fi
+
+    if [ "$refusals" -ge "$REFUSAL_FLOOR" ]; then
+      printf '%s\n\n' "**$refusals call(s) were refused outright**, with no fallback to fall back to. That is work that did not happen — a quest left \`pending_review\` because the gateway was down looks like nothing at all from every other query here."
+    fi
+
+    printf '%s\n\n' "**The threshold is a burst and not a total**, and it was set from a measurement rather than chosen: over the seven days to 2026-08-12 there were ten fallbacks, nine of them inside one ten-minute window. A rule on a single fallback would have fired on three ordinary days and taught nobody anything."
+    printf '%s\n\n' "$(cat "$dir/numbers.md" 2>/dev/null)"
+    printf '[Full run](%s)\n\n' "${RUN_URL:-no run url}"
+    bash "$FINDING" footer gateway-not-serving \
+      "the gateway not serving the Colony for some part of a day — that condition, not which service noticed it or how many calls it was" \
+      "watch-agent.yml"
+  } > "$body_file"
+
+  bash "$FINDING" place gateway-not-serving \
+    "The Colony was served by its second-choice provider" \
+    "$body_file" p2 area:infra from:watcher
+  rm -f "$body_file"
+}
+
 cmd_decide() {
   local dir="$1" why=()
 
   [ -s "$dir/silent.txt" ] && why+=("a service has gone silent")
   cmd_errors_changed "$dir" && why+=("an error volume changed shape")
+  cmd_gateway_wobbled "$dir" && why+=("the gateway was not serving")
 
   if [ ${#why[@]} -gt 0 ]; then
     printf '%s\n' "${why[@]}"
@@ -763,6 +948,7 @@ cmd_report() {
   local dir="$1" service title body_file
 
   report_error_findings "$dir"
+  report_gateway_finding "$dir"
 
   [ -s "$dir/silent.txt" ] || { echo "nothing silent — filing nothing"; return 0; }
 

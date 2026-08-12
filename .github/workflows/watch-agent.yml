@@ -90,7 +90,9 @@ on:
           Force a finding, to exercise the reporting path end to end. `#133`'s
           definition of done requires this to have happened once and the issue it
           opens inspected. It queries a service name that does not exist, so the
-          silent-service check finds it missing — nothing on the host is touched.
+          silent-service check finds it missing, and it fabricates a burst of
+          gateway fallbacks so `#312`'s finding takes the same path — nothing on
+          the host is touched and no model call is made to produce either.
         type: boolean
         required: false
         default: false
@@ -133,6 +135,12 @@ jobs:
           # the first rehearsal filed an issue saying nothing was silent.
           # Nothing on the host is touched either way.
           WATCH_FORCE_SILENT: ${{ inputs.break_it && 'a-service-that-does-not-exist' || '' }}
+          # `#312`: the gateway finding is the second thing this workflow can
+          # file, and a rehearsal that exercised only the first would leave the
+          # newer path in the state the older one was in before `#156` — written,
+          # plausible, and never actually run. Above the burst threshold on
+          # purpose, so it is the finding rather than a line in the report.
+          WATCH_FORCE_FALLBACKS: ${{ inputs.break_it && '9' || '' }}
         run: |
           # No pipeline, and the status is captured rather than allowed to
           # propagate: Actions runs `run:` under `bash -e`, so `script | tee`
@@ -154,7 +162,7 @@ jobs:
           [ "$rc" -eq 0 ] || exit "$rc"
 
           if [ -n "${WATCH_FORCE_SILENT:-}" ]; then
-            echo "::warning::running with a fabricated silent service — this is the rehearsal, not a real finding"
+            echo "::warning::running with a fabricated silent service and a fabricated gateway burst — this is the rehearsal, not a real finding"
           fi
           echo "skip=false" >> "$GITHUB_OUTPUT"
 

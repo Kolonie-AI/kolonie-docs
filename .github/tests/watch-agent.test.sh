@@ -50,9 +50,17 @@ case "$url" in
       # matched on the exact value the script computes from WATCH_NOW.
       if [[ "$* " == *"start=1785235200"* ]]; then cat "$FIX/services_7d" 2>/dev/null
       else cat "$FIX/services_24h" 2>/dev/null; fi ;;
-  */query_range) if [[ "$* " == *"step=86400"* ]]; then cat "$FIX/history" 2>/dev/null
+  # `#312` added two instant queries and one ranged one that all look like the
+  # ones above from the path alone. Matched on the event they name, before the
+  # generic cases — a stub that answered the hourly error fixture to a question
+  # about gateway fallbacks would have every assertion below passing on the
+  # wrong numbers.
+  */query_range) if [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallback_peak" 2>/dev/null
+                 elif [[ "$* " == *"step=86400"* ]]; then cat "$FIX/history" 2>/dev/null
                  else cat "$FIX/hourly" 2>/dev/null; fi ;;
-  */query)       cat "$FIX/slugs" 2>/dev/null ;;
+  */query)       if [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallbacks" 2>/dev/null
+                 elif [[ "$* " == *"model.route.refused"* ]]; then cat "$FIX/refusals" 2>/dev/null
+                 else cat "$FIX/slugs" 2>/dev/null; fi ;;
   *)             cat "$FIX/openrouter" 2>/dev/null ;;
 esac
 exit 0
@@ -101,6 +109,10 @@ setup() {
   printf '{"data":{"result":[{"metric":{"service":"api","level":"warn"},"values":[[1785836400,"2"]]}]}}\n' > "$FIX/hourly"
   printf '{"data":{"result":[]}}\n' > "$FIX/slugs"
   printf '{"data":{"result":[{"metric":{"service":"api","level":"warn"},"values":[[1785235200,"1"],[1785321600,"3"]]}]}}\n' > "$FIX/history"
+  # A day the gateway served everything, which is the ordinary one (`#312`).
+  printf '{"data":{"result":[]}}\n' > "$FIX/fallbacks"
+  printf '{"data":{"result":[]}}\n' > "$FIX/refusals"
+  printf '{"data":{"result":[]}}\n' > "$FIX/fallback_peak"
   : > "$FIX/existing"
 }
 
@@ -563,6 +575,81 @@ for service in api postgres verifier-runner; do
   expect "$service is told nothing, because it writes its own levels" \
     "$(note "$service" >/dev/null 2>&1 && echo no || echo yes)" "$(note "$service" 2>&1)"
 done
+
+echo
+echo "the gateway, which is a warn and therefore invisible to everything else (#312)"
+
+# The day it was found: nine fallbacks in ten minutes, everything kept working,
+# and nobody noticed until the next morning.
+setup
+printf '{"data":{"result":[
+  {"metric":{"service":"support-triage-runner","reason":"status"},"value":[1785840000,"8"]},
+  {"metric":{"service":"verifier-runner","reason":"status"},"value":[1785840000,"1"]}]}}\n' > "$FIX/fallbacks"
+printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"9"]]}]}}\n' > "$FIX/fallback_peak"
+out=$(bash "$SCRIPT" gather "$WORK/out")
+
+expect "the fallbacks are counted by service and by reason" \
+  "$([[ "$out" == *"support-triage-runner"*"status"*"8"* ]] && echo yes || echo no)" "$out"
+expect "and the burst is named as a burst" \
+  "$([[ "$out" == *"Most in one hour"*"9"* ]] && echo yes || echo no)" "$out"
+
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "a burst is a finding" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $out"
+expect "and says which condition it was" \
+  "$([[ "$out" == *"gateway was not serving"* ]] && echo yes || echo no)" "$out"
+
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "it files one issue" "$(logged "issue create" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "under an identity that joins on the condition, not on the count" \
+  "$(logged "watch-finding: gateway-not-serving" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and it says what the threshold was set from" \
+  "$(logged "seven days to 2026-08-12" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# **The rejection case the issue names.** A day with no fallback produces no
+# finding — and the section still appears, because *the gateway served everything
+# yesterday* is the sentence that makes a non-zero day legible.
+setup
+out=$(bash "$SCRIPT" gather "$WORK/out")
+expect "a quiet gateway still gets a line" \
+  "$([[ "$out" == *"The gateway served everything"* ]] && echo yes || echo no)" "$out"
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "and no finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc $out"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "and nothing is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# A trickle is not a burst. Three ordinary days carried one fallback each in the
+# measured week, and a rule that fired on them would have taught nobody anything.
+setup
+printf '{"data":{"result":[{"metric":{"service":"moderation-runner","reason":"timeout"},"value":[1785840000,"1"]}]}}\n' > "$FIX/fallbacks"
+printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"1"]]}]}}\n' > "$FIX/fallback_peak"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "one fallback is reported and not filed" "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc $out"
+
+# A refusal is a different claim: nothing was served, so one is worth saying.
+setup
+printf '{"data":{"result":[{"metric":{"service":"moderation-runner"},"value":[1785840000,"2"]}]}}\n' > "$FIX/refusals"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "a single refusal is a finding, unlike a single fallback" \
+  "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $out"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "and the issue says it is work that did not happen" \
+  "$(logged "work that did not happen" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# The rehearsal reaches the new finding the way it reaches the old one: through
+# `gather`, so it takes the path a real burst takes.
+setup
+WATCH_FORCE_FALLBACKS=9 bash "$SCRIPT" gather "$WORK/out" >/dev/null
+out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
+expect "the rehearsal produces the finding" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $out"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "and files it end to end" "$(logged "issue create" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+setup
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "nothing is fabricated without the switch" \
+  "$([ "$(bash "$SCRIPT" decide "$WORK/out" >/dev/null; echo $?)" -eq 0 ] && echo yes || echo no)"
 
 echo
 echo "no threshold exists anywhere in this agent"
