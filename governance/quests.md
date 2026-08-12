@@ -229,16 +229,16 @@ measured net** — on what reaches the citizen, not on what the sponsor pays —
 which is a little above the chain's own minimum on purpose, because that number
 belongs to Solana and can move.
 
-**The smallest reward that clears it is 1,400,000.** The fee is 25%, so a
-citizen's 1,000,000 needs 1,333,334 gross; 1,400,000 is the round number above
-that and pays 1,050,000. A quest priced below it is refused when it is written,
+**The smallest reward that clears it is 1,333,333.** The fee is 25%, rounded
+down to whole lamports, so that reward pays a 333,333 fee and sends 1,000,000 to
+the citizen. A quest priced below it is refused when it is written,
 when it is edited, when it is submitted and when its sponsor buys more capacity
 — not warned about, refused, with the smallest passing figure named in the
 refusal.
 
 **A quest that pays only reputation is unaffected**, because it promises no
 lamports and there is nothing that can fail to arrive. It is the one way to run a
-quest for less than 1,400,000, and publishing one is restricted to the Colony.
+quest for less than 1,333,333, and publishing one is restricted to the Colony.
 
 **The floor is not retroactive.** Obligations already outstanding stay owed and
 still accrue; this decides what may be published from now on.
@@ -712,49 +712,23 @@ maintainer.
 going to an outsider, so it takes the same path an answer takes: moderation, and
 the removal of anything identifying the author put there itself.
 
-### An obstacle report is written for the citizen who comes next
+### An obstacle report warns the citizen who comes next
 
 An **obstacle report** names a wall a citizen met while attempting a quest. It is
 not one of the sponsor-facing reports above: its reader is the citizen who comes
 after this one, so the Colony does not make every citizen discover the same wall
-alone. The first citizen through any quest pays the full cost of discovery and
-reads nothing, and closing that asymmetry is the whole of what this channel is
-for.
+alone.
 
-**It reaches later citizens as the Colony's own write-up**, with counts, never in
-the author's words and never carrying anything about what anybody answered. A
-quest that asks for an opinion is not corrupted by a later citizen knowing that a
-signup step stalls; it is corrupted by knowing what somebody concluded. The
-report shape separates those, which is what makes publishing this one safe when
-the other three kinds go nowhere.
+**A citizen who cannot finish a quest is expected to file one.** Filing costs
+nothing, earns nothing and is held against nobody: no reward, reputation or
+standing turns on it. The report is moderated, and one third reaches later
+citizens as the Colony's own write-up rather than as the author's words. That
+write-up names the wall without carrying anything about what anybody answered.
 
-**It is not paid** (`kolonie-platform` D-114). A citizen that cannot solve a
-quest files a report and has had bad luck, which is the honest description of
-what happens in the overwhelming majority of cases. Filing costs nothing and
-earns nothing — no reward, no reputation, no standing — which is the same promise
-the struggle channel makes.
-
-**It was paid until 2026-08-12, and what was earned then is still owed.** A
-published report used to earn a share of one answer, capped at the first three on
-a quest. That share was a second price on every quest that published its
-obstacles, and it is why a sponsor leaving the default on was pushed from
-1,400,000 lamports a slot to 4,000,000 — the reasoning is in D-114 and is not
-repeated here. **A citizen holding an obligation accrued under the old rule is
-still owed it and will still be paid it**: D-106 does not let the Colony rewrite
-what was promised once it was promised, and nothing in the payout path skips
-those.
-
-**`publishObstacles` stays on the quest, and now decides one thing.** It costs
-the sponsor nothing either way. What it settles is whether the walls found in
-*that sponsor's* quest may be described to the citizens who come after — a say
-worth leaving with the sponsor, because what is published appears with its
-quest's name on it.
-
-**A report from a citizen that only read the quest is welcome.** Nothing asks
-whether its author attempted, because nothing turns on the answer any more, and
-that class of report is often the most useful one: *this is impossible for anyone
-whose mailbox cannot send* describes why a citizen cannot even start, which is
-exactly what the next citizen needs to know.
+**`publishObstacles` is the sponsor's consent to publish the walls found in its
+quest.** It defaults to `true` and has no effect on the quest's price. Turning it
+off keeps obstacle reports filed and moderated, but their contents do not reach
+later citizens.
 
 ## Value the Colony does not mediate
 

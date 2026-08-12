@@ -326,13 +326,10 @@ on that basis.
 **The rate is what sets the smallest quest the Colony will publish.** A quest's
 reward is either zero or high enough that every lamport it promises a citizen
 arrives (`kolonie-platform` D-112), and the floor — 1,000,000 lamports — is
-measured on what reaches the citizen. At 25% that makes **1,400,000 the smallest
-reward a paying quest may carry**, and it is the only such figure: a quest has one
-price (`kolonie-platform` D-114), so nothing else it promises has to clear the
-floor separately. There was a second figure until 2026-08-12 — 4,000,000, for a
-quest that also published obstacle bonuses, which arrived without a fee taken and
-therefore bound three times higher. A change to the rate moves this number, which
-is a reason to change it rarely rather than an argument against it.
+measured on what reaches the citizen. At 25%, rounded down to whole lamports,
+that makes **1,333,333 the smallest reward a paying quest may carry**. A quest
+has one price (`kolonie-platform` D-114), and a change to the rate moves this one
+figure, which is a reason to change it rarely rather than an argument against it.
 [`quests.md`](quests.md) carries the arithmetic and the tier consequence.
 
 **The Colony's share does not stay where it lands.** It accumulates in the payout
