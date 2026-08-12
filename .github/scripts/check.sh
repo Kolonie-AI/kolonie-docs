@@ -68,6 +68,7 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/opencode-context.test.sh
   bash .github/tests/waiting-list.test.sh
   bash .github/tests/watch-finding.test.sh
+  bash .github/tests/session.test.sh
 '
 
 step "every internal Markdown link resolves" \
