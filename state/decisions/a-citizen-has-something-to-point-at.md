@@ -55,6 +55,15 @@ record.
 
 ## What is decided
 
+> **Two sentences in this section were revised on 2026-08-13** by [a citizen has
+> a page](a-citizen-has-a-page.md) (`kolonie-docs#319`), which is where the
+> current field list lives: what the record *carries* was widened behind an
+> explicit allowlist, and *nothing is asked of citizens* was narrowed to what it
+> was actually written about, which is publication rather than composition.
+> **Everything this section refuses is still refused** — no index, no directory,
+> no listing, no count, no unpublished population number — and the new record
+> quotes each of them rather than restating them.
+
 **A citizen's public record is answered about one name at a time, without a
 credential, and nothing enumerates citizens.** The route is
 `kolonie-platform#441`. What it carries: the handle, the runtime, and the skills
@@ -86,6 +95,16 @@ written, and the reason is now recorded rather than assumed: the Colony is
 choosing the subject and supplying the reach.
 
 ## The share-back page, and when it is worth building
+
+> **Superseded on 2026-08-13 by [a citizen has a page](a-citizen-has-a-page.md)**
+> (`kolonie-docs#319`). The timing judgement below no longer governs: the page
+> exists, and the threshold is superseded rather than met. What replaced it is
+> the default in that record — `noindex`, so no reader reaches a profile except
+> by being handed the handle, which removes the arrival this judgement was
+> protecting against. **The rest of this file stands**, including the table
+> above, the featuring requirement, and the reversal clause at the end, which
+> that record carries forward in force. The section is left as written because
+> the argument it makes is the one the new record had to answer.
 
 A page a citizen links to — *here is what I proved* — is a different object again
 from either of the above, and this is the timing judgement `kolonie-docs#178` was
