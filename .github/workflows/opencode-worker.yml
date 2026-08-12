@@ -186,9 +186,46 @@ jobs:
       #
       # Never fatal, for the sweep above's reason: this run's issue must not be
       # lost to a report about a different one.
+      # ## The board is read here, by the credential that may read it
+      #
+      # The sweep below needs two things a single `GH_TOKEN` cannot both be: the
+      # board, and permission to comment on an issue in another repository. The
+      # board app is Projects-only and cannot comment; `WORKER_REPO_TOKEN` can
+      # comment and, since it lost `read:project` between 14:31 and 15:01 UTC on
+      # 2026-08-12, cannot read the board.
+      #
+      # Measured: every run from 15:00:57 UTC onwards logged *the forgotten-claim
+      # sweep could not read the board; skipping it this run* — a `::warning::`
+      # under a green run, which is the shape this workflow says elsewhere it will
+      # not accept. The sweep was off for those runs, and the sweep is what
+      # notices an item holding a whole repository out of the queue.
+      #
+      # Same split as `Claim it` and `Say so on the issue`: a second credential is
+      # a second step. This one only reads, so a failure here is not fatal — the
+      # sweep falls back to reading the board itself and warns exactly as it does
+      # today.
+      - name: Read the board
+        env:
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
+        run: |
+          set +e
+          board="$RUNNER_TEMP/opencode-board.json"
+          if bash .github/scripts/opencode-worker.sh board-read > "$board"; then
+            echo "the board was read with the board app"
+          else
+            # Left empty on purpose: `board_read` treats an empty `BOARD_FILE` as
+            # *no board handed over* and queries for itself, so this degrades to
+            # the behaviour before this step existed rather than to an all-clear.
+            : > "$board"
+            echo "::warning::the board app could not read the board; the sweep will try for itself"
+          fi
+
       - name: Is anything stuck In Progress with nobody behind it?
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          # The board from the step above, read by the one credential that can.
+          # Scoped to this step: every other caller reads the board itself.
+          BOARD_FILE: ${{ runner.temp }}/opencode-board.json
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # `bash -e {0}` is the shell GitHub gives this. See the sweep below.
