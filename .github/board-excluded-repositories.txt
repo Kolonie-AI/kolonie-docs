@@ -1,0 +1,26 @@
+# Repositories whose open issues do NOT go on the project board.
+#
+# Read by `.github/scripts/board-triage.sh admit`, which puts every open issue in
+# every non-archived repository of the organisation on the board once a pass
+# (`kolonie-docs#332`). This file is the only way out of that.
+#
+# **It is an opt-out, and that is the whole design.** A repository created
+# tomorrow is covered with no edit here and no edit anywhere else, because the
+# sweep reads the organisation's repository list rather than a list somebody
+# maintains. The five `Auto-add to project` workflows on the board still run and
+# are still correct; they are no longer what coverage depends on, because a
+# project takes at most five of them and the organisation passed five
+# repositories some time ago.
+#
+# **One repository per line, the bare name, and a sentence above it saying why.**
+# A line without a reason is a line nobody can decide about later — including the
+# person wondering whether the repository it names should still be excluded.
+# Blank lines and `#` lines are ignored. An archived repository does not belong
+# here: the sweep already skips those, and listing one hides the fact that it is
+# archived behind a decision that was never made.
+
+# The organisation profile: its issues are about this file's own README and the
+# organisation page, and there is no work in it for an agent to pick up. It has
+# no `AGENTS.md`, so the worker could not act on one of its issues even if the
+# board offered it.
+.github

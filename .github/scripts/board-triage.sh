@@ -2,6 +2,7 @@
 # The thing that decides (`kolonie-docs#262`).
 #
 # Usage:
+#   board-triage.sh admit                             # -> puts every open issue in the org on the board (#332)
 #   board-triage.sh candidates                        # -> the issues in Inbox and Ready, as JSON
 #   board-triage.sh brief <candidates.json> [offset] [count]  # -> what the model reads
 #   board-triage.sh cases-brief [cases.json]          # -> the same, over the routing cases (#289)
@@ -277,6 +278,153 @@ provenance() {
     echo "member"
   else
     echo "outside"
+  fi
+}
+
+# ## Getting on the board at all (`#332`)
+#
+# **A project takes five `Auto-add to project` workflows and the organisation has
+# more than five repositories.** Measured 2026-08-13: five workflows, all in use,
+# fourteen non-archived repositories — so nine of them reached the board only when
+# somebody remembered, and `kolonie-dns` carries ten items that got there by hand.
+# An issue that is not on the board is an issue this pass cannot see, which is why
+# *arriving* is a triage concern and this runs before `candidates`.
+#
+# **Opt-out, not opt-in**, and that is the requirement rather than a preference: a
+# repository created tomorrow is covered by nobody doing anything. What is
+# excluded is `.github/board-excluded-repositories.txt`, one name per line with
+# the reason above it.
+#
+# **The five workflows keep running and nothing here depends on them.** They add
+# an item within seconds of an issue being opened, which is faster than this; an
+# item they already added is on the board, so this skips it and reports no change.
+#
+# ## What it will not do
+#
+# **It never fails the pass.** A repository it cannot read, a repository GitHub
+# refuses the write in, an empty answer — each is reported and the loop carries
+# on to the next one. `apply` and `sweep` end a run red on a refused write and
+# should; this one runs *first*, so a red here would take the routing of every
+# other repository down with it. That is exactly the shape of the openclaw outage
+# on 2026-08-13, where one unwritable label cost a whole pass its decisions, and
+# `#332` names it as the thing not to repeat.
+#
+# **It never removes anything, and it never sets a column on an item that is
+# already on the board.** The only write is `board-add`, on an issue with no item
+# at all.
+#
+# ## Why it lists each repository rather than searching once
+#
+# `candidates` gets every open issue in the organisation from one `gh search
+# issues`, and this could read the same call. It does not, for two reasons. The
+# search index lags issue creation by an unbounded amount, and *on the board
+# within one pass of being opened* is the acceptance criterion. And a search
+# cannot report a repository it could not read — an unreadable repository and an
+# empty one produce the same empty result — while the per-repository listing
+# below distinguishes them, which is the other criterion.
+ADMIT_EXCLUSIONS=${ADMIT_EXCLUSIONS:-$HERE/../board-excluded-repositories.txt}
+ADMIT_REPO_LIMIT=${ADMIT_REPO_LIMIT:-100}
+ADMIT_ISSUE_LIMIT=${ADMIT_ISSUE_LIMIT:-200}
+
+# A board that reads as almost empty is a failed call and not an empty board, and
+# treating it as empty would ask GitHub to add every open issue in the
+# organisation. The same floor `board-self-check.sh` puts in front of the same
+# read, for the same reason and with the same number.
+ADMIT_BOARD_FLOOR=${ADMIT_BOARD_FLOOR:-20}
+
+admit() {
+  local excluded=""
+  if [ -f "$ADMIT_EXCLUSIONS" ]; then
+    excluded=" $(sed -e 's/#.*//' -e 's/[[:space:]]//g' "$ADMIT_EXCLUSIONS" | grep -v '^$' | tr '\n' ' ')"
+  else
+    note "no exclusion list at $ADMIT_EXCLUSIONS, so every repository is swept"
+    excluded=" "
+  fi
+
+  local board listing
+  board=$(mktemp) || die "no temporary file" 2
+  listing=$(mktemp) || { rm -f "$board"; die "no temporary file" 2; }
+
+  if ! board_read_as_board >"$board"; then
+    rm -f "$board" "$listing"
+    echo "the board could not be read, so nothing was admitted — 0 added, 0 refused"
+    return 0
+  fi
+  jq -r '.items[] | "\(.content.repository)#\(.content.number)"' "$board" 2>/dev/null |
+    sort -u >"$listing"
+
+  if [ "$(wc -l <"$listing")" -lt "$ADMIT_BOARD_FLOOR" ]; then
+    note "the board answered with $(wc -l <"$listing") item(s), fewer than it has ever held — treating that as an empty board would ask GitHub to add every open issue in the organisation"
+    rm -f "$board" "$listing"
+    echo "the board read is not trustworthy, so nothing was admitted — 0 added, 0 refused"
+    return 0
+  fi
+
+  local repos
+  repos=$(gh repo list "$ORG" --limit "$ADMIT_REPO_LIMIT" --json name,isArchived \
+    --jq '.[] | select(.isArchived | not) | .name' 2>/dev/null)
+  if [ -z "$repos" ]; then
+    rm -f "$board" "$listing"
+    echo "the organisation's repositories could not be listed, so nothing was admitted — 0 added, 0 refused"
+    return 0
+  fi
+
+  local added=0 failures=0 unreadable=0 skipped=0
+  local name repo issues number
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$excluded" in
+      *" $name "*)
+        skipped=$((skipped + 1))
+        continue ;;
+    esac
+    repo="$ORG/$name"
+
+    # Open issues only, and `gh issue list` does not return pull requests — a
+    # pull request belongs to the branch that opened it and has never been a
+    # board item.
+    if ! issues=$(gh issue list --repo "$repo" --state open --limit "$ADMIT_ISSUE_LIMIT" \
+      --json number --jq '.[].number' 2>/dev/null); then
+      unreadable=$((unreadable + 1))
+      note "$repo could not be read, so its issues were not checked against the board"
+      continue
+    fi
+
+    while IFS= read -r number; do
+      [ -n "$number" ] || continue
+      grep -qxF "$repo#$number" "$listing" && continue
+      if board_add_card "$repo" "$number"; then
+        added=$((added + 1))
+      else
+        failures=$((failures + 1))
+        note "$repo#$number is not on the board and could not be added"
+      fi
+    done <<<"$issues"
+  done <<<"$repos"
+
+  rm -f "$board" "$listing"
+  # Both numbers, always (`#302`): *added 0* and *added 0, seven refused* are
+  # different facts and one of them is a defect in the Colony's configuration.
+  echo "the board admitted $added issue(s), $failures could not be added, $unreadable repository(ies) could not be read, $skipped excluded"
+  return 0
+}
+
+# The board read and the board write, with whichever credential can make them —
+# the same split `move_card` above makes, and for the same reason.
+board_read_as_board() {
+  if [ -n "$BOARD_TOKEN" ]; then
+    GH_TOKEN=$BOARD_TOKEN bash "$HERE/opencode-worker.sh" board-read
+  else
+    bash "$HERE/opencode-worker.sh" board-read
+  fi
+}
+
+board_add_card() {
+  local repo=$1 number=$2
+  if [ -n "$BOARD_TOKEN" ]; then
+    GH_TOKEN=$BOARD_TOKEN bash "$HERE/opencode-worker.sh" board-add "$repo" "$number"
+  else
+    bash "$HERE/opencode-worker.sh" board-add "$repo" "$number"
   fi
 }
 
@@ -1453,6 +1601,9 @@ in_list() {
 }
 
 case "${1:-}" in
+  admit)
+    admit
+    ;;
   candidates)
     candidates
     ;;
@@ -1484,6 +1635,6 @@ case "${1:-}" in
     propose "${2:?propose needs the file the model wrote}"
     ;;
   *)
-    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
+    die "usage: board-triage.sh admit | candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac

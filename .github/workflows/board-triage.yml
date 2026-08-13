@@ -130,6 +130,29 @@ jobs:
           bash .github/tests/board-triage.test.sh
           python3 .github/tests/board-triage-ask.test.py
 
+      # ## Arriving, before deciding (`#332`)
+      #
+      # A project takes at most five `Auto-add to project` workflows; this one
+      # has five and the organisation has fourteen non-archived repositories, so
+      # everything past the fifth reached the board when somebody remembered.
+      # **An issue that is not on the board is an issue the step below cannot
+      # see**, so this runs first and on the same token — the App already holds
+      # Organization projects, and nine repositories calling the Projects API
+      # would mean that credential visible in nine places.
+      #
+      # `continue-on-error` says the same thing the script says twice over: the
+      # sweep reports and never fails, and a repository it could not read must
+      # not cost the pass its routing. Both numbers are in the log line
+      # (`#302`).
+      - name: Put anything missing on the board
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
+          BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
+        run: |
+          set -uo pipefail
+          bash .github/scripts/board-triage.sh admit
+
       - name: What is in Inbox and Ready?
         id: candidates
         env:

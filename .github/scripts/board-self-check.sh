@@ -132,9 +132,19 @@ check_pruning() {
 }
 
 # --- 5b: the arriving --------------------------------------------------------
-# Five of the ten repositories have no auto-add workflow and cannot be given one
-# (§4), so an issue opened in one of them is invisible until somebody adds it by
-# hand. This lists every open issue that is not on the board.
+# This lists every open issue that is not on the board.
+#
+# **What it is asking about changed on 2026-08-13 and the question did not**
+# (`#332`). It used to read *five of the ten repositories have no auto-add
+# workflow*, which was true of an organisation that has since grown past ten:
+# a project takes at most five of those workflows, and the ones past the fifth
+# reached the board only when somebody remembered. `board-triage.sh admit` now
+# puts every open issue in every non-archived repository on the board once a
+# pass, with `.github/board-excluded-repositories.txt` as the only way out.
+#
+# So this should now find nothing, and a line here is a finding about that sweep
+# rather than about a repository nobody wired up — which is why it stays. It
+# still only reports: the fix is a write to the board, and this file makes none.
 # The listing itself, read once and answered from a variable after that. Three
 # questions want it now — 5b, 5c and 5d — and the whole reason 5b reads the board
 # this way is that the expensive way emptied the budget, so a second reader asks
@@ -184,7 +194,7 @@ check_arrivals() {
     done | sort -u | comm -23 - "$BOARD_LISTING")
 
   if [ -n "$missing" ]; then
-    echo "5b — **These open issues are not on the board**, so nobody working the loop can see them. One command each: \`gh project item-add 1 --owner $ORG --url https://github.com/<repo>/issues/<n>\`"
+    echo "5b — **These open issues are not on the board**, so nobody working the loop can see them. \`board-triage.sh admit\` should have added each of them within half an hour of it being opened (\`#332\`), so start with that pass's log rather than with the issues. By hand it is one command each: \`gh project item-add 1 --owner $ORG --url https://github.com/<repo>/issues/<n>\`"
     echo
     printf '%s\n' "$missing" | sed 's/^/    /'
     return 1

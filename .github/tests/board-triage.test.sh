@@ -39,11 +39,39 @@ case "$1 $2" in
   # picks the collecting issue out of the repository's issues by title, and
   # `proposed_keys` reads the comment bodies. A fixture of pre-filtered output would
   # assert nothing about either.
+  # Which repositories the organisation has, and whether each is archived
+  # (`#332`). The filter is applied here rather than baked into the fixture,
+  # because *an archived repository is not swept* is behaviour under test.
+  "repo list")
+    [ -f "$GH_FIXTURES/repos" ] || exit 0
+    expression=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --jq) expression=$2; shift 2 ;;
+        *)    shift ;;
+      esac
+    done
+    if [ -n "$expression" ]; then jq -r "$expression" "$GH_FIXTURES/repos"; else cat "$GH_FIXTURES/repos"; fi ;;
   "issue view"|"issue list")
     case "$1 $2" in
       "issue view") fixture="$GH_FIXTURES/comments" ;;
       *)            fixture="$GH_FIXTURES/issue_list" ;;
     esac
+    # The admit sweep lists each repository separately, so its fixtures are per
+    # repository; `#264`'s single collecting-issue listing keeps the shared one.
+    # A repository named in `repo_fails` answers the way an unreadable one does.
+    if [ "$1 $2" = "issue list" ]; then
+      prev_arg=""; repo_arg=""
+      for arg in "$@"; do
+        case "$prev_arg" in --repo) repo_arg=${arg##*/} ;; esac
+        prev_arg=$arg
+      done
+      if [ -n "$repo_arg" ]; then
+        grep -qx -- "$repo_arg" "$GH_FIXTURES/repo_fails" 2>/dev/null &&
+          { echo "HTTP 404: Not Found" >&2; exit 1; }
+        [ -f "$GH_FIXTURES/issue_list_$repo_arg" ] && fixture="$GH_FIXTURES/issue_list_$repo_arg"
+      fi
+    fi
     [ -f "$fixture" ] || exit 0
     expression=""
     while [ "$#" -gt 0 ]; do
@@ -94,20 +122,53 @@ case "$1 $2" in
   # `board-triage.sh` reads the board through that script rather than with a
   # second copy of the query.
   "api graphql")
-    query=""; owner=""; name=""; number=""
+    query=""; owner=""; name=""; number=""; content=""; expression=""
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --jq) expression=$2; shift 2 ;;
         -f|-F)
           case "$2" in
-            query=*)  query=${2#query=} ;;
-            owner=*)  owner=${2#owner=} ;;
-            name=*)   name=${2#name=} ;;
-            number=*) number=${2#number=} ;;
+            query=*)   query=${2#query=} ;;
+            owner=*)   owner=${2#owner=} ;;
+            name=*)    name=${2#name=} ;;
+            number=*)  number=${2#number=} ;;
+            content=*) content=${2#content=} ;;
           esac
           shift 2 ;;
         *) shift ;;
       esac
     done
+    # `--jq` is `gh`'s own, not a pipe the caller adds, so the stub has to apply
+    # it too: `board-add` reads both its answers through one, and a stub that
+    # handed back the whole envelope would have the script add a JSON document
+    # to the board instead of an issue.
+    emit() { if [ -n "$expression" ]; then jq -r "$expression"; else cat; fi; }
+
+    # `#332`: the two calls that put an issue on the board. Both are answered
+    # before the board is read for existence, because the mutation is the write
+    # under test and a missing board fixture is not what a case is asserting
+    # when it asserts about the write.
+    case "$query" in
+      *addProjectV2ItemById*)
+        if grep -qxF -- "$content" "$GH_FIXTURES/add_fails" 2>/dev/null; then
+          echo "HTTP 403: Resource not accessible by integration" >&2
+          exit 1
+        fi
+        # The item id is derived from the content id, so a second add of the
+        # same issue is visible in the log as the same id — which is what
+        # *already on the board is not added twice* asserts against.
+        jq -cn --arg id "PVTI_added_${content#I_}" \
+          '{data: {addProjectV2ItemById: {item: {id: $id}}}}' | emit
+        exit 0 ;;
+      # The issue's node id, which the mutation needs and the number is not.
+      *"issue(number:\$number){id}"*)
+        if grep -qxF -- "$name#$number" "$GH_FIXTURES/unreadable_issues" 2>/dev/null; then
+          jq -cn '{data: {repository: {issue: null}}}' | emit
+        else
+          jq -cn --arg id "I_${name}${number}" '{data: {repository: {issue: {id: $id}}}}' | emit
+        fi
+        exit 0 ;;
+    esac
     [ -s "$GH_FIXTURES/board" ] || { echo "GraphQL: no board" >&2; exit 1; }
     case "$query" in
       *projectItems*)
@@ -1261,6 +1322,171 @@ run_apply "$(decided 909 "agent:claude" "" "" "" true \
   "$(jq -r '.cases[] | select(.case == 9) | .expect.reason' "$CASES")")" >/dev/null
 contains "case 9's defence is a reason the script accepts" \
   "single-select-option-id 0ce10d81" "$(cat "$GH_LOG")"
+
+# Which repositories the organisation answers with. A name ending in `!` is
+# archived, which is the one class the sweep must not touch — and it is a
+# rejection case rather than an exclusion, so it is not counted as one.
+repos_are() {
+  local rows="" repo
+  for repo in "$@"; do
+    case "$repo" in
+      *!) rows+=$(jq -cn --arg n "${repo%!}" '{name: $n, isArchived: true}')$'\n' ;;
+      *)  rows+=$(jq -cn --arg n "$repo" '{name: $n, isArchived: false}')$'\n' ;;
+    esac
+  done
+  jq -s '.' <<<"$rows" > "$GH_FIXTURES/repos"
+}
+
+# What one repository answers when its open issues are listed. Per repository,
+# because the sweep lists each one rather than searching the organisation once.
+issues_in() {
+  local repo=$1; shift
+  jq -cn '$ARGS.positional | map({number: (. | tonumber)})' --args "$@" \
+    > "$GH_FIXTURES/issue_list_$repo"
+}
+
+# The board as `admit` reads it: whatever a case wants already on it, padded to
+# `ADMIT_BOARD_FLOOR` with items from a repository no case sweeps. The padding is
+# not decoration — a board under the floor is a failed read rather than an empty
+# board, so a case asserting about an add has to hand over a plausible board
+# first, and the case that asserts the floor is the one that does not.
+admit_board() {
+  local rows="" row repo number i
+  for row in "$@"; do
+    repo=${row%#*}; number=${row##*#}
+    rows+=$(jq -cn --arg r "$repo" --argjson n "$number" \
+      '{id: "PVTI_on\($n)", status: "Ready", labels: [],
+        content: {number: $n, repository: $r}}')$'\n'
+  done
+  for ((i = 1; i <= 20; i++)); do
+    rows+=$(jq -cn --argjson n "$i" \
+      '{id: "PVTI_filler\($n)", status: "Ready", labels: [],
+        content: {number: $n, repository: "Kolonie-AI/kolonie-filler"}}')$'\n'
+  done
+  jq -s '{items: .}' <<<"$rows" > "$GH_FIXTURES/board"
+}
+
+# The opt-out list, with the comment line the real file's format demands, so that
+# a case is reading the same parser production does.
+excluded_are() {
+  printf '%s\n' "# because a test said so" "$@" > "$WORK/excluded.txt"
+  export ADMIT_EXCLUSIONS="$WORK/excluded.txt"
+}
+
+run_admit() {
+  bash "$SCRIPT" admit 2>"$WORK/stderr"
+}
+
+echo
+echo "everything open in the organisation reaches the board (#332)"
+
+case_setup
+excluded_are
+repos_are kolonie-docs kolonie-hermes
+issues_in kolonie-docs 900
+issues_in kolonie-hermes 12
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+contains "an open issue that is not on the board is added" \
+  "-f content=I_kolonie-hermes12" "$(cat "$GH_LOG")"
+contains "and it lands in Inbox rather than in no column at all" \
+  "--single-select-option-id 78639a6d" "$(cat "$GH_LOG")"
+absent "an issue already on the board is not added twice" \
+  "-f content=I_kolonie-docs900" "$(cat "$GH_LOG")"
+contains "both numbers are reported (#302)" \
+  "the board admitted 1 issue(s), 0 could not be added, 0 repository(ies) could not be read, 0 excluded" \
+  "$out"
+
+# The opt-out, which is the only way a repository stays off the board.
+case_setup
+excluded_are kolonie-email
+repos_are kolonie-docs kolonie-email
+issues_in kolonie-email 5
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+absent "an excluded repository's issues are not added" \
+  "-f content=I_kolonie-email5" "$(cat "$GH_LOG")"
+absent "an excluded repository is not even listed" \
+  "--repo Kolonie-AI/kolonie-email" "$(cat "$GH_LOG")"
+contains "and the exclusion is counted rather than silent" \
+  "0 repository(ies) could not be read, 1 excluded" "$out"
+
+# The rejection case the issue asks for by name. An archived repository is not
+# swept, and it is not an exclusion either — nobody decided anything about it.
+case_setup
+excluded_are
+repos_are kolonie-docs 'kolonie-openclaw!'
+issues_in kolonie-openclaw 7
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+absent "an archived repository is not swept" \
+  "--repo Kolonie-AI/kolonie-openclaw" "$(cat "$GH_LOG")"
+contains "and it is not counted as an exclusion, because nobody excluded it" \
+  "0 excluded" "$out"
+
+# A repository the credential cannot read. The pass carries on to the next one:
+# the sweep runs before every other step of the triage workflow, so a repository
+# that fails here must not take the rest of the organisation's routing with it.
+case_setup
+excluded_are
+printf '%s\n' kolonie-kilo > "$GH_FIXTURES/repo_fails"
+repos_are kolonie-docs kolonie-kilo kolonie-hermes
+issues_in kolonie-docs 900
+issues_in kolonie-kilo 4
+issues_in kolonie-hermes 12
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+check "a repository that errors does not end the pass" "0" "$?"
+contains "the repository that could not be read is counted" \
+  "1 repository(ies) could not be read" "$out"
+contains "and the repository after it is still swept" \
+  "-f content=I_kolonie-hermes12" "$(cat "$GH_LOG")"
+
+# A write GitHub refuses, which is the `#302` shape again: the refusal is
+# reported as its own number, and the next issue is still attempted.
+case_setup
+excluded_are
+printf '%s\n' I_kolonie-hermes12 > "$GH_FIXTURES/add_fails"
+repos_are kolonie-hermes kolonie-claude
+issues_in kolonie-hermes 12
+issues_in kolonie-claude 3
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+contains "a refused add is counted, and the pass keeps going" \
+  "the board admitted 1 issue(s), 1 could not be added" "$out"
+contains "the issue after the refusal is still added" \
+  "-f content=I_kolonie-claude3" "$(cat "$GH_LOG")"
+
+# An issue whose node id cannot be read is not added blind: there is nothing to
+# add, and a mutation with an empty content id would put something else on the
+# board.
+case_setup
+excluded_are
+printf '%s\n' "kolonie-hermes#12" > "$GH_FIXTURES/unreadable_issues"
+repos_are kolonie-hermes
+issues_in kolonie-hermes 12
+admit_board "Kolonie-AI/kolonie-docs#900"
+out=$(run_admit)
+absent "an issue that could not be read is not added" \
+  "addProjectV2ItemById" "$(cat "$GH_LOG")"
+contains "and it is counted as a refusal rather than passed over" \
+  "the board admitted 0 issue(s), 1 could not be added" "$out"
+
+# The floor, at the value production runs with. A board that reads as nearly
+# empty is a failed call, and treating it as an empty board would ask GitHub to
+# add every open issue in the organisation.
+case_setup
+excluded_are
+repos_are kolonie-docs kolonie-hermes
+issues_in kolonie-hermes 12
+jq -cn '{items: [ {id: "PVTI_a", status: "Ready", labels: [],
+  content: {number: 900, repository: "Kolonie-AI/kolonie-docs"}} ]}' \
+  > "$GH_FIXTURES/board"
+out=$(run_admit)
+absent "a board that reads as nearly empty admits nothing" \
+  "addProjectV2ItemById" "$(cat "$GH_LOG")"
+contains "and says why rather than reporting a quiet zero" \
+  "not trustworthy" "$out"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

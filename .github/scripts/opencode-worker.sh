@@ -104,7 +104,10 @@
 #
 # **It never merges, never pushes to `main`, and never writes an issue comment
 # with the board token.** Comments are `GITHUB_TOKEN`'s job, so the stored
-# credential's only power stays moving a column.
+# credential's only power stays putting an issue on the board and moving its
+# column — the two writes the Projects permission covers, and `board-add`
+# (`#332`) lands its item in Inbox for the reason spelled out there: an item with
+# no Status is on the board and invisible to every reader of it.
 set -uo pipefail
 
 PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
@@ -1856,6 +1859,48 @@ case "${1:-}" in
     exit $?
     ;;
 
+  # ## Putting an issue on the board at all (`#332`)
+  #
+  # A project takes at most **five** `Auto-add to project` workflows and this one
+  # has five, all in use, so every repository past the fifth reaches the board by
+  # somebody remembering. `board-triage.sh admit` is what remembers instead, and
+  # this is the single write it makes.
+  #
+  # **Two calls and both are needed.** `addProjectV2ItemById` wants the issue's
+  # node id, which is not the number and is not derivable from it, so the id is
+  # asked for first. Adding an issue that is already on the board is a documented
+  # no-op that answers with the existing item — the caller filters those out
+  # before calling, and this stays correct if one slips through.
+  #
+  # **Then Inbox, in the same breath.** The mutation sets no field, and the
+  # built-in *Item added → set Status* workflow has been off since 2026-08-12
+  # (`#329`), so an item added and left alone has no Status at all: on the board,
+  # in no column, and invisible to `TRIAGE_STATUSES` and to every §6 query that
+  # reads a column. Inbox is where an arrival with no decision belongs, and the
+  # half-hourly pass reads Inbox — which is the whole point of admitting it.
+  board-add)
+    repo=${2:?board-add needs a repository}
+    number=${3:?board-add needs an issue number}
+    content=$(gh api graphql -f query='
+      query($owner:String!,$name:String!,$number:Int!){
+        repository(owner:$owner,name:$name){issue(number:$number){id}}}' \
+      -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" \
+      --jq '.data.repository.issue.id // empty' 2>/dev/null)
+    [ -n "$content" ] || die "$repo#$number could not be read, so there is nothing to put on the board" 3
+
+    item=$(gh api graphql -f query='
+      mutation($project:ID!,$content:ID!){
+        addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}' \
+      -f project="$PROJECT_ID" -f content="$content" \
+      --jq '.data.addProjectV2ItemById.item.id // empty' 2>/dev/null)
+    [ -n "$item" ] || die "could not put $repo#$number on the board" 4
+
+    set_status "$item" "$STATUS_INBOX" >/dev/null ||
+      die "$repo#$number was added to the board and its column could not be set — it is on the board and in no column" 5
+    echo "added $repo#$number to the board, in Inbox"
+    exit 0
+    ;;
+
   board-read)
     # The board as JSON, for a human or an agent working the loop in AGENTS.md
     # §6. Nothing in this script calls it — the four internal readers call
@@ -1866,6 +1911,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | board-add <repo> <n> | leak-check <file>..."
     ;;
 esac

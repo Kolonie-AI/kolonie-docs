@@ -279,9 +279,11 @@ returned 0 for five items whose value did not stick.
 
 The board mostly maintains itself. GitHub's built-in workflows move items on close,
 on PR link and on merge, and add new issues from **five of the organisation's
-thirteen issue-bearing repositories**, excluding `.github` (measured 2026-08-07).
-**You move an item only when you change what is true** — finishing a spec
-(→ Ready), hitting a blocker (→ Blocked).
+thirteen issue-bearing repositories**, excluding `.github` (measured 2026-08-07);
+the other eight arrive through `board-triage.sh admit`, which sweeps every
+non-archived repository once a pass (§6, `#332`). **You move an item only when
+you change what is true** — finishing a spec (→ Ready), hitting a blocker
+(→ Blocked).
 
 **Removing the `blocked:human` label also moves the item, straight to Ready**, and
 that one is easy to trip over because it is a *label* edit producing a *column*
@@ -353,6 +355,13 @@ with `kolonie-email`; eight on 2026-08-05 with `kolonie-dns` — every time,
 because the cap was already spent. Every repository the Colony adds from here
 arrives uncovered by construction. That is not an argument against adding them;
 it is the reason the check below is a measurement rather than this list.
+
+**Since `#332` an uncovered repository is not an invisible one.**
+`board-triage.sh admit` sweeps all of them once a scheduled pass and puts what is
+missing on the board in Inbox — §6 has the whole of it, including where the one
+exclusion list lives. This list stays because it is still true and still worth
+knowing which five the built-in workflows serve; it is no longer the difference
+between an issue being seen and not.
 
 **An issue opened in one of those eight never reaches the board, and nothing says
 so.** That is worse than a low priority. §3 makes the board the only record of
@@ -1209,6 +1218,39 @@ instead of five times, which costs nothing and duplicates nothing.
 Two independent defences: the limit means a stale number cannot silently truncate
 an answer, and the archive means the board does not grow into the limit anyway.
 
+### How an issue gets on the board, and the one way out
+
+**Nothing has to be added by hand, and coverage no longer depends on a workflow
+existing.** `board-triage.sh admit` runs first in every scheduled triage pass and
+puts every open issue in every non-archived repository of the organisation on the
+board, in Inbox (`#332`). A repository created tomorrow is covered with no edit
+anywhere, because the sweep reads the organisation's repository list rather than
+a list somebody maintains. The five `Auto-add to project` workflows still run and
+are still correct; they are simply not what the Colony relies on, which matters
+because a project takes at most five of them (§4) and the organisation passed
+five issue-bearing repositories on 2026-08-03.
+
+**Inbox, and not whatever the board's default is.** The built-in *Item added →
+set Status* workflows were disabled on 2026-08-12 (`#329`), so an item added with
+no Status is on the board and in no column — which is to say invisible to every
+reader of it, including the triage pass that was meant to route it. `board-add`
+in `opencode-worker.sh` sets the column in the same breath as the add.
+
+**The list of excluded repositories is
+`.github/board-excluded-repositories.txt`, and it is the only way out.** One bare
+repository name per line, a sentence above it saying why, `#` and blank lines
+ignored. It holds `.github` and nothing else. An archived repository does not
+belong in it — the sweep already skips those, and listing one hides the fact that
+it is archived behind a decision nobody made.
+
+**The sweep never fails the pass.** It runs before every other step, so a refused
+write here would take the routing of every other repository down with it, which
+is the shape `#332` was opened about. It reports both numbers instead (`#302`):
+*added 0* and *added 0, seven refused* are different facts and one of them is a
+defect in the Colony's configuration. `board-self-check.sh` 5b still lists open
+issues that are not on the board, and a line from it is now a finding about this
+sweep rather than about a missing workflow.
+
 ### Only the board needs GraphQL. Everything else has a REST route
 
 **The two pools are separate — 5,000 GraphQL points an hour and 5,000 REST
@@ -1384,10 +1426,13 @@ legitimately.
 
 **5b — the arriving.** Eight of the organisation's thirteen issue-bearing
 repositories, excluding `.github`, have no auto-add workflow (measured 2026-08-07)
-and cannot be given one (§4), so an issue opened in one of them is invisible until
-somebody adds it by hand. 5b lists every open issue that is not on the board.
-**No output is the right answer.** Anything it prints is work nobody is going to
-see, and the fix is one command per line:
+and cannot be given one (§4). Since `#332` that is no longer what decides whether
+an issue is seen: `board-triage.sh admit` sweeps every non-archived repository
+once a pass and adds what is missing, in Inbox (§6). 5b lists every open issue
+that is not on the board. **No output is the right answer.** Anything it prints
+is work nobody is going to see, and it is now a finding about that sweep — start
+with the pass's log rather than with the issues. By hand it is one command per
+line:
 
 ```bash
 gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
