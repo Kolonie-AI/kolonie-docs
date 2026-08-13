@@ -841,13 +841,39 @@ cmd_decide() {
 # quietly: the sentence would simply stop appearing.
 #
 # Measured 2026-08-11 against `kolonie-infra/promtail/promtail.yml` stage 5b.
-STATUS_DERIVED_LEVEL="traefik website pgadmin"
+STATUS_DERIVED_LEVEL="traefik pgadmin"
+
+# **`website` writes two log formats and only one of them is levelled by status**
+# (`#327`). It is nginx, so promtail runs stage 5b over its access lines *and*
+# stage 5c over its error log, which is a different file with a different shape
+# and carries nginx's own severity in the line. Telling a reader that a `website`
+# error means somebody behind it answered 500 is therefore true of one route and
+# wrong about the other.
+#
+# **`#327` is what the wrong half cost.** 56 error lines against a normal of 0.29,
+# every one of them stage 5c — `[error] open() ... failed` on three real assets
+# that a crawler pool requested with a trailing apostrophe. The note sent the
+# reader looking for the service that answered 500, and there was none: nothing
+# behind nginx was involved and every one of those requests was a `404`. That is
+# `#243`'s failure in the other direction — a sentence confident about a number it
+# did not measure.
+#
+# So `website` gets its own, naming both routes and neither as the answer.
+#
+# Measured 2026-08-13 against `kolonie-infra/promtail/promtail.yml` stages 5b
+# and 5c.
+NGINX_TWO_ROUTE_LEVEL="website"
 
 level_note_for() {
   local service="$1" one
   for one in $STATUS_DERIVED_LEVEL; do
     [ "$one" = "$service" ] || continue
     printf '%s' "**\`$service\` does not write these levels — they are derived from the HTTP status.** \`kolonie-infra\`'s promtail pipeline marks a Common Log Format line \`error\` when the response was **5xx**, and \`info\` for a \`4xx\` (measured 2026-08-11, stage 5b). So this count is not a fault of \`$service\`: it is how many times something behind it answered 500, counted at the edge. **Expect a matching finding for whichever service actually failed**, and read the two as one event rather than as two. \`$service\`'s own errors, when it has any, arrive as logfmt lines carrying a real \`level=\` and are included in the same count."
+    return 0
+  done
+  for one in $NGINX_TWO_ROUTE_LEVEL; do
+    [ "$one" = "$service" ] || continue
+    printf '%s' "**\`$service\` is nginx, and two different rules can put \`error\` on one of its lines — check which before reading anything into the count.** A Common Log Format access line is levelled from the HTTP status: **5xx is \`error\`, 4xx is \`info\`** (stage 5b), so an \`error\` of that shape is something *behind* nginx answering 500 and you should expect a matching finding for it. An nginx **error-log** line — \`2026/08/12 08:53:12 [error] 31#31: ...\` — is levelled from nginx's own severity instead (stage 5c), and means only that nginx said so: a \`404\` under \`/_astro/\` writes one, and a \`404\` anywhere else on the site does not. Measured 2026-08-13 against \`kolonie-infra/promtail/promtail.yml\`. If these lines are the second kind, there is no partner service to look for — see \`kolonie-docs#327\`."
     return 0
   done
   return 1
