@@ -216,7 +216,7 @@ The rule applies to **every** `STATUS.md` in the project, not only this one.
 | VPS, Docker, Traefik, Cloudflare, deploy | `kolonie-infra` |
 | Documentation, process, governance, legal | `kolonie-docs` |
 | Work for a repository that does not exist yet | `kolonie-docs`, with the matching `area:` label |
-| A half-formed idea or an open question | `kolonie-docs`, labelled `idea` or `question` |
+| A half-formed idea or an open question | `kolonie-docs`, labelled `idea` or `decision` |
 
 **Never create a draft item on the board.** A draft lives only inside the board
 and is not an issue: it cannot be linked, closed, assigned or found by an issue
@@ -664,9 +664,29 @@ priority label states vaguely. A third priority tempts exactly that substitution
 work for `kolonie-website` is filed in `kolonie-docs` until that repository
 exists.
 
-**Type** — `idea` (needs thinking before it can be specified), `question` (an
-open decision), `decision` (needs an architectural decision recorded before work
-starts), plus the GitHub defaults `bug` and `documentation`.
+**Type** — `idea` (needs thinking before it can be specified), `decision` (needs
+an architectural decision recorded before work starts), plus `bug` and
+`enhancement`. All four exist in all five board repositories (measured
+2026-08-14, `gh label list --repo Kolonie-AI/<repo> --limit 200`). **An open
+decision is a `decision`** — that is the label to reach for when the issue is a
+question rather than a change.
+
+**Two labels this table used to offer and no longer does.** `question` and
+`documentation` exist in `kolonie-openclaw` and in none of the other four; across
+all five repositories `question` is on no issue at all and `documentation` is on
+one (measured 2026-08-14, `gh issue list --repo … --state all --json labels`).
+**Corrected the document rather than creating the labels**, because `question` as
+it was defined — _an open decision_ — is what `decision` already means, and three
+labels for two states is the condition the `p3` paragraph above argues against.
+`gh issue create --label documentation` against `kolonie-docs` fails, which is how
+this was found. The two survivors in `kolonie-openclaw` are left where they are:
+one of them is carrying an issue, and deleting a label to make a sentence true is
+the more expensive of the two fixes.
+
+**`enhancement` is listed because it is used** — 91 issues across the five
+repositories on the same measurement, second only to `bug`. It was in every label
+set and in no table here, which is the same defect as `question` seen from the
+other side.
 
 **Origin** — `from:citizen`, `from:external`, `from:maintainer`, `from:agent`,
 `from:watcher`, and `needs-triage` (measured across the five board repositories on

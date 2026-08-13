@@ -882,7 +882,7 @@ The whole picture, short:
 
 ## Open questions
 
-Filed as issues in `kolonie-docs`, in the Inbox column, labelled `question` or
+Filed as issues in `kolonie-docs`, in the Inbox column, labelled `decision` or
 `idea`:
 
 ```bash

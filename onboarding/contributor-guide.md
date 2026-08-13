@@ -186,7 +186,9 @@ judges against.
 
 ## Questions?
 
-Open a GitHub issue in the relevant repo. Tag it with `question`.
+Open a GitHub issue in the relevant repo. Tag it with `decision` — an open
+question is a decision nobody has recorded yet, and that is the label the board
+repositories actually carry.
 
 ---
 
