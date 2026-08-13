@@ -75,6 +75,25 @@ case "$1 $2" in
     fi ;;
   "project item-list") cat "$GH_FIXTURES/board" 2>/dev/null ;;
   "repo list")        cat "$GH_FIXTURES/repos" 2>/dev/null ;;
+  # 5c asks two things of every repository, and both answer per repository —
+  # which is the whole point of the check, so the fixtures are per repository
+  # too. A file that is absent is the gap; `case_setup` writes the healthy ones.
+  "label list")
+    for _i in $(seq 1 $#); do
+      eval "_a=\${$_i}"
+      [ "$_a" = --repo ] && { eval "_r=\${$((_i + 1))}"; cat "$GH_FIXTURES/labels_${_r##*/}" 2>/dev/null; }
+    done ;;
+  "api repos/"*)
+    _p=${2#repos/}
+    case "$_p" in
+      */contents/.github/workflows/triage.yml)
+        _r=${_p%%/contents/*}
+        [ -f "$GH_FIXTURES/triage_${_r##*/}" ] || exit 1
+        base64 -w0 < "$GH_FIXTURES/triage_${_r##*/}" ;;
+      */contents/.github/workflows/review.yml)
+        _r=${_p%%/contents/*}
+        [ -f "$GH_FIXTURES/review_${_r##*/}" ] || exit 1 ;;
+    esac ;;
   "issue list")
     # Two different listings reach this stub and they must not be confused.
     # `#237` moved the *finding* lookup into watch-finding.sh, which asks for
@@ -117,6 +136,22 @@ setup() {
   echo "kolonie-docs" > "$GH_FIXTURES/repos"
   for i in $(seq 1 25); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/issues"
   : > "$GH_FIXTURES/existing"
+  # 5c is healthy by default: every repository §5 names has the whole
+  # vocabulary, a `triage.yml` that calls the reusable workflow, and a reviewer.
+  # A case that wants a gap removes one of these rather than building the other
+  # four, so a finding in a case is the thing that case is about.
+  for r in kolonie-docs kolonie-platform kolonie-infra kolonie-website kolonie-email; do
+    covered "$r"
+  done
+}
+
+# The vocabulary comes from the script that writes it, exactly as 5c asks for it
+# — a fixture holding its own copy of the eight labels would pass this test on
+# the day the two lists stopped agreeing, which is the only day it matters.
+covered() {
+  bash "$ROOT/.github/scripts/board-triage.sh" vocabulary > "$GH_FIXTURES/labels_$1"
+  echo "uses: Kolonie-AI/kolonie-docs/.github/workflows/inbound-triage.yml@main" > "$GH_FIXTURES/triage_$1"
+  : > "$GH_FIXTURES/review_$1"
 }
 
 logged() { grep -q -- "$1" "$GH_LOG"; }
@@ -168,6 +203,84 @@ expect "a short board listing fails without accusing every issue" \
   "$([ $rc -eq 1 ] && [[ "$out" != *"#20"* ]] && echo yes || echo no)" "$out"
 expect "and says why it did not run the comparison" \
   "$([[ "$out" == *"was not run"* ]] && echo yes || echo no)" "$out"
+
+echo
+echo "5c — is the automation pointed at the repository (#333)"
+
+# What `kolonie-dns#17` and the `kolonie-openclaw` outage of 2026-08-13 both
+# were, before either had an issue: a repository whose issues reach the board
+# and whose labels do not exist, so a triage pass is billed for a decision it
+# then throws away.
+setup; grep -v '^agent:claude$' "$GH_FIXTURES/labels_kolonie-platform" > "$WORK/t" && mv "$WORK/t" "$GH_FIXTURES/labels_kolonie-platform"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a missing label fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names the repository and the label" \
+  "$([[ "$out" == *"kolonie-platform"* && "$out" == *"missing labels: agent:claude"* ]] && echo yes || echo no)" "$out"
+expect "and does not accuse the repositories that are fine" \
+  "$([[ "$out" != *"kolonie-email"* ]] && echo yes || echo no)" "$out"
+
+# The label half must not be able to report the whole vocabulary as missing off
+# a listing that failed — the same floor 5b has, one repository wide.
+setup; : > "$GH_FIXTURES/labels_kolonie-infra"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository whose labels could not be listed is not accused of having none" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"could not be listed"* && "$out" != *"missing labels:"* ]] && echo yes || echo no)" "$out"
+
+setup; rm -f "$GH_FIXTURES/triage_kolonie-website"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "no inbound triage fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and says which file to copy" \
+  "$([[ "$out" == *"kolonie-website"* && "$out" == *"inbound-triage.yml"* ]] && echo yes || echo no)" "$out"
+
+# The gap the filename cannot see: `triage.yml` is present and calls something
+# else, which reads as covered to anything that checks only that the file is
+# there. This is why the check reads the caller.
+setup; echo "uses: ./.github/workflows/something-local.yml" > "$GH_FIXTURES/triage_kolonie-website"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a triage.yml that calls something else is not covered" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-website"* ]] && echo yes || echo no)" "$out"
+
+setup; rm -f "$GH_FIXTURES/review_kolonie-email"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "no reviewer fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names it" \
+  "$([[ "$out" == *"kolonie-email"* && "$out" == *"review.yml"* ]] && echo yes || echo no)" "$out"
+
+# The point of the check, stated as a case: a repository nobody has filed an
+# issue about yet is checked because it is on the board, not because it broke.
+setup; echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository that reached the board is checked without an issue being filed in it" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-openclaw"* ]] && echo yes || echo no)" "$out"
+
+setup; echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/issues"; covered kolonie-openclaw
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "and once it is covered, it is silent" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# §5 is explicit that no skill repository puts an issue on the board. A daily
+# report that names six repositories for a thing that is not this check's
+# business is one nobody opens; that they have no triage at all is filed
+# separately rather than reported here every morning.
+setup; echo "kolonie-hermes" >> "$GH_FIXTURES/repos"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository that is not on the board and not in §5 is out of scope" \
+  "$([ $rc -eq 0 ] && [[ "$out" != *"kolonie-hermes"* ]] && echo yes || echo no)" "$out"
+
+# The five are checked whether or not the listing came back, so a spent budget
+# narrows this answer instead of silencing it — and says which of the two it is.
+setup; echo "Kolonie-AI/kolonie-docs#1" > "$GH_FIXTURES/board"; rm -f "$GH_FIXTURES/review_kolonie-email"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a board listing that failed its floor narrows 5c rather than silencing it" \
+  "$([[ "$out" == *"kolonie-email"* && "$out" == *"only the repositories"* ]] && echo yes || echo no)" "$out"
+
+# The listing is read once for the whole run. 5b's read is what 5a's own header
+# spends its length on the cost of; a second caller asking again would undo it.
+setup; bash "$SCRIPT" check "$WORK/report" >/dev/null
+expect "the board is read once for the whole run, not once per question" \
+  "$([ "$(grep -c 'items(first: 100' "$GH_LOG")" -eq 1 ] && echo yes || echo no)" \
+  "$(grep -c 'items(first: 100' "$GH_LOG") reads"
 
 echo
 echo "a token that cannot see the board says so, and files nothing"
@@ -257,11 +370,14 @@ echo "it never writes to the board"
 # Every command, over every fixture, into one log. Anything that mutates the
 # board would have to appear here.
 : > "$WORK/all"
-for fixture in healthy off missing; do
+for fixture in healthy off missing uncovered; do
   setup
   case $fixture in
     off)     echo "$(date -u -d '40 days ago' +%Y-%m-%dT%H:%M:%SZ) Kolonie-AI/kolonie-docs#7" >> "$GH_FIXTURES/pruning" ;;
     missing) echo "Kolonie-AI/kolonie-docs#99" >> "$GH_FIXTURES/issues" ;;
+    # 5c's fix is a workflow or a label in somebody else's repository, which is
+    # more of a decision than 5b's is. It has to be as unable to take it.
+    uncovered) : > "$GH_FIXTURES/labels_kolonie-platform"; rm -f "$GH_FIXTURES/triage_kolonie-infra" "$GH_FIXTURES/review_kolonie-email" ;;
   esac
   bash "$SCRIPT" check "$WORK/report" >/dev/null
   printf '5a — x\n' > "$WORK/report"
@@ -269,7 +385,8 @@ for fixture in healthy off missing; do
   bash "$SCRIPT" resolve >/dev/null
   cat "$GH_LOG" >> "$WORK/all"
 done
-for forbidden in "item-add" "item-edit" "archiveProjectV2Item" "unarchive" "item-delete"; do
+for forbidden in "item-add" "item-edit" "archiveProjectV2Item" "unarchive" "item-delete" \
+                 "label create" "label delete" "workflow run"; do
   expect "no $forbidden in any code path" \
     "$(grep -q -- "$forbidden" "$WORK/all" && echo no || echo yes)" \
     "$(grep -- "$forbidden" "$WORK/all" | head -1)"

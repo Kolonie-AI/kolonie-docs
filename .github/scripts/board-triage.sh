@@ -99,6 +99,94 @@ FAILED_LABEL=${FAILED_LABEL:-opencode:failed}
 # nothing may prioritise an issue that arrived from outside the Colony.
 OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external needs-triage}
 
+# ## Every label this pass writes, and where a repository gets it (`#333`)
+#
+# **The vocabulary is per-repository and nothing kept the copies together.**
+# `inbound-triage.yml` settled this shape for its own three labels and its
+# comment says why: creating them by hand in each repository leaves the next
+# repository to call the automation broken in exactly the same way. This file
+# writes four kinds of label that file does not, and until `#333` it assumed
+# them.
+#
+# It has now cost the same thing twice. `kolonie-dns#17`: nine labels absent, 48
+# passes over a day decided seven issues and discarded every one. Then
+# `kolonie-openclaw`, 2026-08-13 — none of the three routes, no `from:external`,
+# `gh issue edit` writes its labels in one call, and two decisions that had been
+# paid for were thrown away.
+#
+# **The set is closed and is `AGENTS.md` §5's.** A label this table does not name
+# is neither created nor written, so widening what the pass may add means
+# widening this table first, in the open, rather than inventing vocabulary in
+# whichever repository the pass happened to run over. `ROUTES` is settable from
+# the environment and is checked against this table like everything else.
+#
+# **An existing label is left exactly as it is**: no `--force`, because a
+# repository's own colour and description are not this file's to overwrite. The
+# colours below are the ones `kolonie-docs` carries (measured 2026-08-13) and are
+# the safety net rather than the definition — a repository that already has the
+# label never sees them.
+label_definition() {
+  case "$1" in
+    agent:human)    printf '%s\x1f%s' D4C5F9 'Route: a person picks this up.' ;;
+    agent:claude)   printf '%s\x1f%s' D4C5F9 'Route: an attended Claude agent picks this up.' ;;
+    agent:opencode) printf '%s\x1f%s' D4C5F9 'Route: the unattended opencode worker may pick this up.' ;;
+    from:external)  printf '%s\x1f%s' E4E669 'Opened from outside the organisation. Untrusted text.' ;;
+    decision)       printf '%s\x1f%s' 5319E7 'Needs an architectural decision recorded before work starts.' ;;
+    idea)           printf '%s\x1f%s' C2E0C6 'Needs thinking before it can be specified.' ;;
+    p1)             printf '%s\x1f%s' B60205 'Highest priority.' ;;
+    p2)             printf '%s\x1f%s' FBCA04 'Later, not scheduled.' ;;
+    *) return 1 ;;
+  esac
+}
+
+# The same table, as a list of names. `board-self-check.sh` reports a repository
+# that is missing part of the vocabulary, and it asks this rather than holding a
+# second copy — a check that disagrees with the thing it checks reports on its
+# own drift and nothing else.
+vocabulary() {
+  local label
+  for label in agent:human agent:claude agent:opencode from:external decision idea p1 p2; do
+    echo "$label"
+  done
+}
+
+# What each repository already has, asked once per repository per invocation
+# rather than once per issue: a pass of six candidates in one repository is one
+# listing, not six. Per invocation, like `WRITE_FAILURES` — `apply` and `sweep`
+# are separate processes.
+declare -A REPO_LABELS=()
+
+# Make sure the labels about to be written exist in the repository they are about
+# to be written to. Returns 1 — and counts a refusal — only for a label outside
+# the table above, which is a defect in this file rather than in a repository.
+#
+# **A listing that failed reads as a repository with no labels**, which asks
+# GitHub to create all eight. That is the safe direction: `gh label create` on a
+# label that already exists fails, this swallows it, and the `gh issue edit`
+# below is still the thing that decides whether the write happened.
+ensure_labels() {
+  local repo=$1
+  shift
+  local label pair colour description
+  if [ -z "${REPO_LABELS[$repo]:-}" ]; then
+    REPO_LABELS[$repo]=" $(gh label list --repo "$repo" --limit 200 --json name --jq '.[].name' 2>/dev/null | tr '\n' ' ')"
+  fi
+  for label in "$@"; do
+    [ -n "$label" ] || continue
+    case "${REPO_LABELS[$repo]}" in *" $label "*) continue ;; esac
+    if ! pair=$(label_definition "$label"); then
+      refused "\`$label\` is not in AGENTS.md §5's vocabulary, so it was neither created in $repo nor written"
+      return 1
+    fi
+    IFS=$'\x1f' read -r colour description <<<"$pair"
+    if gh label create "$label" --repo "$repo" --color "$colour" --description "$description" >/dev/null 2>&1; then
+      note "created the missing label $label in $repo"
+    fi
+    REPO_LABELS[$repo]+="$label "
+  done
+  return 0
+}
+
 # ## Where a proposed prohibition goes (`#264`)
 #
 # `#264` says the proposal is a comment on `kolonie-docs#142` — which closed on
@@ -411,7 +499,12 @@ apply() {
   # Both numbers, always — *changed 0* and *0 could not be written* are the quiet
   # pass, and *changed 0, 7 could not be written* is an outage (`#302`).
   echo "triage changed $changed issue(s), $WRITE_FAILURES could not be written"
-  [ "$WRITE_FAILURES" -eq 0 ] || die "$WRITE_FAILURES write(s) GitHub refused — the decisions above were paid for and discarded" 4
+  # Loud, and last. Every issue in the list above has already been attempted by
+  # the time this line runs — `#333`: a refusal costs the issue it was about and
+  # the rest of the pass is applied, and the run still goes red so that a
+  # repository missing a label is noticed the same day rather than in a log
+  # nobody opens.
+  [ "$WRITE_FAILURES" -eq 0 ] || die "$WRITE_FAILURES write(s) GitHub refused — those issues were paid for and discarded; the rest of the pass was applied" 4
 }
 
 # One issue. Returns 0 when something was written, 1 when nothing was — the
@@ -566,9 +659,20 @@ apply_one() {
   blockers=$(bash "$HERE/opencode-worker.sh" blockers "$repo" "$number" 2>/dev/null | tr '\n' ' ')
 
   # ## The labels, in one call
+  #
+  # **One call, so a label the repository does not have takes the others with
+  # it** — which is why the labels being added are ensured first (`#333`). Only
+  # the ones being *added*: a label being removed is by definition already there,
+  # and creating one in order to remove it would be a write nobody asked for.
+  #
+  # **A repository that refuses the write costs its own issue and no other**
+  # (`#333`). This returns 1, `apply` counts it and carries on down its list, and
+  # the pass still fails at the end with both numbers — `#302`'s rule is that a
+  # refusal is loud, not that it is contagious.
   if [ ${#add[@]} -gt 0 ] || [ ${#remove[@]} -gt 0 ]; then
     local -a args=()
     local label
+    ensure_labels "$repo" ${add[@]+"${add[@]}"} || return 1
     for label in ${add[@]+"${add[@]}"}; do args+=(--add-label "$label"); done
     for label in ${remove[@]+"${remove[@]}"}; do args+=(--remove-label "$label"); done
     if ! gh issue edit "$number" --repo "$repo" "${args[@]}" >/dev/null 2>&1; then
@@ -1283,6 +1387,9 @@ case "${1:-}" in
   provenance)
     provenance "${2:?provenance needs a login}"
     ;;
+  vocabulary)
+    vocabulary
+    ;;
   refusals)
     refusals
     ;;
@@ -1293,6 +1400,6 @@ case "${1:-}" in
     propose "${2:?propose needs the file the model wrote}"
     ;;
   *)
-    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
+    die "usage: board-triage.sh candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac

@@ -401,6 +401,52 @@ gh project item-edit --id <item-id> --project-id PVT_kwDOEmwuYs4BebbB \
   --field-id PVTSSF_lADOEmwuYs4BebbBzhY1uQw --single-select-option-id <option-id>
 ```
 
+### What a new repository needs before the automation is pointed at it
+
+**This list exists because the answer used to be remembered rather than
+checked, and it cost the same thing twice.** `kolonie-dns#17`: nine labels
+absent, so a day of triage decisions were paid for and thrown away. Then
+`kolonie-openclaw`, 2026-08-13: four labels absent, two triage runs red, and
+eight issues in *another* repository went unrouted for half an hour because the
+pass they shared died. Both were fixed by hand, in the one repository, which is
+the fix that leaves the next repository to break in the same way.
+
+A repository whose issues reach the board needs all five, and it needs them
+**before** the first issue is filed in it, not after the first pass fails:
+
+1. **The eight labels the triage pass writes** — the three `agent:` routes,
+   `from:external`, `decision`, `idea`, `p1` and `p2`, all defined in §5. `bash
+   .github/scripts/board-triage.sh vocabulary` prints exactly that list, and is
+   the copy to trust: `board-triage.sh` now creates a missing one before it
+   writes it, so this line is a belt to that brace rather than the only defence.
+2. **`.github/workflows/triage.yml`**, calling
+   `Kolonie-AI/kolonie-docs/.github/workflows/inbound-triage.yml@main` with the
+   repository's own `area:` label. Without it an issue opened from outside gets
+   no `area:`, no `from:external` and no reply.
+3. **`.github/workflows/review.yml`**, so a pull request opened there is
+   reviewed rather than merged unread.
+4. **A board card for every open issue**, which is automatic only for the five
+   repositories above and is `gh project item-add` by hand for every other —
+   the paragraphs above say why that cap is not automated away.
+5. **A named place in §5** — added to its list of repositories that carry issues
+   on the board, and its `area:` label added to §5's Area list if it needs one
+   that does not exist yet. Area is not the same as repository, and an agent that
+   has to infer which is which guesses.
+
+**Nothing here is checked at the moment a repository is created**, because
+nothing watches an organisation for new repositories. What is checked is the
+consequence: `board-self-check.sh`'s query 5c asks all of 1–3 daily, of every
+repository §5 names and of every repository that has reached the board, and
+reports what is missing with the one command that fixes it. It never fixes
+anything itself — creating a workflow in another repository is a decision.
+
+**The skill repositories are deliberately outside that check.** §5 is explicit
+that none of them puts an issue on the board, and a daily report that names six
+repositories every morning for something that is not the board's business is one
+nobody opens. That they have no inbound triage and no reviewer at all is a real
+finding; it is [`kolonie-docs#338`](https://github.com/Kolonie-AI/kolonie-docs/issues/338)
+rather than a line in a daily report.
+
 ### Getting `<item-id>` right, which is harder than it looks
 
 **An issue number does not identify an issue here.** The board spans five
@@ -1259,8 +1305,8 @@ that failure worth remembering.
 bash .github/scripts/board-self-check.sh check
 ```
 
-**That script is the one copy of both queries, and this section deliberately no
-longer carries them.** `#132` required them to exist in exactly one place; a
+**That script is the one copy of all three queries, and this section deliberately
+no longer carries them.** `#132` required them to exist in exactly one place; a
 second copy in a document is a version that goes out of step without anybody
 editing it, which is the failure `#120` is named after. What the script does not
 hold is the *reasoning*, which is here:
@@ -1294,12 +1340,28 @@ see, and the fix is one command per line:
 gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
 ```
 
-**Neither answer is acted on automatically, and that is a decision.** 5a's fix is
+**5c — the pointing.** 5a and 5b both ask about the board's contents. 5c asks
+whether the automation that fills it is actually aimed at the repositories it
+serves: has each of them the eight labels the triage pass writes, a `triage.yml`
+that calls `inbound-triage.yml`, and a reviewer. It asks this of the five
+repositories §5 names *and* of every repository that currently has a card, so a
+newcomer is checked because it reached the board rather than because it broke.
+
+**It exists because the answer used to be remembered.** `kolonie-dns#17` and
+`kolonie-openclaw` on 2026-08-13 were the same failure twice — labels absent, a
+triage pass billed for decisions it then discarded — and both were fixed in the
+one repository, which is the fix that leaves the next one to break. §4 has the
+list of what a new repository needs; this is the query that notices when it did
+not get it. **The skill repositories are out of its scope on purpose**, for the
+reason §4 gives.
+
+**No answer is acted on automatically, and that is a decision.** 5a's fix is
 a dashboard setting no API can reach — `ProjectV2Workflow` exposes `enabled` and
 no mutation that sets it. 5b's fix is a write to the board, and a board write
-ought to be somebody's decision rather than a nightly job's. The daily run opens
-one issue, reuses it rather than filing a second, and closes it when both
-answers are right again.
+ought to be somebody's decision rather than a nightly job's. 5c's is a workflow
+or a label in another repository, which is more of a decision still. The daily
+run opens one issue, reuses it rather than filing a second, and closes it when
+every answer is right again.
 
 **This one is measurement and not assertion, deliberately.** §4 lists which
 repositories are covered as of a date, and a list in a document is exactly the

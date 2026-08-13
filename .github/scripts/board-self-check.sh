@@ -1,10 +1,11 @@
 #!/bin/bash
-# Does the board still maintain itself? `AGENTS.md` §6 queries 5a and 5b.
+# Does the board still maintain itself? `AGENTS.md` §6 queries 5a and 5b, and 5c
+# below — whether the automation is pointed at the repositories the board serves.
 #
 # Usage:
-#   board-self-check.sh check [report-file]   # run both, write findings, exit 1 if wrong
+#   board-self-check.sh check [report-file]   # run all three, write findings, exit 1 if wrong
 #   board-self-check.sh report <report-file>  # open or reuse the issue that says so
-#   board-self-check.sh resolve               # close that issue, both answers being right again
+#   board-self-check.sh resolve               # close that issue, every answer being right again
 #
 # ## Why this file exists at all
 #
@@ -41,8 +42,9 @@
 #
 # **It does not fix anything.** 5a reports a dashboard setting no API can reach —
 # `ProjectV2Workflow` exposes `enabled` and no mutation to set it. 5b's fix is
-# `gh project item-add`, a write to the board that ought to be a decision. This
-# script reads, and reports. Nothing here archives, adds or edits a board item,
+# `gh project item-add`, a write to the board that ought to be a decision. 5c's
+# is a workflow or a label in somebody else's repository, which is more of a
+# decision still. This script reads, and reports. Nothing here archives, adds or edits a board item,
 # and `.github/tests/board-self-check.test.sh` asserts that against a stubbed
 # `gh` rather than trusting the reading.
 set -uo pipefail
@@ -122,35 +124,144 @@ check_pruning() {
 # Five of the ten repositories have no auto-add workflow and cannot be given one
 # (§4), so an issue opened in one of them is invisible until somebody adds it by
 # hand. This lists every open issue that is not on the board.
-check_arrivals() {
-  local board missing
-  board=$(mktemp) || return 1
+# The listing itself, read once and answered from a variable after that. Two
+# questions now want it (5b and 5c) and `#329` will want it for a third, and the
+# whole reason 5b reads the board this way is that the expensive way emptied the
+# budget — so a second reader asks this rather than calling again.
+BOARD_LISTING=""
+BOARD_STATUS=
+BOARD_FLOOR=20
+
+load_board() {
+  [ -n "$BOARD_LISTING" ] && return "$BOARD_STATUS"
+  BOARD_LISTING=$(mktemp) || { BOARD_STATUS=1; return 1; }
   # `board-read` and not `gh project item-list`: the same document for 2 points
   # against 203 (`#269`, measured 2026-08-10 on a 129-item board), and 5a above
   # exists because that 203 emptied the budget. A check whose own cost is the
   # thing it warns about was reporting a symptom it was helping to cause.
   bash "$HERE/opencode-worker.sh" board-read 2>/dev/null \
-    | jq -r '.items[] | "\(.content.repository)#\(.content.number)"' 2>/dev/null | sort -u > "$board"
+    | jq -r '.items[] | "\(.content.repository)#\(.content.number)"' 2>/dev/null | sort -u > "$BOARD_LISTING"
 
   # A board that reads as empty is a failed call, not an empty board, and
   # reporting every open issue in the organisation as missing is the loudest
   # possible way to be wrong. The floor is the same defence `red-lines.py` has.
-  if [ "$(wc -l < "$board")" -lt 20 ]; then
-    echo "5b — **The board listing returned $(wc -l < "$board") items**, which is fewer than the board has ever held. Treating that as \"everything is missing\" would file a hundred false lines, so the comparison was not run. The likely causes are a spent GraphQL budget or a token that lost \`project\` scope."
-    rm -f "$board"
+  # It lives here rather than in 5b so that every reader of the listing inherits
+  # it: a second copy of a guard is a second thing that can be got wrong.
+  if [ "$(wc -l < "$BOARD_LISTING")" -lt "$BOARD_FLOOR" ]; then BOARD_STATUS=1; else BOARD_STATUS=0; fi
+  return "$BOARD_STATUS"
+}
+
+check_arrivals() {
+  local missing
+  if ! load_board; then
+    echo "5b — **The board listing returned $(wc -l < "$BOARD_LISTING") items**, which is fewer than the board has ever held. Treating that as \"everything is missing\" would file a hundred false lines, so the comparison was not run. The likely causes are a spent GraphQL budget or a token that lost \`project\` scope."
     return 1
   fi
 
   missing=$(for r in $(gh repo list "$ORG" --limit 50 --json name --jq '.[].name'); do
       gh issue list --repo "$ORG/$r" --state open --limit 200 \
         --json number --jq ".[] | \"$ORG/$r#\(.number)\""
-    done | sort -u | comm -23 - "$board")
-  rm -f "$board"
+    done | sort -u | comm -23 - "$BOARD_LISTING")
 
   if [ -n "$missing" ]; then
     echo "5b — **These open issues are not on the board**, so nobody working the loop can see them. One command each: \`gh project item-add 1 --owner $ORG --url https://github.com/<repo>/issues/<n>\`"
     echo
     printf '%s\n' "$missing" | sed 's/^/    /'
+    return 1
+  fi
+  return 0
+}
+
+# --- 5c: is the automation actually pointed at this repository? --------------
+# **A repository's readiness for the automation was remembered rather than
+# checked, and it cost the same thing twice** (`#333`). `kolonie-dns#17`: nine
+# labels absent, so a day of triage decisions were paid for and discarded. Then
+# `kolonie-openclaw`, 2026-08-13: four labels absent, two runs red, and eight
+# issues in another repository went unrouted for half an hour because of it. Both
+# were fixed by hand, in that one repository, which is the fix that leaves the
+# next repository to break in the same way.
+#
+# `board-triage.sh` now creates the labels it writes, so the first of those two
+# outages cannot repeat. This is the other half: **saying so before an issue is
+# filed**, so a repository joining the organisation is set up rather than
+# discovered.
+#
+# ## What is in scope, and what is deliberately not
+#
+# The five repositories `AGENTS.md` §5 names carry board issues and are checked
+# unconditionally — including one with no issues yet, which is the whole point of
+# not waiting for one to be filed. Anything else that has reached the board since
+# is checked because it has: `kolonie-openclaw` and `kolonie-dns` are on the board
+# and are not in §5's five, and they are exactly the two that broke.
+#
+# **The skill repositories are out of scope here.** §5 is explicit that none of
+# them puts an issue on the board, and listing six repositories every morning for
+# a thing that is not this check's business is how a daily report becomes one
+# nobody opens. That they have no inbound triage and no reviewer at all is a real
+# and separate finding, and it is filed as one.
+#
+# It reports and never fixes, like everything else in this file: creating a
+# workflow in another repository is a decision, not hygiene.
+BOARD_REPOSITORIES="kolonie-docs kolonie-platform kolonie-infra kolonie-website kolonie-email"
+
+# `triage.yml` calling the reusable workflow, and `review.yml` — the convention
+# all seven board repositories already follow (measured 2026-08-13). Checked by
+# reading the caller rather than by trusting the filename: a `triage.yml` that
+# calls something else is the state this would otherwise report as covered.
+check_coverage() {
+  local wanted repo listing finding="" missing gaps seen narrowed=""
+  wanted=$(bash "$HERE/board-triage.sh" vocabulary 2>/dev/null)
+  # The vocabulary comes from the script that writes it. If that call answers
+  # nothing the check is not run at all, because "every label is missing
+  # everywhere" is the loudest possible way to be wrong — 5b's own rule.
+  [ -n "$wanted" ] || { echo "5c — **The triage vocabulary could not be read** from \`board-triage.sh vocabulary\`, so no repository's labels were checked. That is a defect in this checkout, not a finding about any repository."; return 1; }
+
+  # The five are checked whether or not the listing came back; the union is what
+  # needs it, so a board read that failed its floor narrows this check instead of
+  # silencing it, and says which of the two it was.
+  seen=$(printf '%s\n' $BOARD_REPOSITORIES)
+  if load_board; then
+    seen=$(printf '%s\n%s\n' "$seen" "$(sed 's|^[^/]*/||; s|#.*$||' "$BOARD_LISTING")")
+  else
+    # Not a finding of its own — 5b has already said the listing failed, loudly
+    # and with the number. It is a caveat on this answer, so it is printed only
+    # where it changes how this answer should be read.
+    narrowed="    (the board listing did not pass its floor, so only the repositories \`AGENTS.md\` §5 names were checked)"$'\n'
+  fi
+
+  for repo in $(printf '%s\n' "$seen" | sort -u); do
+    [ -n "$repo" ] || continue
+    gaps=""
+
+    missing=$(comm -23 <(printf '%s\n' "$wanted" | sort) \
+      <(gh label list --repo "$ORG/$repo" --limit 200 --json name --jq '.[].name' 2>/dev/null | sort) \
+      | tr '\n' ' ')
+    # Every label reading as missing is a listing that failed, not a repository
+    # with no labels — the same floor 5b has, one repository wide.
+    if [ "$(wc -w <<<"$missing")" -ge "$(wc -l <<<"$wanted")" ]; then
+      gaps+="        its labels could not be listed, so the vocabulary is unverified"$'\n'
+    elif [ -n "${missing// /}" ]; then
+      gaps+="        missing labels: ${missing% } — \`bash .github/scripts/board-triage.sh vocabulary\` names the set"$'\n'
+    fi
+
+    listing=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null)
+    case "$listing" in
+      *inbound-triage.yml@*) : ;;
+      *) gaps+="        no workflow calls \`inbound-triage.yml\`, so an issue filed from outside gets no \`area:\` label and no reply — copy \`.github/workflows/triage.yml\` and set its \`area:\`"$'\n' ;;
+    esac
+
+    if ! gh api "repos/$ORG/$repo/contents/.github/workflows/review.yml" --silent >/dev/null 2>&1; then
+      gaps+="        no reviewer: copy \`.github/workflows/review.yml\`"$'\n'
+    fi
+
+    [ -n "$gaps" ] && finding+="    $ORG/$repo"$'\n'"$gaps"
+  done
+
+  if [ -n "$finding" ]; then
+    echo "5c — **The automation is not fully pointed at these repositories.** A repository whose issues reach the board but whose labels do not exist is worse than one that is not on the board at all: the triage pass is billed for a decision it then discards (\`#333\`). \`AGENTS.md\` §4 has the whole list a new repository needs."
+    echo
+    printf '%s' "$finding"
+    [ -n "$narrowed" ] && printf '%s' "$narrowed"
     return 1
   fi
   return 0
@@ -200,9 +311,12 @@ cmd_check() {
   check_pruning >> "$report" || status=1
   [ -s "$report" ] && echo >> "$report"
   check_arrivals >> "$report" || status=1
+  [ -s "$report" ] && echo >> "$report"
+  check_coverage >> "$report" || status=1
+  [ -n "$BOARD_LISTING" ] && rm -f "$BOARD_LISTING"
 
   if [ "$status" -eq 0 ]; then
-    echo "the board is pruning itself and every open issue is on it"
+    echo "the board is pruning itself, every open issue is on it, and the automation is pointed at every repository that reaches it"
   else
     cat "$report"
   fi
@@ -277,7 +391,7 @@ cmd_report() {
   {
     cat "$report"
     printf '\n\n[Full run](%s)\n\n' "${RUN_URL:-no run url}"
-    printf '%s\n\n' "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily. It never archives, adds or edits a board item — the fix is a decision, so it stays a person's or an agent's to take."
+    printf '%s\n\n' "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily, and asks 5c — whether the automation is pointed at every repository whose issues reach the board — alongside them. It never archives, adds or edits a board item, and it never creates a workflow or a label in another repository: every fix below is a decision, so it stays a person's or an agent's to take."
     bash "$FINDING" footer board-unmaintained \
       "the board failing its own maintenance check — 5a, 5b or both, regardless of which of them it was or what the numbers were that day" \
       "board-self-check.yml"
@@ -300,7 +414,7 @@ cmd_resolve() {
   existing=$(jq -r 'select(.state == "OPEN") | .number' <<<"${found:-null}" 2>/dev/null)
   if [ -n "$existing" ]; then
     gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
-      --comment "Both answers are right again: the board is pruning itself and every open issue is on it. [Run](${RUN_URL:-no run url})"
+      --comment "Every answer is right again: the board is pruning itself, every open issue is on it, and the automation is pointed at every repository that reaches it. [Run](${RUN_URL:-no run url})"
     echo "closed #$existing"
   fi
 }

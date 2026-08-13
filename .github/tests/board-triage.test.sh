@@ -58,11 +58,37 @@ case "$1 $2" in
   # not exist in `kolonie-dns` for a day, and `gh issue edit` writes every label in
   # one call — so `p1` and `decision`, which did exist, fell with the one that did
   # not. The fixture reproduces the whole call failing, which is what happened.
+  #
+  # **Per issue number rather than for the whole pass** (`#333`), because the
+  # thing under test is now that the *other* issues in the same pass are still
+  # written. A fixture that failed every edit could not tell the fix from the bug.
   "issue edit")
-    if [ -s "$GH_FIXTURES/label_fails" ]; then
+    if [ -s "$GH_FIXTURES/label_fails" ] && grep -qx -- "$3" "$GH_FIXTURES/label_fails"; then
       echo "could not add label: 'agent:claude' not found" >&2
       exit 1
     fi ;;
+  # What the repository already has (`#333`). The fixture is the `--json name`
+  # shape and the filter is applied here, because *which labels are missing* is
+  # the behaviour under test and a pre-filtered fixture would assert nothing.
+  "label list")
+    [ -f "$GH_FIXTURES/labels" ] || exit 0
+    expression=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --jq) expression=$2; shift 2 ;;
+        *)    shift ;;
+      esac
+    done
+    if [ -n "$expression" ]; then jq -r "$expression" "$GH_FIXTURES/labels"; else cat "$GH_FIXTURES/labels"; fi ;;
+  # Creating one. A repository that already has it answers `already exists`, which
+  # is the case the script swallows.
+  "label create")
+    if grep -qx -- "$3" "$GH_FIXTURES/labels_created_fail" 2>/dev/null; then
+      echo "HTTP 403: Resource not accessible by integration" >&2
+      exit 1
+    fi
+    jq --arg n "$3" '. + [{name: $n}]' "$GH_FIXTURES/labels" > "$GH_FIXTURES/labels.next" &&
+      mv "$GH_FIXTURES/labels.next" "$GH_FIXTURES/labels" ;;
   # The board, translated out of the `gh project item-list` shape the fixtures are
   # written in — the same translation `opencode-worker.test.sh` does, because
   # `board-triage.sh` reads the board through that script rather than with a
@@ -193,6 +219,17 @@ case_setup() {
   mkdir -p "$GH_FIXTURES"
   : > "$GH_LOG"
   printf '%s\n' "colleague" "runner" > "$GH_FIXTURES/members"
+  # A repository that already carries the whole vocabulary, which is every
+  # repository on the board today and therefore the state the other cases are
+  # about. The case that is about `#333` overwrites this with a repository that
+  # is missing one.
+  vocabulary agent:human agent:claude agent:opencode from:external decision idea p1 p2
+}
+
+# The labels the repository under test has. `--json name` shape, because that is
+# what the script asks for.
+vocabulary() {
+  jq -cn '$ARGS.positional | map({name: .})' --args "$@" > "$GH_FIXTURES/labels"
 }
 
 check() {
@@ -1011,7 +1048,7 @@ echo "a write GitHub refused (#302)"
 case_setup
 searched "$(issue 900 'a label that does not exist here' '')"
 boarded "900|Inbox|"
-echo yes > "$GH_FIXTURES/label_fails"
+echo 900 > "$GH_FIXTURES/label_fails"
 out=$(run_apply "$(decided 900 "agent:claude" "p1" "" "" true)"); status=$?
 check "a refused label write fails the pass" "4" "$status"
 contains "and the count is in the summary line, beside the changes" \
@@ -1030,6 +1067,71 @@ out=$(run_apply "$(decided 900 "agent:claude" "p1" "" "" true)"); status=$?
 check "a pass with nothing to write is still green" "0" "$status"
 contains "and says so with both numbers" \
   "triage changed 0 issue(s), 0 could not be written" "$out"
+
+echo
+echo "a repository that does not have the vocabulary yet (#333)"
+
+# `kolonie-openclaw`, 2026-08-13: none of the three routes and no `from:external`,
+# so both decisions the pass had been billed for were discarded and the two runs
+# after it failed the same way. The labels were created by hand at 08:41Z. This is
+# the pass creating them instead.
+case_setup
+vocabulary p1 p2 decision idea
+searched "$(issue 900 'a repository new to the automation' '')"
+boarded "900|Inbox|"
+out=$(run_apply "$(decided 900 "agent:claude" "p1" "" "" true)"); status=$?
+check "a missing label does not fail the pass, because it is created" "0" "$status"
+contains "the route label is created in the repository it is about to be written to" \
+  "label create agent:claude --repo Kolonie-AI/kolonie-docs" "$(cat "$GH_LOG")"
+contains "with a colour and a description, so the repository gets a usable label" \
+  "--color D4C5F9" "$(cat "$GH_LOG")"
+absent "no --force: a repository's own colour is not this script's to overwrite" \
+  "--force" "$(cat "$GH_LOG")"
+absent "a label the repository already has is left exactly as it is" \
+  "label create p1" "$(cat "$GH_LOG")"
+absent "and nothing is created that this issue was not about to be given" \
+  "label create agent:opencode" "$(cat "$GH_LOG")"
+contains "and the write then goes through" "--add-label agent:claude" "$(cat "$GH_LOG")"
+
+# The vocabulary is closed and is `AGENTS.md` §5's. `ROUTES` is settable from the
+# environment, which is the reachable way to ask this script to write a label
+# nobody has agreed to — it is refused rather than created.
+case_setup
+searched "$(issue 900 'a route nobody agreed to' '')"
+boarded "900|Inbox|"
+out=$(ROUTES="agent:human agent:claude agent:invented" \
+  run_apply "$(decided 900 "agent:invented" "" "" "" true)"); status=$?
+check "a label outside AGENTS.md §5 is refused" "4" "$status"
+absent "and is not created" "label create agent:invented" "$(cat "$GH_LOG")"
+absent "and is not written" "--add-label agent:invented" "$(cat "$GH_LOG")"
+contains "and the refusal says which vocabulary it is not in" \
+  "not in AGENTS.md §5's vocabulary" "$(cat "$WORK/stderr")"
+
+# The half `#333` is actually named for: the model call was made and billed, and
+# one issue GitHub refuses must not throw away the decisions about the others.
+case_setup
+vocabulary agent:human agent:claude agent:opencode from:external decision idea p1 p2
+searched "$(issue 900 'the one GitHub refuses' '')" "$(issue 901 'the one beside it' '')"
+boarded "900|Inbox|" "901|Inbox|"
+echo 900 > "$GH_FIXTURES/label_fails"
+jq -cn '{ decisions: [
+    { repo: "Kolonie-AI/kolonie-docs", number: 900, route: "agent:claude",
+      priority: "", readiness: "", depends_on: [], ready: true,
+      reason: "because the table says so" },
+    { repo: "Kolonie-AI/kolonie-docs", number: 901, route: "agent:claude",
+      priority: "p1", readiness: "", depends_on: [], ready: true,
+      reason: "because the table says so" } ] }' > "$WORK/decisions.json"
+out=$(run_apply "$WORK/decisions.json"); status=$?
+contains "the issue beside the refused one is still written" \
+  "issue edit 901 --repo Kolonie-AI/kolonie-docs --add-label agent:claude --add-label p1" \
+  "$(cat "$GH_LOG")"
+contains "and its card is still moved" \
+  "single-select-option-id 0ce10d81" "$(cat "$GH_LOG")"
+contains "and both numbers are still reported, one refused and one written" \
+  "triage changed 1 issue(s), 1 could not be written" "$out"
+check "and the run still fails, because a refusal is loud (#302)" "4" "$status"
+contains "and the refusal still names the issue it was about" \
+  "the labels on Kolonie-AI/kolonie-docs#900 could not be written" "$(cat "$WORK/stderr")"
 
 echo
 echo "the routing cases (#289)"
