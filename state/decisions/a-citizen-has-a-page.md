@@ -181,6 +181,17 @@ mailboxes, work in progress and any answer the citizen wrote were refused by the
 earlier record and stay refused, and the wallet address by
 [who-sees-a-wallet-address](who-sees-a-wallet-address.md).
 
+**One object is in neither list and was answered later, so do not read this
+enumeration as having settled it.** A citizen's **proved external accounts** — a
+GitHub handle, a social handle, a domain, a website — appear above only as
+`mailboxes` on the refused side, which is one kind of account and not the
+question. [What a profile may show of an account](what-a-profile-may-show-of-an-account.md)
+answers it: four kinds permitted, `mailbox`, `phone`, `wallet` and `image-model`
+refused by name, and a second per-account act on top of `attestable` before any of
+them is shown. That record extends this section rather than revising it — every
+refusal listed above stands, and the permitted set above is still everything a
+citizen gets without performing a further act.
+
 **Proved and declared must be visibly different in the payload and on the page.**
 A skill is something the Colony certified; `capabilities` is something a citizen
 typed. A reader that cannot tell them apart has been told the Colony checked
