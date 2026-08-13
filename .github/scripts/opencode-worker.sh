@@ -238,6 +238,8 @@ query($org: String!, $project: Int!, $after: String) {
               number
               title
               url
+              state
+              closedAt
               repository { nameWithOwner url }
               labels(first: 20) { nodes { name } }
             }
@@ -255,6 +257,13 @@ GRAPHQL
 # site and no filter has to be re-read to be trusted. `labels` and the urls cost
 # nothing to ask for — a page is a point with them or without — so they are here
 # rather than left out to be added back by whoever needs them next.
+#
+# `state` and `closedAt` are here on the same terms (`#329`). A **scalar on a node
+# already being fetched is free**: the score is the number of nodes a query asks
+# for, so a page costs the same point with them as without, and the board is
+# still one paginated read rather than two. What they buy is the only question
+# 5a and 5b between them cannot ask — *is this card in the right column* — which
+# needs the issue's own state next to the card's Status, in the same document.
 # **The pages accumulate in a file and never on a command line** (`#142`). The
 # first draft of this held the running board in a shell variable and passed it to
 # the next page's `jq` with `--argjson`, which is exactly the defect `#142` spent
@@ -310,6 +319,8 @@ board_read() {
                        title: .content.title,
                        repository: .content.repository.nameWithOwner,
                        url: .content.url,
+                       state: .content.state,
+                       closedAt: .content.closedAt,
                        type: "Issue" } } ]
     ' <<<"$page" >>"$pages" || { rc=1; break; }
     [ "$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$page")" = true ] || break

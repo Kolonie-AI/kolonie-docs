@@ -1,6 +1,6 @@
 name: Board self-check
 
-# `AGENTS.md` §6 queries 5a and 5b, on a schedule, because on 2026-08-02 nobody
+# `AGENTS.md` §6 queries 5a to 5d, on a schedule, because on 2026-08-02 nobody
 # ran them and the project ran out of GitHub API budget — 4,998 of 5,000 GraphQL
 # points in one working session, every point spent by the `--limit 1000` listing
 # the orchestration loop is told to use. Board columns could not be set on three
@@ -19,15 +19,16 @@ name: Board self-check
 # ## Where the queries are
 #
 # In `.github/scripts/board-self-check.sh`, which is the only copy. §6 says what
-# 5a and 5b check and points at the script to run them. `#132` required exactly
-# one copy and left the choice of which; the alternative was a workflow that
+# each of the four checks and points at the script to run them. `#132` required
+# exactly one copy and left the choice of which; the alternative was a workflow that
 # executes code out of a Markdown file, and that is a class of clever that fails
 # quietly and reads as fine in review.
 #
 # ## What it may never do
 #
-# **Fix anything.** 5a reports a dashboard setting no API can reach; 5b's fix is
-# a write to the board that ought to be a decision. The script reads and reports,
+# **Fix anything.** 5a reports a dashboard setting no API can reach; 5b's fix and
+# 5d's are both writes to the board that ought to be a decision, and 5c's is a
+# workflow or a label in another repository. The script reads and reports,
 # and `.github/tests/board-self-check.test.sh` proves it against a stubbed `gh`
 # rather than asking to be believed.
 
@@ -87,7 +88,7 @@ jobs:
       - name: Test the check
         run: bash .github/tests/board-self-check.test.sh
 
-      - name: Ask the board both questions
+      - name: Ask the board all four questions
         id: check
         env:
           # A stored, **read-only** credential: Organization → Projects: Read and
@@ -147,7 +148,7 @@ jobs:
 
       # The other half of reaching somebody: an issue that stays open after the
       # thing it reports is fixed is an issue people learn to ignore.
-      - name: Close it once both answers are right again
+      - name: Close it once every answer is right again
         if: success() && inputs.break_it != true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

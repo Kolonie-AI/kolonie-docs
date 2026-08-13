@@ -1,9 +1,18 @@
 #!/bin/bash
-# Does the board still maintain itself? `AGENTS.md` §6 queries 5a and 5b, and 5c
-# below — whether the automation is pointed at the repositories the board serves.
+# Does the board still maintain itself? `AGENTS.md` §6 queries 5a and 5b, plus 5c
+# — whether the automation is pointed at the repositories the board serves — and
+# 5d, whether the items on it are in a column that matches their state.
+#
+# **What each catches that the others cannot.** 5a asks what has left the board
+# and 5b asks what never reached it, so between them they see only its edges. 5c
+# asks about the machinery around it rather than its contents. **5d is the only
+# one that looks at an item that is on the board and in the wrong place** — no
+# Status at all, or closed and still sitting in a working column — which is the
+# class the board has been failing in since the built-in Status workflows were
+# disabled on 2026-08-12 (`#329`).
 #
 # Usage:
-#   board-self-check.sh check [report-file]   # run all three, write findings, exit 1 if wrong
+#   board-self-check.sh check [report-file]   # run all four, write findings, exit 1 if wrong
 #   board-self-check.sh report <report-file>  # open or reuse the issue that says so
 #   board-self-check.sh resolve               # close that issue, every answer being right again
 #
@@ -44,7 +53,9 @@
 # `ProjectV2Workflow` exposes `enabled` and no mutation to set it. 5b's fix is
 # `gh project item-add`, a write to the board that ought to be a decision. 5c's
 # is a workflow or a label in somebody else's repository, which is more of a
-# decision still. This script reads, and reports. Nothing here archives, adds or edits a board item,
+# decision still. 5d's is `gh project item-edit`, the same board write as 5b's
+# and the same argument — a column is somebody's judgement about an issue, and a
+# nightly job that moved cards would be making it. This script reads, and reports. Nothing here archives, adds or edits a board item,
 # and `.github/tests/board-self-check.test.sh` asserts that against a stubbed
 # `gh` rather than trusting the reading.
 set -uo pipefail
@@ -124,10 +135,17 @@ check_pruning() {
 # Five of the ten repositories have no auto-add workflow and cannot be given one
 # (§4), so an issue opened in one of them is invisible until somebody adds it by
 # hand. This lists every open issue that is not on the board.
-# The listing itself, read once and answered from a variable after that. Two
-# questions now want it (5b and 5c) and `#329` will want it for a third, and the
-# whole reason 5b reads the board this way is that the expensive way emptied the
-# budget — so a second reader asks this rather than calling again.
+# The listing itself, read once and answered from a variable after that. Three
+# questions want it now — 5b, 5c and 5d — and the whole reason 5b reads the board
+# this way is that the expensive way emptied the budget, so a second reader asks
+# this rather than calling again.
+#
+# **Two files, one read.** `BOARD_JSON` is what `board-read` answered;
+# `BOARD_LISTING` is the `owner/repo#n` reduction of it that 5b and 5c compare
+# against. 5d needs the fields the reduction throws away — the card's Status and
+# the issue's own state — so the document is kept as well as the list rather than
+# fetched a second time in a different shape.
+BOARD_JSON=""
 BOARD_LISTING=""
 BOARD_STATUS=
 BOARD_FLOOR=20
@@ -135,12 +153,14 @@ BOARD_FLOOR=20
 load_board() {
   [ -n "$BOARD_LISTING" ] && return "$BOARD_STATUS"
   BOARD_LISTING=$(mktemp) || { BOARD_STATUS=1; return 1; }
+  BOARD_JSON=$(mktemp) || { BOARD_STATUS=1; return 1; }
   # `board-read` and not `gh project item-list`: the same document for 2 points
   # against 203 (`#269`, measured 2026-08-10 on a 129-item board), and 5a above
   # exists because that 203 emptied the budget. A check whose own cost is the
   # thing it warns about was reporting a symptom it was helping to cause.
-  bash "$HERE/opencode-worker.sh" board-read 2>/dev/null \
-    | jq -r '.items[] | "\(.content.repository)#\(.content.number)"' 2>/dev/null | sort -u > "$BOARD_LISTING"
+  bash "$HERE/opencode-worker.sh" board-read 2>/dev/null > "$BOARD_JSON"
+  jq -r '.items[] | "\(.content.repository)#\(.content.number)"' "$BOARD_JSON" 2>/dev/null \
+    | sort -u > "$BOARD_LISTING"
 
   # A board that reads as empty is a failed call, not an empty board, and
   # reporting every open issue in the organisation as missing is the loudest
@@ -267,6 +287,120 @@ check_coverage() {
   return 0
 }
 
+# --- 5d: is the item in the right place? -------------------------------------
+# **5a, 5b and 5c all ask about the edges of the board** — what has left it, what
+# never reached it, what the automation around it is pointed at. None of them can
+# see an item that is *on* the board and in the wrong column, and that is the
+# class the board started failing in on 2026-08-12 (`#329`).
+#
+# Measured on the live board, 2026-08-13, 154 items:
+#
+#   - **Two items had no Status at all** (`kolonie-docs#327`, `#328`). Both are on
+#     the board, so 5b is satisfied and silent. An item with no Status is in no
+#     column: nobody working the loop sees it, and the triage router does not pick
+#     it up either — it reads Inbox.
+#   - **One closed item was still In Review** (`kolonie-platform#827`, closed
+#     06:41:06Z, still there two hours later). 5a only looks at what is already in
+#     Done, so a closed item that never arrived there is invisible to it.
+#
+# Both were the collateral of deleting the `Backlog` option, which disabled the
+# four built-in workflows that *write* Status at 2026-08-12T21:56:01Z — including
+# *Item added to project* and *Item closed*. Until somebody re-enables them in the
+# Projects UI, every new issue arrives with no Status and every closed issue stays
+# where it was. So this is not a check that waits for a rare day: it is the only
+# one that reports what the board is producing right now, and it keeps its value
+# afterwards as the thing that notices the next time a workflow is switched off.
+#
+# It reports and never fixes, like everything else here. The fix is a board write,
+# which is 5b's argument exactly.
+#
+# The ids below are the same defaults `opencode-worker.sh` and `opencode-red.sh`
+# carry, and §4 has the query that regenerates them if a column is ever added or
+# renamed. **A third copy is tolerable here where a second copy of the label
+# vocabulary was not** (`#333`): the vocabulary decided whether the check passed,
+# so a stale copy made the answer wrong silently. These ids appear only inside a
+# command printed for a person to run, and a stale one fails in their terminal
+# rather than in this report.
+PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
+STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
+STATUS_INBOX=${STATUS_INBOX:-78639a6d}
+STATUS_DONE=${STATUS_DONE:-d37dbc2a}
+
+# How long a closed item may sit outside Done before it is a finding. The
+# built-in workflow moves it in seconds and an agent that closes an issue moves
+# the card in its next call, so this is not bounding the automation — it is
+# bounding the human-and-agent lag either side of it. Hours rather than 5a's
+# days: this check runs daily, and a window longer than a day would mean a
+# failure the board is producing every hour is reported the morning after next.
+#
+# The status-less half needs no threshold. Nothing writes an empty Status on the
+# way to writing a real one — an item with none has already missed the workflow
+# that was supposed to give it one.
+CLOSED_SETTLE_HOURS=6
+
+check_placement() {
+  local cutoff statusless closed stated
+  if ! load_board; then
+    # 5b has already printed the number and the likely causes; repeating them
+    # would be two paragraphs about one failure. What has to be said here is
+    # that neither comparison ran, because a silent 5d under a failing 5b reads
+    # as *the columns are fine*.
+    echo "5d — **Neither placement comparison was run**, because the board listing did not pass its floor. See 5b for the number and the likely cause. This is unverified rather than clean: an item in no column and a closed item outside Done would both look exactly like this."
+    return 1
+  fi
+
+  cutoff=$(date -u -d "$CLOSED_SETTLE_HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+
+  # An item with no Status is in no column. The destination is Inbox, because
+  # that is where the triage router looks — unless the issue is closed, in which
+  # case recommending Inbox would be sending a finished issue back to the front
+  # of the loop.
+  statusless=$(jq -r --arg p "$PROJECT_ID" --arg f "$STATUS_FIELD" \
+    --arg inbox "$STATUS_INBOX" --arg done "$STATUS_DONE" '
+    .items[] | select((.status // "") == "")
+    | "    \(.content.repository)#\(.content.number) — gh project item-edit --id \(.id) --project-id \($p) --field-id \($f) --single-select-option-id \(if .content.state == "CLOSED" then $done + "   # Done, it is closed" else $inbox + "   # Inbox" end)"
+    ' "$BOARD_JSON" 2>/dev/null)
+
+  # **A listing carrying no issue state at all is a query that changed, not a
+  # board with nothing closed on it.** `state` and `closedAt` are read from the
+  # same paginated call as everything else here; if they stop arriving, this half
+  # would report all-clear forever, which is the failure mode the whole file is
+  # written against.
+  stated=$(jq -r '[.items[] | select(.content.state != null)] | length' "$BOARD_JSON" 2>/dev/null)
+  if [ "${stated:-0}" -eq 0 ]; then
+    echo "5d — **The board listing carries no issue state**, so the closed-item comparison was not run. Nothing on it says whether an issue is open or closed, which means \`board-read\` is answering without \`state\` and \`closedAt\` — a defect in this checkout rather than a finding about the board."
+    [ -n "$statusless" ] && { echo; echo "The status-less comparison did run, and found:"; echo; printf '%s\n' "$statusless"; }
+    return 1
+  fi
+
+  # Closed and somewhere other than Done. Items with no Status are excluded
+  # because the half above already names them, with a destination that accounts
+  # for their being closed.
+  closed=$(jq -r --arg c "$cutoff" --arg p "$PROJECT_ID" --arg f "$STATUS_FIELD" --arg done "$STATUS_DONE" '
+    .items[]
+    | select(.content.state == "CLOSED")
+    | select((.status // "") != "" and .status != "Done")
+    | select(.content.closedAt != null and .content.closedAt < $c)
+    | "    \(.content.repository)#\(.content.number) — closed \(.content.closedAt), still in \(.status) — gh project item-edit --id \(.id) --project-id \($p) --field-id \($f) --single-select-option-id \($done)"
+    ' "$BOARD_JSON" 2>/dev/null)
+
+  [ -z "$statusless" ] && [ -z "$closed" ] && return 0
+
+  if [ -n "$statusless" ]; then
+    echo "5d — **These board items are in no column.** They are on the board, so 5b is satisfied and says nothing about them, and nobody working the loop can see them — the queue reads columns. The likeliest cause is that the built-in Status workflows are still disabled (§4); this is the per-item repair, not the repair:"
+    echo
+    printf '%s\n' "$statusless" | head -20
+    [ -n "$closed" ] && echo
+  fi
+
+  if [ -n "$closed" ]; then
+    echo "5d — **These items are closed and are not in Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not the built-in workflow being slow. A closed item outside Done is never archived either, so it stays on the board and every board read is charged for it — which is 5a's failure arriving by another route:"
+    echo
+    printf '%s\n' "$closed" | head -20
+  fi
+  return 1
+}
+
 # --- can this token see the board at all? ------------------------------------
 # **A credential that cannot reach the board must not be the reason the board
 # looks broken.** Without it, both queries come back empty and both read as
@@ -313,10 +447,12 @@ cmd_check() {
   check_arrivals >> "$report" || status=1
   [ -s "$report" ] && echo >> "$report"
   check_coverage >> "$report" || status=1
-  [ -n "$BOARD_LISTING" ] && rm -f "$BOARD_LISTING"
+  [ -s "$report" ] && echo >> "$report"
+  check_placement >> "$report" || status=1
+  [ -n "$BOARD_LISTING" ] && rm -f "$BOARD_LISTING" "$BOARD_JSON"
 
   if [ "$status" -eq 0 ]; then
-    echo "the board is pruning itself, every open issue is on it, and the automation is pointed at every repository that reaches it"
+    echo "the board is pruning itself, every open issue is on it, every item is in a column that matches its state, and the automation is pointed at every repository that reaches it"
   else
     cat "$report"
   fi
@@ -391,9 +527,9 @@ cmd_report() {
   {
     cat "$report"
     printf '\n\n[Full run](%s)\n\n' "${RUN_URL:-no run url}"
-    printf '%s\n\n' "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily, and asks 5c — whether the automation is pointed at every repository whose issues reach the board — alongside them. It never archives, adds or edits a board item, and it never creates a workflow or a label in another repository: every fix below is a decision, so it stays a person's or an agent's to take."
+    printf '%s\n\n' "Filed by \`board-self-check.yml\`, which runs \`AGENTS.md\` §6 queries 5a and 5b daily, and asks 5c — whether the automation is pointed at every repository whose issues reach the board — and 5d — whether every item on it is in a column that matches its state — alongside them. It never archives, adds or edits a board item, and it never creates a workflow or a label in another repository: every fix below is a decision, so it stays a person's or an agent's to take."
     bash "$FINDING" footer board-unmaintained \
-      "the board failing its own maintenance check — 5a, 5b or both, regardless of which of them it was or what the numbers were that day" \
+      "the board failing its own maintenance check — 5a, 5b, 5c, 5d or any combination of them, regardless of which it was or what the numbers were that day" \
       "board-self-check.yml"
   } > "$body_file"
 
@@ -414,7 +550,7 @@ cmd_resolve() {
   existing=$(jq -r 'select(.state == "OPEN") | .number' <<<"${found:-null}" 2>/dev/null)
   if [ -n "$existing" ]; then
     gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed \
-      --comment "Every answer is right again: the board is pruning itself, every open issue is on it, and the automation is pointed at every repository that reaches it. [Run](${RUN_URL:-no run url})"
+      --comment "Every answer is right again: the board is pruning itself, every open issue is on it, every item is in a column that matches its state, and the automation is pointed at every repository that reaches it. [Run](${RUN_URL:-no run url})"
     echo "closed #$existing"
   fi
 }

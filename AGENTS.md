@@ -1289,9 +1289,11 @@ re-read by repository and number — a call that costs **1 point** and answers f
 the board rather than from your copy. Re-fetch at the top of each waking loop and
 not more often.
 
-**5. Check that the board is still maintaining itself.** Two properties, and both
-are checked by measurement rather than believed: that finished work is being
-pruned, and that new work is arriving at all.
+**5. Check that the board is still maintaining itself.** Four properties, and
+every one of them is checked by measurement rather than believed: that finished
+work is being pruned, that new work is arriving at all, that the automation
+which fills the board is aimed at the repositories it serves, and that the items
+already on it are in a column that matches their state.
 
 **This one runs by itself, daily**, and that is the change `kolonie-docs#132`
 made on 2026-08-03. Running it by hand is a spot check now, not the only defence
@@ -1305,7 +1307,7 @@ that failure worth remembering.
 bash .github/scripts/board-self-check.sh check
 ```
 
-**That script is the one copy of all three queries, and this section deliberately
+**That script is the one copy of all four queries, and this section deliberately
 no longer carries them.** `#132` required them to exist in exactly one place; a
 second copy in a document is a version that goes out of step without anybody
 editing it, which is the failure `#120` is named after. What the script does not
@@ -1355,11 +1357,35 @@ list of what a new repository needs; this is the query that notices when it did
 not get it. **The skill repositories are out of its scope on purpose**, for the
 reason §4 gives.
 
+**5d — the placement.** 5a asks what has left the board and 5b asks what never
+reached it, so between them they see only its edges; 5c asks about the machinery
+around it rather than its contents. **5d is the only one that looks at an item
+that is on the board and in the wrong place**: no Status at all, or closed and
+still sitting in a working column six hours later.
+
+**It exists because that class of failure is what the board is producing right
+now.** Measured on 2026-08-13 against 154 items: two issues had no Status at all
+and one closed issue was still In Review two hours after it closed. An item with
+no Status is in no column, so nobody working the loop sees it and the triage
+router does not pick it up either — it reads Inbox. Both were collateral of the
+four built-in Status workflows being disabled at 2026-08-12T21:56:01Z (§4), which
+is a Projects-UI repair and therefore a person's. Until it happens, every new
+issue arrives with no Status and every closed issue stays where it was. Its value
+afterwards is that it notices the next time a workflow is switched off.
+
+**It costs no additional read.** The board is fetched once for 5b, and 5d asks
+its questions of the same document — `state` and `closedAt` ride along in the
+paginated query, because a GraphQL score counts the nodes asked for and not the
+scalars on them.
+
 **No answer is acted on automatically, and that is a decision.** 5a's fix is
 a dashboard setting no API can reach — `ProjectV2Workflow` exposes `enabled` and
 no mutation that sets it. 5b's fix is a write to the board, and a board write
 ought to be somebody's decision rather than a nightly job's. 5c's is a workflow
-or a label in another repository, which is more of a decision still. The daily
+or a label in another repository, which is more of a decision still. 5d's is
+`gh project item-edit` — the same board write as 5b's, and the same argument: a
+column is somebody's judgement about an issue, and a nightly job that moved cards
+would be making it. The daily
 run opens one issue, reuses it rather than filing a second, and closes it when
 every answer is right again.
 

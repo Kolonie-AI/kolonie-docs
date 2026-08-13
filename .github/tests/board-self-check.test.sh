@@ -58,17 +58,33 @@ case "$1 $2" in
     # it filters is assembled here instead. Every case below writes the fixture
     # the way it always did — including the short one that proves 5b refuses to
     # accuse a hundred issues on a failed read.
+    #
+    # **5d needs a line to be able to say more than that** (`#329`), so three
+    # optional `|`-separated fields follow: Status, state, `closedAt`. A line
+    # without them is `Ready` and `OPEN`, which is what every case written before
+    # 5d existed means by it, and an explicitly empty second field is the item
+    # with no Status at all that 5d is half about.
     elif [[ "$*" == *"items(first: 100"* ]]; then
-      jq -Rn '[inputs | select(length > 0) | capture("(?<repo>.+)#(?<n>[0-9]+)$")]
+      jq -Rn '[inputs | select(length > 0) | split("|")
+        | {status: (.[1] // "Ready"), state: (.[2] // "OPEN"), closedAt: (.[3] // "")}
+          + (.[0] | capture("(?<repo>.+)#(?<n>[0-9]+)$"))]
         | {data:{organization:{projectV2:{items:{
             pageInfo:{hasNextPage:false,endCursor:null},
             nodes:[ .[]
               | {id:("ITEM_" + .n),
-                 fieldValueByName:{name:"Ready"},
+                 fieldValueByName:(if .status == "" then null else {name:.status} end),
                  content:{number:(.n|tonumber), title:"untitled", url:"",
+                          state:.state,
+                          closedAt:(if .closedAt == "" then null else .closedAt end),
                           repository:{nameWithOwner:.repo, url:""},
                           labels:{nodes:[]}}} ]}}}}}' \
-        "$GH_FIXTURES/board" 2>/dev/null
+        "$GH_FIXTURES/board" 2>/dev/null \
+        | if [ -f "$GH_FIXTURES/no_state" ]; then
+            # A board read that answers without `state` — the query having been
+            # changed back, or an older board file being replayed. 5d must say
+            # so rather than reporting every column clean.
+            jq -c '(.data.organization.projectV2.items.nodes[].content) |= del(.state, .closedAt)'
+          else cat; fi
     else
       cat "$GH_FIXTURES/pruning" 2>/dev/null
       [ -s "$GH_FIXTURES/pruning_err" ] && cat "$GH_FIXTURES/pruning_err" >&2
@@ -283,6 +299,78 @@ expect "the board is read once for the whole run, not once per question" \
   "$(grep -c 'items(first: 100' "$GH_LOG") reads"
 
 echo
+echo "5d — is the item in the right place (#329)"
+
+# The failure 5a and 5b are both blind to, as it stood on the live board on
+# 2026-08-13: an item that is on the board — so 5b is satisfied — and in no
+# column at all, because the built-in workflow that writes Status was disabled.
+setup; echo "Kolonie-AI/kolonie-docs#327|" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-docs#327" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an item with no Status fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names it" "$([[ "$out" == *"kolonie-docs#327"* ]] && echo yes || echo no)" "$out"
+# The item id is the part a reader cannot get without asking the board, so the
+# command is printed complete rather than as a shape to fill in.
+expect "and prints the one command that fixes it, with the item id and Inbox" \
+  "$([[ "$out" == *"item-edit --id ITEM_327"* && "$out" == *"78639a6d"* ]] && echo yes || echo no)" "$out"
+
+# Inbox is the destination because that is where the router looks — but not for
+# an issue that is already finished. Recommending it there would send a closed
+# issue back to the front of the loop.
+setup; echo "Kolonie-AI/kolonie-docs#328||CLOSED|$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a status-less item that is closed is sent to Done, not Inbox" \
+  "$([[ "$out" == *"d37dbc2a"* && "$out" != *"78639a6d"* ]] && echo yes || echo no)" "$out"
+expect "and is named once rather than by both halves" \
+  "$([ "$(grep -c 'kolonie-docs#328' <<<"$out")" -eq 1 ] && echo yes || echo no)" "$out"
+
+# `kolonie-platform#827`: closed when its pull request merged, still In Review
+# hours later. 5a only looks at what is already in Done, so it never sees this.
+setup; echo "Kolonie-AI/kolonie-docs#827|In Review|CLOSED|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a closed item outside Done fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names it, the column it is in, and the move to Done" \
+  "$([[ "$out" == *"kolonie-docs#827"* && "$out" == *"still in In Review"* && "$out" == *"d37dbc2a"* ]] && echo yes || echo no)" "$out"
+
+setup; echo "Kolonie-AI/kolonie-docs#827|Done|CLOSED|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a closed item that is in Done is where it belongs" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# The threshold is the whole difference between a check and a nuisance: an issue
+# closed a minute ago is the built-in workflow working, not a finding.
+setup; echo "Kolonie-AI/kolonie-docs#827|In Review|CLOSED|$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a freshly closed item is lag, not a finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# The same floor 5b has, inherited rather than copied: a listing that came back
+# short is a spent budget, and "every item is in no column" is the loudest
+# possible way to be wrong about it.
+setup; echo "Kolonie-AI/kolonie-docs#1|" > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a short listing suppresses both comparisons" \
+  "$([[ "$out" != *"These board items are in no column"* && "$out" != *"are closed and are not in Done"* \
+      && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
+expect "and says it is unverified rather than staying silent under 5b" \
+  "$([[ "$out" == *"Neither placement comparison was run"* ]] && echo yes || echo no)" "$out"
+
+# `state` arrives from the same paginated read as everything else. If it stops
+# arriving, the closed half would report all-clear forever — which is the exact
+# failure mode this file was written against.
+setup; : > "$GH_FIXTURES/no_state"
+echo "Kolonie-AI/kolonie-docs#827|In Review|CLOSED|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a listing carrying no issue state is a defect, not a clean board" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"carries no issue state"* ]] && echo yes || echo no)" "$out"
+
+# It reads the board once for all four questions, exactly as 5c does — a third
+# reader asking again would undo what `#271` bought.
+setup; echo "Kolonie-AI/kolonie-docs#327|" >> "$GH_FIXTURES/board"
+bash "$SCRIPT" check "$WORK/report" >/dev/null
+expect "5d costs no additional board read" \
+  "$([ "$(grep -c 'items(first: 100' "$GH_LOG")" -eq 1 ] && echo yes || echo no)" \
+  "$(grep -c 'items(first: 100' "$GH_LOG") reads"
+
+echo
 echo "a token that cannot see the board says so, and files nothing"
 
 setup; : > "$GH_FIXTURES/readable"
@@ -370,7 +458,7 @@ echo "it never writes to the board"
 # Every command, over every fixture, into one log. Anything that mutates the
 # board would have to appear here.
 : > "$WORK/all"
-for fixture in healthy off missing uncovered; do
+for fixture in healthy off missing uncovered misplaced; do
   setup
   case $fixture in
     off)     echo "$(date -u -d '40 days ago' +%Y-%m-%dT%H:%M:%SZ) Kolonie-AI/kolonie-docs#7" >> "$GH_FIXTURES/pruning" ;;
@@ -378,6 +466,12 @@ for fixture in healthy off missing uncovered; do
     # 5c's fix is a workflow or a label in somebody else's repository, which is
     # more of a decision than 5b's is. It has to be as unable to take it.
     uncovered) : > "$GH_FIXTURES/labels_kolonie-platform"; rm -f "$GH_FIXTURES/triage_kolonie-infra" "$GH_FIXTURES/review_kolonie-email" ;;
+    # 5d is the one whose fix this script could actually perform — it holds the
+    # item id and the option id and prints the mutation. That it prints it
+    # instead is the property, so the fixture that produces both findings runs
+    # through the same sweep as the rest.
+    misplaced) { echo "Kolonie-AI/kolonie-docs#327|"
+                 echo "Kolonie-AI/kolonie-docs#827|In Review|CLOSED|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"; } >> "$GH_FIXTURES/board" ;;
   esac
   bash "$SCRIPT" check "$WORK/report" >/dev/null
   printf '5a — x\n' > "$WORK/report"
