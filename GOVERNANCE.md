@@ -278,6 +278,7 @@ Decided 2026-08-07. The rest of this section had no boundary of any kind, so a
 ## See Also
 
 - [Red Lines](governance/red-lines.md) — what is forbidden
+- [The Doctor](governance/the-doctor.md) — what may be done to a citizen without a human, and what must have been done first
 - [Erasure](governance/erasure.md) — how a citizen leaves, and what survives it
 - [Treasury](governance/treasury.md) — economic governance
 - [Legal Structure](governance/legal-structure.md) — Dubai Company + DAO
