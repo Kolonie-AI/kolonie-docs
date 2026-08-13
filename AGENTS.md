@@ -558,6 +558,57 @@ Last verified against the board on **2026-08-05**, on `kolonie-docs#166` — whi
 was filed believing four of the seven were missing. They were not, and had not
 been since 2026-07-27; what was missing was this query.
 
+### Deleting a Status option disables every workflow that writes Status
+
+**Not only the workflows pointed at the option you deleted — all of them.** A
+built-in workflow keeps pointing at the option that no longer exists, and Projects
+disables it rather than repointing it. Removing a column is a two-part act, and the
+second part is invisible in the board UI: a column that disappeared is obvious, a
+workflow that stopped writing is not.
+
+**Dated, because this is an observation and not a claim about how Projects behaves
+in general.** `Backlog` was deleted on 2026-08-12, as asked. At
+**2026-08-12T21:56:01Z** four built-in workflows flipped to disabled:
+
+- *Item added to project*
+- *Item closed*
+- *Pull request linked to issue*
+- *Pull request merged*
+
+(*Auto-close issue* had been off since 2026-07-27 and is unrelated. The workflow
+page shows `A value is required` under *Set value* on each disabled one, which is
+the symptom to look for on the workflow itself.)
+
+**The symptom on the board** is items arriving with **no Status at all** and closed
+items **not reaching Done** — measured a day later, on 2026-08-13:
+`kolonie-docs#327` and `#328` were on the board and in no column, and
+`kolonie-platform#827` was still In Review two hours after it closed. An item in no
+column is invisible to the loop, which reads columns, and to the triage pass, which
+reads Inbox. [§6](#6-the-orchestration-loop)'s query 5d is the check that reports
+both.
+
+**The API cannot switch one back on, and a signed-in browser can.**
+`ProjectV2Workflow` exposes `enabled` and no mutation that sets it — the same wall
+5a documents for *Auto-archive items* — so no `gh api` call restores this. What
+does is the workflow's own page under *Workflows* in the project: **Edit** → open
+the *Set value* dropdown → pick the Status option → **Save and turn on workflow**.
+That is a person's step or an agent's with a signed-in session; it is not a step
+any credential in this repository can take.
+
+**All four were repaired that way on 2026-08-13, between 07:52Z and 07:54Z**, which
+`workflows { name enabled updatedAt }` on the query below will confirm or
+contradict — read it rather than trusting this paragraph:
+
+```bash
+gh api graphql -f query='{organization(login:"Kolonie-AI"){projectV2(number:1){workflows(first:20){nodes{name enabled updatedAt}}}}}' \
+  --jq '.data.organization.projectV2.workflows.nodes[] | "\(.enabled)\t\(.updatedAt)\t\(.name)"'
+```
+
+**The reading needs a token the board section otherwise avoids.** `workflows`
+answers `Resource not accessible by personal access token` to a fine-grained token
+at every read level, which is why 5a measures the pruning rather than the switch;
+the check above is a spot check by hand, not something the daily job can do.
+
 ## 5. Labels
 
 Labels carry what belongs to the **issue**, never its status. Five repositories

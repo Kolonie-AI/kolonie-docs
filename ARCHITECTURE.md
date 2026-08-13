@@ -577,6 +577,15 @@ gateway that is down costs the pass its judgement and not its bookkeeping.
 The board keeps every label it has; nothing else reads the schedule. What returns
 is the state `#262` measured: a queue that only a conversation fills.
 
+**Everything above assumes an issue reaches Inbox with a Status on it, and that is
+Projects' own doing rather than this repository's.** Four built-in workflows write
+the Status field, and **deleting a Status option disables all of them** — the
+mechanism, the four names, the date it happened and how it is repaired are in
+`AGENTS.md` [§4](AGENTS.md#deleting-a-status-option-disables-every-workflow-that-writes-status),
+which is where the field and its option ids live. It is worth knowing here because
+the symptom looks like a triage failure: issues that sit in no column are not
+issues the pass declined to route, they are issues it never saw.
+
 ## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of
