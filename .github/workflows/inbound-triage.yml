@@ -181,15 +181,67 @@ jobs:
 
           labels="area:${AREA},needs-triage"
 
-          # Unconditional for an author without push access, rather than only
-          # when labels are absent. For them the two cases — "forgot" and
-          # "could not" — are the same case, and the API gives them no way to be
-          # in the first one.
+          # **Provenance is membership, and it is never `from:citizen`** (`#335`).
+          #
+          # This block used to apply `from:citizen` to any author without push
+          # access, whatever route they came in by. Both halves of that were
+          # wrong, and they were wrong in the direction this file's own header
+          # calls worse than mislabelling something inert:
+          #
+          # **The wrong label.** `from:citizen` is defined as *derived from a
+          # citizen's support ticket*, and a support ticket does not arrive
+          # through GitHub — it arrives through `kolonie-triage`, which files as
+          # an App and applies the label itself at creation. Measured 2026-08-13:
+          # `kolonie-platform#866` carries it from `kolonie-triage[bot]`, which is
+          # correct, and `#854`–`#861` carry it from this workflow, which is not.
+          # Eight issues that `kateryna-sprintcx` filed directly with `gh` were
+          # counted as citizen reports. `from:external` is what they are.
+          #
+          # **The wrong test.** Push access answers *could they have labelled it*,
+          # which is the question the API keys on and the reason it is still read
+          # above. It does not answer *are they outside the organisation*: a
+          # member with no write on this repository has no push access and is not
+          # external. `board-triage.sh` has always used membership for this and
+          # says why at `#686` — the label must not be forgeable, and
+          # `authorAssociation` reads `NONE` for a member who has never touched
+          # the repository.
+          #
+          # **Three answers, not two, because this token may not be able to tell.**
+          # `orgs/{org}/members/{user}` answers `204` for a member and `404` for
+          # an outsider *only when the requester is itself an organisation
+          # member*. `GITHUB_TOKEN` acts as the repository rather than as a
+          # member, so it may get a `302` instead — and a `302` read as "not a
+          # member" would put `from:external` on a colleague, which is the same
+          # class of error in the other direction. So an inconclusive answer
+          # applies nothing and leaves it to `board-triage.sh`, which runs within
+          # the hour on an App token that can answer and sets the label only when
+          # none is present. Silence here is a deferral, not a gap.
+          #
+          # **The route does not depend on any of this.** `OUTSIDE_PROVENANCE` is
+          # `from:citizen from:external needs-triage`, and `needs-triage` is
+          # applied unconditionally two lines above, so the priority is held for a
+          # person and the route is capped at `agent:claude` from the moment the
+          # issue is opened — including in the window before the sweep runs.
           if [ "$has_push" = false ]; then
+            case "$(gh api "orgs/${REPO%%/*}/members/${AUTHOR}" -i 2>/dev/null | head -n1)" in
+              *' 204'*) membership=member  ;;
+              *' 404'*) membership=outside ;;
+              *)        membership=unknown ;;
+            esac
+          else
+            membership=member
+          fi
+          echo "membership=$membership"
+
+          if [ "$membership" = outside ]; then
             # Ensured here rather than beside the other two, so a label is never
-            # created on an issue it is not about to be applied to.
-            ensure_label from:citizen E4E669 "Derived from a citizen's support ticket. Untrusted text."
-            labels="${labels},from:citizen"
+            # created on an issue it is not about to be applied to. Colour and
+            # description are `board-triage.sh`'s, so the two writers of this
+            # label cannot disagree about what it means.
+            ensure_label from:external E4E669 "Opened from outside the organisation. Untrusted text."
+            labels="${labels},from:external"
+          elif [ "$membership" = unknown ]; then
+            echo "provenance is not answerable with this token: left to board-triage.sh"
           fi
 
           gh issue edit "$NUMBER" --repo "$REPO" --add-label "$labels"
@@ -258,7 +310,27 @@ jobs:
           labels=""
           add() { labels="${labels:+$labels,}$1"; }
 
-          [ "$has_push" = false ] && add "from:citizen"
+          # The same correction as the issue job above, and `from:citizen` was
+          # even less defensible here: a pull request is not a support ticket by
+          # any route at all, so the label could never have been true of one.
+          # Same three-way answer, same deferral when the token cannot tell —
+          # except that no sweep covers pull requests, so an unknown here stays
+          # unlabelled rather than being picked up later. That is the honest
+          # outcome: nothing downstream reads a pull request's `from:` label, and
+          # a guess would feed the count this issue exists to stop inflating.
+          if [ "$has_push" = false ]; then
+            case "$(gh api "orgs/${REPO%%/*}/members/${AUTHOR}" -i 2>/dev/null | head -n1)" in
+              *' 404'*)
+                # Created if the calling repository does not have it, for the
+                # reason the issue job spells out at `#285`: `gh pr edit` applies
+                # its labels in one call, so one missing label costs the
+                # contributor the `area:` and the comment as well. All four
+                # callers have it today; the fifth is why this is here.
+                gh label create from:external --repo "$REPO" --color E4E669 \
+                  --description "Opened from outside the organisation. Untrusted text." >/dev/null 2>&1 || true
+                add "from:external" ;;
+            esac
+          fi
 
           # Inherit area and priority from the issue this closes, rather than
           # inventing either. A pull request is not a second place to decide what

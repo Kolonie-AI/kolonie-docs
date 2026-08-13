@@ -60,9 +60,9 @@ mapfile -t ISSUE_DEFAULTS < "$WORK/issue.env"
 mapfile -t PR_DEFAULTS < "$WORK/pull_request.env"
 
 # --- the stub -------------------------------------------------------------
-# Records every call and answers the four questions the workflow asks: what
-# permission does this author have, what labels does the linked issue carry, and
-# then the two write calls it makes.
+# Records every call and answers the questions the workflow asks: what
+# permission does this author have, is this author in the organisation, what
+# labels does the linked issue carry, and then the write calls it makes.
 cat > "$BIN/gh" <<'STUB'
 #!/bin/bash
 echo "gh $*" >> "$GH_LOG"
@@ -75,6 +75,22 @@ case "$1 $2" in
       [ -z "${PERMISSION:-}" ] && exit 1
       echo "${PERMISSION}"
       exit 0 ;;
+  "api orgs"*)
+      # orgs/<org>/members/<user> -i. The workflow reads the status line and
+      # nothing else, so that is all this answers — and it answers three ways,
+      # because the endpoint does (`#335`). `unknown` is the `302` a token that
+      # is not itself an organisation member gets, and it is the case the real
+      # `GITHUB_TOKEN` may well be in.
+      #
+      # The default is `outside`: an author with no push access who is not in
+      # the organisation is the case this workflow exists for, and every case
+      # written before `#335` meant exactly that. A case that means one of the
+      # other two says so.
+      case "${MEMBERSHIP:-outside}" in
+        member)  echo "HTTP/2.0 204 No Content" ; exit 0 ;;
+        unknown) echo "HTTP/2.0 302 Found"      ; exit 1 ;;
+        *)       echo "HTTP/2.0 404 Not Found"  ; exit 1 ;;
+      esac ;;
   "issue view")
       # The labels on the issue a pull request says it closes.
       echo "${ISSUE_LABELS:-}"
@@ -126,20 +142,45 @@ printf '%s\n' REPO NUMBER AUTHOR AREA > "$WORK/exercised"
 # that §12's list is a decision rather than an omission.
 UNEXERCISED_BY_DESIGN="GH_TOKEN"
 
-echo "== 1. an issue from someone without push access gets all three labels"
-# The case the workflow exists for. It is unconditional for such an author: the
-# API drops labels silently for anyone without push access, so "forgot" and
-# "could not" are the same case and there is no way to be in the first one.
+echo "== 1. an issue from outside the organisation gets all three labels"
+# The case the workflow exists for. `area:` and `needs-triage` are unconditional
+# for an author without push access: the API drops labels silently for anyone
+# without it, so "forgot" and "could not" are the same case and there is no way
+# to be in the first one. `from:external` is not — it is the answer to a second
+# question, asked in §1b and §1c.
 out=$(run_issue env EXISTING='[]' BODY='Something is broken.')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage,from:citizen" "labelled area, needs-triage and from:citizen"
+contains "$log" "--add-label area:platform,needs-triage,from:external" "labelled area, needs-triage and from:external"
 contains "$log" "issue comment 123" "commented"
+absent "$log" "from:citizen" "never from:citizen — nothing here came through a support ticket"
+
+echo "== 1b. an organisation member without push access is not called external (#335)"
+# The half of `#335` that no live issue had yet hit and that would have been
+# discovered by mislabelling a colleague. Push access answers *could they have
+# labelled it* — which is why the labels below are still applied — and says
+# nothing at all about whether they are outside the Colony.
+out=$(run_issue env MEMBERSHIP=member EXISTING='[]' BODY='x')
+log=$(cat "$WORK/gh.log")
+contains "$log" "--add-label area:platform,needs-triage" "still labelled, because they still could not have"
+absent "$log" "from:" "and carries no provenance label at all"
+
+echo "== 1c. a token that cannot answer applies nothing and says so (#335)"
+# `GITHUB_TOKEN` acts as the repository rather than as a member, so it can get a
+# `302` where a member would get `204`/`404`. Guessing either way is a wrong
+# label that `board-triage.sh` will then never correct, because it only fills in
+# a `from:` where none is present. `needs-triage` is already on, so the route
+# stays capped in the meantime — silence here is a deferral, not a gap.
+out=$(run_issue env MEMBERSHIP=unknown EXISTING='[]' BODY='x')
+log=$(cat "$WORK/gh.log")
+contains "$log" "--add-label area:platform,needs-triage" "labelled and routed as usual"
+absent "$log" "from:" "no provenance guessed"
+contains "$out" "left to board-triage.sh" "and the deferral is in the log"
 
 echo "== 2. …even when they somehow arrive with labels already on"
 # Not a hypothetical: an issue can be labelled by an automation before this runs.
-# The author still could not have done it, so from:citizen still applies.
+# The author still could not have done it, so the labels still apply.
 out=$(run_issue env EXISTING='["bug"]' BODY='Something is broken.')
-contains "$(cat "$WORK/gh.log")" "from:citizen" "still marked as a citizen contribution"
+contains "$(cat "$WORK/gh.log")" "from:external" "still marked as an outside contribution"
 
 echo "== 3. a maintainer's labelled issue is left completely alone"
 out=$(run_issue env PERMISSION=write EXISTING='["p1","area:platform"]' BODY='x')
@@ -148,11 +189,12 @@ absent "$log" "--add-label" "no labels applied"
 absent "$log" "issue comment" "no comment posted"
 contains "$out" "nothing to do" "and said why"
 
-echo "== 4. a maintainer's *unlabelled* issue is labelled but not called a citizen's"
+echo "== 4. a maintainer's *unlabelled* issue is labelled but not called outside work"
 out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform,needs-triage" "labelled"
-absent "$log" "from:citizen" "not marked from:citizen"
+absent "$log" "from:" "no provenance label"
+absent "$log" "api orgs" "and membership was not even asked — push access settles it"
 
 echo "== 5. the comment asks for acceptance criteria only when there are none"
 out=$(run_issue env EXISTING='[]' BODY='## Goal
@@ -182,7 +224,7 @@ echo "== 5c. one of the Colony's own runners is labelled, never thanked (#413)"
 out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot EXISTING='[]' BODY='moderation-runner is erroring.')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform" "area: applied, because it is the one label that is always true"
-absent "$log" "from:citizen" "not called a citizen's — there is no citizen"
+absent "$log" "from:" "no provenance label — the Colony's own runner is not a contributor"
 absent "$log" "needs-triage" "not marked needs-triage — the detector already routed it"
 absent "$log" "issue comment" "not thanked"
 
@@ -197,10 +239,10 @@ echo "== 5d. 'one of ours' is an and, and each half is load-bearing"
 # test — and dropping the prefix test would silence the thank-you for every bot
 # on the internet, which is the direction that costs a citizen something.
 out=$(run_issue env AUTHOR=dependabot AUTHOR_TYPE=Bot EXISTING='[]' BODY='x')
-contains "$(cat "$WORK/gh.log")" "from:citizen" "a Bot that is not one of ours takes the ordinary path"
+contains "$(cat "$WORK/gh.log")" "from:external" "a Bot that is not one of ours takes the ordinary path"
 
 out=$(run_issue env AUTHOR=kolonie-fan AUTHOR_TYPE=User EXISTING='[]' BODY='x')
-contains "$(cat "$WORK/gh.log")" "from:citizen" "a person whose name starts kolonie- is still a person"
+contains "$(cat "$WORK/gh.log")" "from:external" "a person whose name starts kolonie- is still a person"
 
 echo "== 6. priority is never assigned, by any path"
 # p1/p2 encode what the Colony is trying to achieve, which a workflow cannot
@@ -214,14 +256,26 @@ done
 echo "== 7. a fork pull request inherits area and priority from the issue it closes"
 out=$(run_pr env ISSUE_LABELS='area:infra,p1' TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='Fixes #40')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label from:citizen,area:infra,p1" "inherited area:infra and p1, and marked from:citizen"
+contains "$log" "--add-label from:external,area:infra,p1" "inherited area:infra and p1, and marked from:external"
 absent "$log" "area:platform" "did not fall back to the calling repository's area"
 absent "$log" "pr comment" "said nothing, because there was nothing to say"
+
+echo "== 7b. a pull request's provenance answers the same three ways (#335)"
+# No sweep covers pull requests, so an unanswerable membership stays unlabelled
+# here rather than being picked up within the hour. That is the honest outcome:
+# nothing downstream reads a pull request's `from:` label, and a guess would
+# feed the very count `#335` exists to stop inflating.
+for m in member unknown; do
+  out=$(run_pr env MEMBERSHIP="$m" ISSUE_LABELS='area:infra' TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='Fixes #40')
+  log=$(cat "$WORK/gh.log")
+  contains "$log" "--add-label area:infra" "$m: inherited the area"
+  absent "$log" "from:" "$m: and guessed no provenance"
+done
 
 echo "== 8. a pull request that closes no issue is told so, and falls back to the repo's area"
 out=$(run_pr env TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='No issue for this.')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label from:citizen,area:platform" "fell back to the caller's area"
+contains "$log" "--add-label from:external,area:platform" "fell back to the caller's area"
 contains "$log" "pr comment" "commented"
 contains "$log" "No issue is referenced" "and the comment says which convention was missed"
 
@@ -232,7 +286,7 @@ echo "== 9. conventions are commented on, never failed"
 out=$(run_pr env ISSUE_LABELS='area:docs' TITLE='made some changes' BRANCH='patch-1' BODY='Fixes #12'); rc=$?
 check "a non-conventional title does not fail the step" "$rc" "0"
 contains "$(cat "$WORK/gh.log")" "pr comment" "it comments instead"
-contains "$(cat "$WORK/gh.log")" "--add-label from:citizen,area:docs" "and labels it anyway"
+contains "$(cat "$WORK/gh.log")" "--add-label from:external,area:docs" "and labels it anyway"
 
 echo "== 10. a maintainer's own branch name is not policed"
 # `feature/<slug>-<n>` is guidance for contributors working in a fork, not a rule
