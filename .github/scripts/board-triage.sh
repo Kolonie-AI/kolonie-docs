@@ -470,6 +470,31 @@ apply_one() {
     esac
   fi
 
+  # ## The guards read the labels this pass has just decided, not only the old ones
+  #
+  # Both guards below ask the same question — *did this arrive from outside* —
+  # against the same constant, `OUTSIDE_PROVENANCE`. They used to ask it of two
+  # different things. `sane_route` was handed `$labels`, which is what GitHub
+  # already had; the priority guard asked `$labels` *or* `${add[*]}`, which
+  # includes the `from:external` the provenance block a few lines up may have just
+  # decided. The gap between them was reachable and was not theoretical: measured
+  # 2026-08-13, `lauraneumann-berlin` holds `write` on `kolonie-openclaw` and is
+  # not a member of the organisation, so an issue that account opens and labels
+  # itself takes `inbound-triage.yml`'s *labelled by someone who could label it*
+  # exit — no `needs-triage`, no `from:citizen` — and arrives here carrying nothing
+  # that says outside. This pass then adds `from:external`, holds the priority
+  # correctly, and caps nothing, because `sane_route` cannot see the label the same
+  # pass is about to write. `agent:opencode` was reachable, and the sweep arms
+  # auto-merge on green.
+  #
+  # So the two guards now read one string, and a label decided in this pass counts
+  # exactly as one that was already on the issue. `#334`.
+  local effective_labels=$labels fresh
+  for fresh in "${add[@]:-}"; do
+    [ -n "$fresh" ] || continue
+    case "$effective_labels" in *" $fresh "*) : ;; *) effective_labels+="$fresh " ;; esac
+  done
+
   # ## The route, and the four ways the model's answer is overruled
   local current_route=""
   local candidate_route
@@ -483,7 +508,7 @@ apply_one() {
   # `sane_route` says which of its four rules fired, and the comment prints that
   # instead — with the model's sentence kept below, marked as the proposal it was.
   local rule=""
-  IFS=$'\x1f' read -r route rule < <(sane_route "$route" "$labels" "$current_route" "$depends")
+  IFS=$'\x1f' read -r route rule < <(sane_route "$route" "$effective_labels" "$current_route" "$depends")
   local -a remove=()
   if [ "$route" != "$current_route" ]; then
     add+=("$route")
@@ -518,7 +543,7 @@ apply_one() {
     p1 | p2)
       if has_any "$labels" "p1 p2"; then
         : # somebody has already decided this, and triage does not overrule it
-      elif has_any "$labels" "$OUTSIDE_PROVENANCE" || in_list "from:external" "${add[*]:-}"; then
+      elif has_any "$effective_labels" "$OUTSIDE_PROVENANCE"; then
         note "$repo#$number arrived from outside, so its priority waits for a person (AGENTS.md §5, class 6)"
       else
         add+=("$priority")

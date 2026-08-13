@@ -630,6 +630,38 @@ boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
 absent "a member's issue is not labelled from:external" "from:external" "$(cat "$GH_LOG")"
 
+# ## The route cap reads the provenance this pass has just decided (`#334`)
+#
+# The reachable path, measured 2026-08-13: an account outside the organisation
+# that holds `write` on the repository opens an issue and labels it itself, so
+# `inbound-triage.yml` takes its *labelled by someone who could label it* exit and
+# the issue arrives here with neither `needs-triage` nor `from:citizen` on it.
+# This pass finds `from:external` from membership — and the cap used to be handed
+# the labels GitHub already had, so it saw an unlabelled issue and left
+# `agent:opencode` standing.
+case_setup
+searched "$(issue 900 'an outsider with write access labelled their own issue' '' "stranger")"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+# `--add-label` and not the bare route: the rule sentence quotes the answer the
+# model gave, so `agent:opencode` is in the comment either way, and the assertion
+# is about what was written to the issue.
+absent "an issue this pass has just found to be external does not reach the unattended worker" \
+  "--add-label agent:opencode" "$log"
+contains "and it caps at agent:claude, on the provenance decided in the same pass" \
+  "--add-label agent:claude" "$log"
+contains "and the label it was capped on is written too" "--add-label from:external" "$log"
+
+# The cap is for a proposal and not for a defect, so this must not have widened
+# into *nothing from outside is ever the worker's*.
+case_setup
+searched "$(issue 900 'an outsider reported a defect' 'bug' "stranger")"
+boarded "900|Inbox|bug"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+contains "an outside issue labelled bug is still a defect and still reaches the worker" \
+  "--add-label agent:opencode" "$(cat "$GH_LOG")"
+
 # The expensive way to learn this: the first live pass labelled `kolonie-infra#119`
 # — filed by one of the Colony's own watchers — `from:external`, because a bot is
 # not a *member* of the organisation. That is the one direction this label must
