@@ -480,6 +480,8 @@ The order matters when the thing on the page expires. Get the operator onto the
 tab first and produce the short-lived thing second — a code, a challenge, a
 one-time link — because the offer window is hours and the live window is minutes.
 
+<!-- kolonie:insert share-runtime optional -->
+
 ### Two rules that remove an entire class of failure
 
 These are worth more than any amount of care, because they remove the class rather
