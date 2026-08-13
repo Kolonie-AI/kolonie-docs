@@ -263,32 +263,38 @@ expect "and names it" \
   "$([[ "$out" == *"kolonie-email"* && "$out" == *"review.yml"* ]] && echo yes || echo no)" "$out"
 
 # The point of the check, stated as a case: a repository nobody has filed an
-# issue about yet is checked because it is on the board, not because it broke.
-setup; echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/board"
-echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/issues"
+# issue about yet is checked because the sweep is about to route its issues, not
+# because it broke. Being in the organisation is the whole qualification (`#338`)
+# — it does not have to have reached the board first, which is the state every
+# repository is in on the day it is created.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "a repository that reached the board is checked without an issue being filed in it" \
+expect "a repository the sweep covers is checked without an issue being filed in it" \
   "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-openclaw"* ]] && echo yes || echo no)" "$out"
 
-setup; echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/board"
-echo "Kolonie-AI/kolonie-openclaw#5" >> "$GH_FIXTURES/issues"; covered kolonie-openclaw
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"; covered kolonie-openclaw
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "and once it is covered, it is silent" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
-# §5 is explicit that no skill repository puts an issue on the board. A daily
-# report that names six repositories for a thing that is not this check's
-# business is one nobody opens; that they have no triage at all is filed
-# separately rather than reported here every morning.
+# The scope is the sweep's, so a runtime repository is in it. It was exempt while
+# nothing put its issues on the board; `#332` ended that and `#338` took the
+# exemption out rather than leaving a check that agrees with a premise that has
+# gone.
 setup; echo "kolonie-hermes" >> "$GH_FIXTURES/repos"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "a repository that is not on the board and not in §5 is out of scope" \
-  "$([ $rc -eq 0 ] && [[ "$out" != *"kolonie-hermes"* ]] && echo yes || echo no)" "$out"
+expect "a runtime repository is in scope rather than exempt" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-hermes"* ]] && echo yes || echo no)" "$out"
 
-# The five are checked whether or not the listing came back, so a spent budget
-# narrows this answer instead of silencing it — and says which of the two it is.
-setup; echo "Kolonie-AI/kolonie-docs#1" > "$GH_FIXTURES/board"; rm -f "$GH_FIXTURES/review_kolonie-email"
+setup; echo "kolonie-hermes" >> "$GH_FIXTURES/repos"; covered kolonie-hermes
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "a board listing that failed its floor narrows 5c rather than silencing it" \
+expect "and it too goes quiet once it has the triage and the reviewer" \
+  "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# The five are checked whether or not the sweep's listing came back, so a spent
+# budget narrows this answer instead of silencing it — and says which it was.
+setup; : > "$GH_FIXTURES/repos"; rm -f "$GH_FIXTURES/review_kolonie-email"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository listing that failed narrows 5c rather than silencing it" \
   "$([[ "$out" == *"kolonie-email"* && "$out" == *"only the repositories"* ]] && echo yes || echo no)" "$out"
 
 # The listing is read once for the whole run. 5b's read is what 5a's own header

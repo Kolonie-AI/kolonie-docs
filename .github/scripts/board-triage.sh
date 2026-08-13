@@ -332,8 +332,20 @@ ADMIT_ISSUE_LIMIT=${ADMIT_ISSUE_LIMIT:-200}
 # read, for the same reason and with the same number.
 ADMIT_BOARD_FLOOR=${ADMIT_BOARD_FLOOR:-20}
 
-admit() {
-  local excluded=""
+# Which repositories the sweep covers: every non-archived repository of the
+# organisation, less whatever the exclusion file names. Written to the file named
+# in `$1`, one bare name per line, and the number of exclusions applied is left
+# in `SWEPT_REPOSITORIES_SKIPPED` — a file rather than stdout because a command
+# substitution would run this in a subshell and lose that count.
+#
+# **It is a function, and `repositories` publishes it, because two things need
+# the same answer** (`#338`). `admit` sweeps this list; `board-self-check.sh` 5c
+# checks that each repository on it has the labels and the workflows the sweep
+# assumes. Those two drifting apart is the failure 5c exists to catch, so they
+# read one list rather than two that agree today.
+SWEPT_REPOSITORIES_SKIPPED=0
+swept_repositories() {
+  local out=$1 excluded="" repos name
   if [ -f "$ADMIT_EXCLUSIONS" ]; then
     excluded=" $(sed -e 's/#.*//' -e 's/[[:space:]]//g' "$ADMIT_EXCLUSIONS" | grep -v '^$' | tr '\n' ' ')"
   else
@@ -341,6 +353,25 @@ admit() {
     excluded=" "
   fi
 
+  repos=$(gh repo list "$ORG" --limit "$ADMIT_REPO_LIMIT" --json name,isArchived \
+    --jq '.[] | select(.isArchived | not) | .name' 2>/dev/null)
+  [ -n "$repos" ] || return 1
+
+  SWEPT_REPOSITORIES_SKIPPED=0
+  : >"$out"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$excluded" in
+      *" $name "*)
+        SWEPT_REPOSITORIES_SKIPPED=$((SWEPT_REPOSITORIES_SKIPPED + 1))
+        continue ;;
+    esac
+    printf '%s\n' "$name" >>"$out"
+  done <<<"$repos"
+  return 0
+}
+
+admit() {
   local board listing
   board=$(mktemp) || die "no temporary file" 2
   listing=$(mktemp) || { rm -f "$board"; die "no temporary file" 2; }
@@ -361,23 +392,17 @@ admit() {
   fi
 
   local repos
-  repos=$(gh repo list "$ORG" --limit "$ADMIT_REPO_LIMIT" --json name,isArchived \
-    --jq '.[] | select(.isArchived | not) | .name' 2>/dev/null)
-  if [ -z "$repos" ]; then
-    rm -f "$board" "$listing"
+  repos=$(mktemp) || { rm -f "$board" "$listing"; die "no temporary file" 2; }
+  if ! swept_repositories "$repos"; then
+    rm -f "$board" "$listing" "$repos"
     echo "the organisation's repositories could not be listed, so nothing was admitted — 0 added, 0 refused"
     return 0
   fi
 
-  local added=0 failures=0 unreadable=0 skipped=0
+  local added=0 failures=0 unreadable=0 skipped=$SWEPT_REPOSITORIES_SKIPPED
   local name repo issues number
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    case "$excluded" in
-      *" $name "*)
-        skipped=$((skipped + 1))
-        continue ;;
-    esac
     repo="$ORG/$name"
 
     # Open issues only, and `gh issue list` does not return pull requests — a
@@ -400,9 +425,9 @@ admit() {
         note "$repo#$number is not on the board and could not be added"
       fi
     done <<<"$issues"
-  done <<<"$repos"
+  done <"$repos"
 
-  rm -f "$board" "$listing"
+  rm -f "$board" "$listing" "$repos"
   # Both numbers, always (`#302`): *added 0* and *added 0, seven refused* are
   # different facts and one of them is a defect in the Colony's configuration.
   echo "the board admitted $added issue(s), $failures could not be added, $unreadable repository(ies) could not be read, $skipped excluded"
@@ -1622,6 +1647,19 @@ case "${1:-}" in
   provenance)
     provenance "${2:?provenance needs a login}"
     ;;
+  repositories)
+    # Named separately from `admit` so that a reader — and `board-self-check.sh`
+    # — can ask *which repositories does the sweep cover* without asking for the
+    # sweep. It writes nothing anywhere.
+    swept_out=$(mktemp) || die "no temporary file" 2
+    if swept_repositories "$swept_out"; then
+      cat "$swept_out"
+      rm -f "$swept_out"
+    else
+      rm -f "$swept_out"
+      die "the organisation's repositories could not be listed" 2
+    fi
+    ;;
   vocabulary)
     vocabulary
     ;;
@@ -1635,6 +1673,6 @@ case "${1:-}" in
     propose "${2:?propose needs the file the model wrote}"
     ;;
   *)
-    die "usage: board-triage.sh admit | candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
+    die "usage: board-triage.sh admit | repositories | candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac

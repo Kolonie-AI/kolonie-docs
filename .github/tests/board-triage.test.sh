@@ -1489,6 +1489,25 @@ contains "and says why rather than reporting a quiet zero" \
   "not trustworthy" "$out"
 
 echo
+echo "the sweep publishes the list it sweeps, so 5c can check the same set (#338)"
+
+# `board-self-check.sh` 5c asks this rather than keeping a list of its own. What
+# it must get is the sweep's answer exactly: the same exclusions applied and the
+# same archived repositories dropped, or the set that is routed and the set that
+# is checked drift apart, which is the failure 5c exists to catch.
+case_setup
+excluded_are kolonie-email
+repos_are kolonie-docs kolonie-email 'kolonie-openclaw!' kolonie-skill
+out=$(bash "$SCRIPT" repositories 2>"$WORK/stderr")
+contains "a swept repository is named" "kolonie-docs" "$out"
+contains "including one that has no auto-add workflow" "kolonie-skill" "$out"
+absent "an excluded repository is not" "kolonie-email" "$out"
+absent "and neither is an archived one" "kolonie-openclaw" "$out"
+contains "nothing else is printed with them" "2" "$(wc -l <<<"$out")"
+absent "and it writes nothing while answering" \
+  "addProjectV2ItemById" "$(cat "$GH_LOG")"
+
+echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"
   exit 0

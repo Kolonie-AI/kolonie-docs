@@ -151,7 +151,7 @@ check_pruning() {
 # this rather than calling again.
 #
 # **Two files, one read.** `BOARD_JSON` is what `board-read` answered;
-# `BOARD_LISTING` is the `owner/repo#n` reduction of it that 5b and 5c compare
+# `BOARD_LISTING` is the `owner/repo#n` reduction of it that 5b compares
 # against. 5d needs the fields the reduction throws away — the card's Status and
 # the issue's own state — so the document is kept as well as the list rather than
 # fetched a second time in a different shape.
@@ -216,19 +216,23 @@ check_arrivals() {
 # filed**, so a repository joining the organisation is set up rather than
 # discovered.
 #
-# ## What is in scope, and what is deliberately not
+# ## What is in scope, and why it is no longer a list kept here
 #
-# The five repositories `AGENTS.md` §5 names carry board issues and are checked
-# unconditionally — including one with no issues yet, which is the whole point of
-# not waiting for one to be filed. Anything else that has reached the board since
-# is checked because it has: `kolonie-openclaw` and `kolonie-dns` are on the board
-# and are not in §5's five, and they are exactly the two that broke.
+# It was five repositories, then five plus whatever had reached the board. Both
+# were the same shape of answer: a set somebody maintains, which is right until
+# a repository joins the organisation and nobody edits it.
 #
-# **The skill repositories are out of scope here.** §5 is explicit that none of
-# them puts an issue on the board, and listing six repositories every morning for
-# a thing that is not this check's business is how a daily report becomes one
-# nobody opens. That they have no inbound triage and no reviewer at all is a real
-# and separate finding, and it is filed as one.
+# **The scope is now the sweep's own** (`#338`). `board-triage.sh admit` puts
+# every open issue in every non-archived repository on the board except the ones
+# `.github/board-excluded-repositories.txt` names (`#332`), and this check asks
+# that same script, through `board-triage.sh repositories`, which repositories
+# those are. So the question it answers is exactly the right one: *the sweep is
+# going to route issues out of this repository — is the repository ready for
+# that?* A repository created tomorrow is checked with no edit here.
+#
+# The five `AGENTS.md` §5 names stay as the floor. If the listing fails, they are
+# still checked and the answer says it was narrowed — the same rule 5b has, for
+# the same reason: silence would read as a clean report.
 #
 # It reports and never fixes, like everything else in this file: creating a
 # workflow in another repository is a decision, not hygiene.
@@ -246,17 +250,15 @@ check_coverage() {
   # everywhere" is the loudest possible way to be wrong — 5b's own rule.
   [ -n "$wanted" ] || { echo "5c — **The triage vocabulary could not be read** from \`board-triage.sh vocabulary\`, so no repository's labels were checked. That is a defect in this checkout, not a finding about any repository."; return 1; }
 
-  # The five are checked whether or not the listing came back; the union is what
-  # needs it, so a board read that failed its floor narrows this check instead of
-  # silencing it, and says which of the two it was.
+  # The five are checked whether or not the sweep's list came back; the union is
+  # what needs it, so a failed listing narrows this check instead of silencing
+  # it, and says so where it changes how the answer should be read.
+  local swept
   seen=$(printf '%s\n' $BOARD_REPOSITORIES)
-  if load_board; then
-    seen=$(printf '%s\n%s\n' "$seen" "$(sed 's|^[^/]*/||; s|#.*$||' "$BOARD_LISTING")")
+  if swept=$(bash "$HERE/board-triage.sh" repositories 2>/dev/null) && [ -n "$swept" ]; then
+    seen=$(printf '%s\n%s\n' "$seen" "$swept")
   else
-    # Not a finding of its own — 5b has already said the listing failed, loudly
-    # and with the number. It is a caveat on this answer, so it is printed only
-    # where it changes how this answer should be read.
-    narrowed="    (the board listing did not pass its floor, so only the repositories \`AGENTS.md\` §5 names were checked)"$'\n'
+    narrowed="    (the organisation's repositories could not be listed, so only the repositories \`AGENTS.md\` §5 names were checked — \`board-triage.sh repositories\` is the call that failed)"$'\n'
   fi
 
   for repo in $(printf '%s\n' "$seen" | sort -u); do

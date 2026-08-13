@@ -80,6 +80,7 @@ jobs:
           bash .github/tests/no-gateway-leak.test.sh
           bash .github/tests/opencode-worker.test.sh
           bash .github/tests/board-triage.test.sh
+          bash .github/tests/board-self-check.test.sh
           python3 .github/tests/board-triage-ask.test.py
           bash .github/tests/opencode-red.test.sh
           bash .github/tests/opencode-context.test.sh

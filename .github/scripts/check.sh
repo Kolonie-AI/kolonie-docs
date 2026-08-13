@@ -65,6 +65,7 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/no-gateway-leak.test.sh
   bash .github/tests/opencode-worker.test.sh
   bash .github/tests/board-triage.test.sh
+  bash .github/tests/board-self-check.test.sh
   bash .github/tests/opencode-context.test.sh
   bash .github/tests/waiting-list.test.sh
   bash .github/tests/watch-finding.test.sh

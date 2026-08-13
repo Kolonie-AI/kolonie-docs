@@ -363,23 +363,23 @@ exclusion list lives. This list stays because it is still true and still worth
 knowing which five the built-in workflows serve; it is no longer the difference
 between an issue being seen and not.
 
-**An issue opened in one of those eight never reaches the board, and nothing says
-so.** That is worse than a low priority. §3 makes the board the only record of
-status and §6 makes it the queue an arriving agent reads, so an issue that never
-arrives is not waiting — it is invisible, and the failure is silent by
-construction.
+**Until `#332` an issue opened in one of those eight never reached the board, and
+nothing said so.** That was worse than a low priority. §3 makes the board the only
+record of status and §6 makes it the queue an arriving agent reads, so an issue
+that never arrived was not waiting — it was invisible, and the failure was silent
+by construction. The sweep is what closed that, and it is the reason this section
+now reads as history.
 
-So, until the cap stops binding:
-
-**If you open an issue in an uncovered repository, put it on the board in the same
-breath.** One command, and it needs the `project` scope you already have:
+**You may still put an issue on the board in the same breath as opening it**, and
+it is worth doing rather than waiting a pass. One command, and it needs the
+`project` scope you already have:
 
 ```bash
 gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
 ```
 
-**If a citizen opens one there, nothing will do it for them.** Query 6 in §6 is how
-that gets caught; run it when you run the others.
+That is now a convenience and no longer the only thing standing between an issue
+and the queue. **If a citizen opens one there, the sweep does it for them.**
 
 The uncovered ones were all skill repositories until 2026-08-04, which was the
 least bad set to lose — they carry few issues, and the ones they do carry tend to
@@ -434,9 +434,11 @@ A repository whose issues reach the board needs all five, and it needs them
    no `area:`, no `from:external` and no reply.
 3. **`.github/workflows/review.yml`**, so a pull request opened there is
    reviewed rather than merged unread.
-4. **A board card for every open issue**, which is automatic only for the five
-   repositories above and is `gh project item-add` by hand for every other —
-   the paragraphs above say why that cap is not automated away.
+4. **A board card for every open issue**, which since `#332` the scheduled
+   `board-triage.sh admit` does for every repository — the five with an auto-add
+   workflow get theirs sooner, and nothing has to be added by hand. What a new
+   repository needs here is therefore nothing at all, unless it should *not* be
+   swept, which is one line in `.github/board-excluded-repositories.txt`.
 5. **A named place in §5** — added to its list of repositories that carry issues
    on the board, and its `area:` label added to §5's Area list if it needs one
    that does not exist yet. Area is not the same as repository, and an agent that
@@ -444,17 +446,24 @@ A repository whose issues reach the board needs all five, and it needs them
 
 **Nothing here is checked at the moment a repository is created**, because
 nothing watches an organisation for new repositories. What is checked is the
-consequence: `board-self-check.sh`'s query 5c asks all of 1–3 daily, of every
-repository §5 names and of every repository that has reached the board, and
-reports what is missing with the one command that fixes it. It never fixes
-anything itself — creating a workflow in another repository is a decision.
+consequence: `board-self-check.sh`'s query 5c asks all of 1–3 daily, and it asks
+it **of every repository the sweep covers** — `board-triage.sh repositories`,
+which is the same list `admit` reads, so the set that gets routed and the set
+that gets checked cannot drift apart. It reports what is missing with the one
+command that fixes it and never fixes anything itself: creating a workflow in
+another repository is a decision.
 
-**The skill repositories are deliberately outside that check.** §5 is explicit
-that none of them puts an issue on the board, and a daily report that names six
-repositories every morning for something that is not the board's business is one
-nobody opens. That they have no inbound triage and no reviewer at all is a real
-finding; it is [`kolonie-docs#338`](https://github.com/Kolonie-AI/kolonie-docs/issues/338)
-rather than a line in a daily report.
+**The six runtime repositories are inside that check as of 2026-08-13**
+([`#338`](https://github.com/Kolonie-AI/kolonie-docs/issues/338)). They were
+exempt because none of them put an issue on the board, so an `area:` label would
+have been written for nobody and a reply would have promised a routing that did
+not exist. `#332` removed that premise in the same session: the sweep admits their
+issues like anyone else's. All six now carry `triage.yml` with `area: skills` and
+`review.yml`, the latter triggered by `workflow_run: workflows: [Skill]` — the
+requirement is *a workflow that runs on every pull request with no path filter*
+(`#123`), never the string `CI`, and `skill.yml` is one. Their labels are not
+created ahead of time and do not need to be: `inbound-triage.yml` and
+`board-triage.sh` both create a label before writing it (`#333`).
 
 ### Getting `<item-id>` right, which is harder than it looks
 
@@ -1441,17 +1450,19 @@ gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<re
 **5c — the pointing.** 5a and 5b both ask about the board's contents. 5c asks
 whether the automation that fills it is actually aimed at the repositories it
 serves: has each of them the eight labels the triage pass writes, a `triage.yml`
-that calls `inbound-triage.yml`, and a reviewer. It asks this of the five
-repositories §5 names *and* of every repository that currently has a card, so a
-newcomer is checked because it reached the board rather than because it broke.
+that calls `inbound-triage.yml`, and a reviewer. It asks this of **every
+repository the sweep covers** — `board-triage.sh repositories`, the same list
+`admit` reads — with the five §5 names as the floor if that listing fails. So a
+newcomer is checked because the sweep is about to route its issues, rather than
+because it broke.
 
 **It exists because the answer used to be remembered.** `kolonie-dns#17` and
 `kolonie-openclaw` on 2026-08-13 were the same failure twice — labels absent, a
 triage pass billed for decisions it then discarded — and both were fixed in the
 one repository, which is the fix that leaves the next one to break. §4 has the
 list of what a new repository needs; this is the query that notices when it did
-not get it. **The skill repositories are out of its scope on purpose**, for the
-reason §4 gives.
+not get it. **The six runtime repositories are in its scope since `#338`**, for
+the reason §4 gives.
 
 **5d — the placement.** 5a asks what has left the board and 5b asks what never
 reached it, so between them they see only its edges; 5c asks about the machinery
