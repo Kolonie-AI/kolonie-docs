@@ -527,6 +527,13 @@ jobs:
       # repository whose `main` requires nothing, which is the same refusal made
       # below for the worker's own pull requests. `unarmed_pull_requests` carries
       # the fork and draft rules and why they are the ones everything hangs on.
+      #
+      # **On a green pull request, though, arming is merging**, and `#326` is the
+      # day that mattered: `kolonie-platform#844` was disarmed by hand at 06:33
+      # and armed again by the 06:41 run, which merged and deployed it. Two ways
+      # to hold one now, both in `unarmed_pull_requests`: label it
+      # `blocked:human`, or disarm it — a disarm is permanent as far as the sweep
+      # is concerned.
       - name: Is a pull request waiting for nobody?
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}

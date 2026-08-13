@@ -1087,7 +1087,7 @@ required_contexts_of() {
 # not a mechanism: this covers the agent that was never told, the agent that was
 # told and forgot, and the person.
 #
-# ## The four filters, and which one the whole thing hangs on
+# ## The six filters, and which one the whole thing hangs on
 #
 # 1. **Not a fork.** A stranger's branch must never arm itself. This is the rule
 #    everything else is a refinement of — the repositories are public, anybody
@@ -1100,17 +1100,36 @@ required_contexts_of() {
 #    step already did the work.
 # 4. **`main` requires a status check.** Same refusal the worker already makes
 #    where it opens its own pull requests, for the same reason.
+# 5. **Not labelled `blocked:human`.** The label already exists in every
+#    repository here and already means *waiting on a person*, so this is the
+#    existing vocabulary rather than a new one. It is what to reach for before a
+#    pull request is green, where there is no disarm to make yet.
+# 6. **Nobody has disarmed it.** An `auto_merge_disabled` event anywhere in the
+#    timeline takes the pull request out of the sweep permanently (`#326`).
 #
-# ## What it does not filter on, stated because the omission looks like a bug
+# ## Why a disarm has to stick
 #
-# Not on the author, not on a label and not on a branch prefix. Every open pull
-# request in the organisation that survives the four above is armed, including a
-# person's. That is the intent rather than an oversight: **arming is not
-# merging.** `--auto --squash` with no `--admin` lands nothing that the required
-# check has not passed, so the worst case is that a green pull request somebody
-# was sitting on merges — which is what a green pull request in this
-# organisation means. The way to say *not yet* is the draft flag, and it is
-# filter 2.
+# Filters 5 and 6 are `#326`, and they are here because filter 2 was not enough.
+# `kolonie-platform#844` carried a migration and a change to the front door, and
+# its own body asked for a look before it went in. The sweep armed it, the
+# maintainer disarmed it by hand at 06:33, and the next run read an open pull
+# request with `auto_merge == null` and armed it again at 06:41. The required
+# checks were green by then, so it merged in the same second and deployed.
+#
+# **A manual disarm that buys fifteen minutes is not a control.** Filter 6 needs
+# no convention and no label discipline: the act of disarming *is* the signal,
+# and it is the one every reader already reaches for. Somebody who wants it armed
+# after all arms it themselves, and filter 3 then leaves it alone.
+#
+# ## What it still does not filter on, stated because the omission looks like a bug
+#
+# Not on the author and not on a branch prefix. Every open pull request in the
+# organisation that survives the six above is armed, including a person's. That
+# is the intent rather than an oversight: **arming is not merging.** `--auto
+# --squash` with no `--admin` lands nothing that the required check has not
+# passed, so the worst case is that a green pull request somebody was sitting on
+# merges — which is what a green pull request in this organisation means, unless
+# they said otherwise in one of the two ways above.
 #
 # ## `dirty` is skipped, and `unknown` is not an answer
 #
@@ -1120,8 +1139,15 @@ required_contexts_of() {
 # reported yet is precisely what auto-merge is for. `unknown` means GitHub has
 # not computed mergeability, and reading it either way would be a guess:
 # `stale_pull_requests` above states this at length and the same rule applies.
+#
+# ## A timeline that cannot be read fails closed
+#
+# Everywhere else here an unreadable API means *leave it for the next run*, and
+# that is what filter 6 does too — but the reason is stronger. Not knowing
+# whether a pull request was disarmed and arming it anyway is the one mistake
+# that cannot be taken back: on a green pull request, arming is merging.
 unarmed_pull_requests() {
-  local repo repos number required state
+  local repo repos number required state disarmed
 
   repos=$(gh api "orgs/$ORG/repos" -X GET -f per_page=100 -f type=all \
     --jq '.[] | select(.archived | not) | .full_name' 2>/dev/null) || return 1
@@ -1130,14 +1156,16 @@ unarmed_pull_requests() {
   while read -r repo; do
     [ -n "${repo:-}" ] || continue
 
-    # One list call answers filters 1 to 3 for the whole repository. The
-    # per-pull-request call below is paid only for what survives them, which on
+    # One list call answers filters 1, 2, 3 and 5 for the whole repository — the
+    # labels come back on the list, so the label filter costs nothing extra. The
+    # per-pull-request calls below are paid only for what survives them, which on
     # a quiet day is nothing at all.
     local candidates
     candidates=$(gh api "repos/$repo/pulls" -X GET -f state=open -f per_page=100 \
       --jq '.[] | select(.draft | not)
                 | select(.auto_merge == null)
                 | select((.head.repo.full_name // "") == .base.repo.full_name)
+                | select([(.labels // [])[].name] | index("blocked:human") | not)
                 | .number' 2>/dev/null) || {
       echo "could not list open pull requests in $repo; leaving it for the next run" >&2
       continue
@@ -1162,6 +1190,19 @@ unarmed_pull_requests() {
           echo "$repo#$number: GitHub has not computed mergeability yet; leaving it for the next run" >&2
           continue ;;
       esac
+
+      # Filter 6. `--paginate` because the event that matters may be anywhere in
+      # the timeline, and a disarm the sweep did not scroll far enough to see is
+      # the bug this filter exists to fix.
+      if ! disarmed=$(gh api --paginate "repos/$repo/issues/$number/timeline" \
+        --jq '.[] | select(.event == "auto_merge_disabled") | .event' 2>/dev/null); then
+        echo "$repo#$number: could not read the timeline, so whether anybody disarmed it is unknown; leaving it alone" >&2
+        continue
+      fi
+      if [ -n "$disarmed" ]; then
+        echo "$repo#$number: somebody disarmed auto-merge on it; the sweep does not arm it again (#326)" >&2
+        continue
+      fi
 
       printf '%s\t%s\t%s\n' "$repo" "$number" "$required"
     done <<<"$candidates"

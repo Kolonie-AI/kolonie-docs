@@ -154,6 +154,12 @@ case "$1 $2" in
       echo "HTTP 502" >&2
       exit 1
     fi
+    # `#326` is the one caller that paginates, so its path is not in `$2`. Every
+    # branch below dispatches on `$2`; dropping the flag here keeps that true
+    # rather than teaching each branch about a flag only one of them uses.
+    if [ "${2:-}" = "--paginate" ]; then
+      set -- "$1" "${@:3}"
+    fi
     case "$2" in
       */jobs)     cat "$GH_FIXTURES/jobs" 2>/dev/null ;;
       */comments) cat "$GH_FIXTURES/comments" 2>/dev/null ;;
@@ -227,6 +233,30 @@ case "$1 $2" in
           echo "HTTP 502: the pull requests could not be listed" >&2
           exit 1
         fi
+        [ -f "$fixture" ] || exit 0
+        expression=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --jq) expression=$2; shift 2 ;;
+            *)    shift ;;
+          esac
+        done
+        if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
+      # `#326` asks whether anybody disarmed auto-merge, once per candidate that
+      # survived the list filters. Before `*/issues/*`, which this path would
+      # otherwise match. **An absent fixture is a timeline with no such event**,
+      # not a failed read — every case written before `#326` would otherwise die
+      # here on a pull request nobody ever touched. The real `--jq` runs, because
+      # picking `auto_merge_disabled` out of a mixed timeline is the behaviour
+      # under test.
+      */timeline)
+        if [ -s "$GH_FIXTURES/timeline_fail" ]; then
+          echo "HTTP 502: the timeline could not be read" >&2
+          exit 1
+        fi
+        key=${2#repos/}
+        key=${key%/timeline}
+        fixture="$GH_FIXTURES/timeline_${key//\//_}"
         [ -f "$fixture" ] || exit 0
         expression=""
         while [ "$#" -gt 0 ]; do
@@ -1643,13 +1673,20 @@ org() {
 }
 
 # The open pull requests of one repository, as the API returns them, because the
-# filter is what is under test. `<number>|<draft>|<head repo>|<auto_merge>`.
+# filter is what is under test.
+# `<number>|<draft>|<head repo>|<auto_merge>[|<label>,<label>]`. The labels are
+# optional and default to none, so every case written before `#326` reads the
+# same as it did.
 opened() {
   local repo=$1; shift
   local rows=()
   for row in "$@"; do
-    IFS='|' read -r number draft head auto <<<"$row"
-    rows+=("{\"number\":${number},\"draft\":${draft},\"auto_merge\":${auto},\"head\":{\"repo\":${head}},\"base\":{\"repo\":{\"full_name\":\"${repo}\"}}}")
+    IFS='|' read -r number draft head auto labels <<<"$row"
+    local labelled="[]"
+    if [ -n "${labels:-}" ]; then
+      labelled=$(printf '%s' "$labels" | jq -R 'split(",") | map({name: .})' -c)
+    fi
+    rows+=("{\"number\":${number},\"draft\":${draft},\"auto_merge\":${auto},\"labels\":${labelled},\"head\":{\"repo\":${head}},\"base\":{\"repo\":{\"full_name\":\"${repo}\"}}}")
   done
   local joined
   joined=$(IFS=,; echo "${rows[*]}")
@@ -1660,6 +1697,15 @@ opened() {
 mergeability() {
   local repo=$1 number=$2 state=$3
   printf '%s\n' "$state" > "$GH_FIXTURES/pull_${repo//\//_}_pulls_$number"
+}
+
+# A pull request's timeline, as `#326` reads it: the event names in order. Given
+# a mixed timeline on purpose, because the filter has to find one event among
+# several rather than read a flag somebody set for it.
+timeline() {
+  local repo=$1 number=$2; shift 2
+  printf '%s\n' "$*" | tr ' ' '\n' | jq -R '{event: .}' | jq -s -c '.' \
+    > "$GH_FIXTURES/timeline_${repo//\//_}_issues_$number"
 }
 
 mine='{"full_name":"Kolonie-AI/kolonie-docs"}'
@@ -1699,6 +1745,51 @@ org "Kolonie-AI/kolonie-docs|check"
 opened "Kolonie-AI/kolonie-docs" '274|false|'"$mine"'|{"enabled_by":{"login":"colette"}}'
 check "one the worker already armed costs the sweep nothing" "" \
   "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# `#326`. The two ways to say *this one waits for me* on a pull request that is
+# already open, already green and no longer a draft.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null|blocked:human"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+check "blocked:human takes a pull request out of the sweep" "" \
+  "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null|bug,area:infra"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+contains "and any other label leaves it exactly as it was" \
+  "274" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# The one that cost a production deploy: disarmed at 06:33, armed again at 06:41.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+timeline "Kolonie-AI/kolonie-docs" 274 labeled auto_merge_enabled auto_merge_disabled commented
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "a disarm sticks, and the sweep never arms it again" "" "$out"
+contains "and it says a person did that on purpose" "somebody disarmed" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+timeline "Kolonie-AI/kolonie-docs" 274 labeled commented reviewed
+contains "an ordinary timeline is not a disarm" \
+  "274" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# On a green pull request arming is merging, so not knowing is a reason to stop.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+echo "the timeline read fails this case" > "$GH_FIXTURES/timeline_fail"
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "a timeline that cannot be read fails closed" "" "$out"
+contains "and says the disarm is what it could not establish" \
+  "whether anybody disarmed it is unknown" "$(cat "$WORK/err")"
 
 # The refusal `#232` already makes where the worker opens its own pull requests.
 # Arming here would land the branch the instant it was enabled.
