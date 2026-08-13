@@ -924,6 +924,14 @@ worker_pull_requests() {
 # because the two disagreeing is a defect worth having the sweep notice rather
 # than paper over. A ref that does not match the convention prints nothing and
 # the caller skips it.
+#
+# **`Closes #N` registers nothing on a pull request whose base is not the default
+# branch.** GitHub creates the linked-issue relation only there, so a stacked
+# pull request merges without closing anything and its issue shows no pull
+# request at all — `kolonie-platform#846` and `#847` both carried the keyword and
+# both had an empty `closingIssuesReferences`, while `#844`, which targeted
+# `main`, closed `#827` (`#331`, 2026-08-13). The worker never opens a stacked
+# pull request, so this is about the ones people open by hand.
 issue_of_branch() {
   local ref=$1
   [[ "$ref" =~ ^opencode/issue-([0-9]+)$ ]] || return 0
@@ -1066,7 +1074,10 @@ unreported_completions() {
 # pull request waits for a person rather than landing unverified.
 required_contexts_of() {
   local repo=$1
-  gh api "repos/$repo/branches/main/protection" \
+  # The branch to ask about, because protection binds one branch and not a
+  # repository (`#331`). `main` where a caller has nothing better to say.
+  local branch=${2:-main}
+  gh api "repos/$repo/branches/$branch/protection" \
     --jq '[.required_status_checks.contexts // []] | flatten | join(", ")' 2>/dev/null || true
 }
 
@@ -1087,7 +1098,7 @@ required_contexts_of() {
 # not a mechanism: this covers the agent that was never told, the agent that was
 # told and forgot, and the person.
 #
-# ## The six filters, and which one the whole thing hangs on
+# ## The seven filters, and which one the whole thing hangs on
 #
 # 1. **Not a fork.** A stranger's branch must never arm itself. This is the rule
 #    everything else is a refinement of — the repositories are public, anybody
@@ -1106,6 +1117,10 @@ required_contexts_of() {
 #    pull request is green, where there is no disarm to make yet.
 # 6. **Nobody has disarmed it.** An `auto_merge_disabled` event anywhere in the
 #    timeline takes the pull request out of the sweep permanently (`#326`).
+# 7. **It targets the repository's default branch.** Filter 4 asks what the
+#    default branch requires; a pull request into a feature branch is not
+#    protected by that answer, because branch protection binds only the branch it
+#    is configured on (`#331`).
 #
 # ## Why a disarm has to stick
 #
@@ -1121,10 +1136,37 @@ required_contexts_of() {
 # and it is the one every reader already reaches for. Somebody who wants it armed
 # after all arms it themselves, and filter 3 then leaves it alone.
 #
+# ## Why the base branch has to be asked about separately
+#
+# Filter 7 is `#331`, and it is the same shape of hole as `#326`: filter 4 was
+# read as covering something it does not. **Branch protection binds only the
+# branch it is configured on.** A pull request whose base is a feature branch has
+# no required check to wait for, so arming it merges it in the same second,
+# unbuilt — and `ci.yml` in `kolonie-platform` is triggered
+# `pull_request: branches: [main]`, so on such a pull request CI does not run at
+# all. It happened on 2026-08-13: `kolonie-platform#847` was opened at 07:04
+# against the branch of the still-open `#846` and the 07:10 run merged it at
+# 07:10:35, announcing that it would land when a check reported that was never
+# going to run.
+#
+# Nothing reached `main` — `#846` carried `blocked:human`. What it cost was the
+# hold: a diff a person was asked to read grew by another pull request's worth of
+# change with nobody told.
+#
+# **The base ref is filtered in the loop rather than in the `--jq`**, unlike the
+# other list-borne filters, because this one has something to say. A skipped pull
+# request here is usually a deliberate stack that a person will merge by hand,
+# and a sweep that drops it silently is indistinguishable from one that has not
+# noticed it.
+#
+# The default branch is read per repository from the same listing that names the
+# repository, so this costs no request. It is `main` everywhere here today, and
+# hard-coding it would be a fact that rots without saying so.
+#
 # ## What it still does not filter on, stated because the omission looks like a bug
 #
 # Not on the author and not on a branch prefix. Every open pull request in the
-# organisation that survives the six above is armed, including a person's. That
+# organisation that survives the seven above is armed, including a person's. That
 # is the intent rather than an oversight: **arming is not merging.** `--auto
 # --squash` with no `--admin` lands nothing that the required check has not
 # passed, so the worst case is that a green pull request somebody was sitting on
@@ -1147,39 +1189,54 @@ required_contexts_of() {
 # whether a pull request was disarmed and arming it anyway is the one mistake
 # that cannot be taken back: on a green pull request, arming is merging.
 unarmed_pull_requests() {
-  local repo repos number required state disarmed
+  local repo repos number required state disarmed default_branch base
 
+  # `default_branch` rides along with the name, so filter 7 costs no request.
   repos=$(gh api "orgs/$ORG/repos" -X GET -f per_page=100 -f type=all \
-    --jq '.[] | select(.archived | not) | .full_name' 2>/dev/null) || return 1
+    --jq '.[] | select(.archived | not) | [.full_name, .default_branch] | @tsv' 2>/dev/null) || return 1
   [ -n "$repos" ] || return 1
 
-  while read -r repo; do
+  while IFS=$'\t' read -r repo default_branch; do
     [ -n "${repo:-}" ] || continue
+    # An older listing, or a fixture that predates this column, still names a
+    # repository. Defaulting is safer than skipping it: `main` is what every
+    # repository here answers, and skipping would silently stop sweeping.
+    [ -n "${default_branch:-}" ] || default_branch=main
 
     # One list call answers filters 1, 2, 3 and 5 for the whole repository — the
     # labels come back on the list, so the label filter costs nothing extra. The
     # per-pull-request calls below are paid only for what survives them, which on
-    # a quiet day is nothing at all.
+    # a quiet day is nothing at all. The base ref comes back on the same list and
+    # is carried through rather than filtered here, so filter 7 can say which
+    # branch it left a pull request alone for.
     local candidates
     candidates=$(gh api "repos/$repo/pulls" -X GET -f state=open -f per_page=100 \
       --jq '.[] | select(.draft | not)
                 | select(.auto_merge == null)
                 | select((.head.repo.full_name // "") == .base.repo.full_name)
                 | select([(.labels // [])[].name] | index("blocked:human") | not)
-                | .number' 2>/dev/null) || {
+                | [(.number | tostring), (.base.ref // "")] | @tsv' 2>/dev/null) || {
       echo "could not list open pull requests in $repo; leaving it for the next run" >&2
       continue
     }
     [ -n "$candidates" ] || continue
 
-    required=$(required_contexts_of "$repo")
+    required=$(required_contexts_of "$repo" "$default_branch")
     if [ -z "$required" ]; then
-      echo "$repo has no required status check on main; nothing there is armed" >&2
+      echo "$repo has no required status check on $default_branch; nothing there is armed" >&2
       continue
     fi
 
-    while read -r number; do
+    while IFS=$'\t' read -r number base; do
       [ -n "${number:-}" ] || continue
+
+      # Filter 7. Before the two calls below, because a stacked pull request is
+      # not a candidate at all and paying to read its mergeability would be a
+      # request spent on an answer nothing acts on.
+      if [ "${base:-$default_branch}" != "$default_branch" ]; then
+        echo "$repo#$number targets $base rather than $default_branch, where no check is required; the sweep leaves it to whoever stacked it (#331)" >&2
+        continue
+      fi
 
       state=$(gh api "repos/$repo/pulls/$number" --jq '.mergeable_state' 2>/dev/null) || continue
       case "${state:-}" in

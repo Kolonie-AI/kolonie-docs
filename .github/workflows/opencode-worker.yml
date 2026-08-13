@@ -534,6 +534,13 @@ jobs:
       # to hold one now, both in `unarmed_pull_requests`: label it
       # `blocked:human`, or disarm it — a disarm is permanent as far as the sweep
       # is concerned.
+      #
+      # **The third way out is not a hold at all: the pull request does not
+      # target the default branch** (`#331`). Protection binds one branch, so a
+      # stacked pull request has no required check to wait for and arming it
+      # merges it unbuilt — `kolonie-platform#847`, merged at 07:10:35 in the
+      # second it was armed. Those are left to whoever stacked them, and the log
+      # line says the branch rather than a check that cannot report.
       - name: Is a pull request waiting for nobody?
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}

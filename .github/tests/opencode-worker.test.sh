@@ -214,9 +214,12 @@ case "$1 $2" in
           exit 1
         fi
         cat "$GH_FIXTURES/repos" 2>/dev/null ;;
-      */branches/main/protection)
+      */branches/*/protection)
         key=${2#repos/}
-        key=${key%/branches/main/protection}
+        branch=${key#*/branches/}
+        branch=${branch%/protection}
+        key=${key%/branches/*/protection}
+        key="${key}_${branch}"
         # **An absent fixture is an unprotected branch**, which is the case the
         # sweep must refuse on, and a missing file makes `cat` exit 1 exactly as
         # the live API 404s on a branch with no protection.
@@ -1665,10 +1668,12 @@ echo "the pull requests nobody armed (#275)"
 org() {
   : > "$GH_FIXTURES/repos"
   for row in "$@"; do
-    IFS='|' read -r repo required <<<"$row"
-    printf '%s\n' "$repo" >> "$GH_FIXTURES/repos"
+    # A third field names the default branch, because `#331` reads it per
+    # repository. `main` where a case does not care, which is nearly all of them.
+    IFS='|' read -r repo required default_branch <<<"$row"
+    printf '%s\t%s\n' "$repo" "${default_branch:-main}" >> "$GH_FIXTURES/repos"
     [ -n "${required:-}" ] &&
-      printf '%s\n' "$required" > "$GH_FIXTURES/protection_${repo//\//_}"
+      printf '%s\n' "$required" > "$GH_FIXTURES/protection_${repo//\//_}_${default_branch:-main}"
   done
 }
 
@@ -1681,12 +1686,14 @@ opened() {
   local repo=$1; shift
   local rows=()
   for row in "$@"; do
-    IFS='|' read -r number draft head auto labels <<<"$row"
+    # A sixth field is the base ref, for `#331`. Absent means the default branch,
+    # which is what every case written before it meant.
+    IFS='|' read -r number draft head auto labels base <<<"$row"
     local labelled="[]"
     if [ -n "${labels:-}" ]; then
       labelled=$(printf '%s' "$labels" | jq -R 'split(",") | map({name: .})' -c)
     fi
-    rows+=("{\"number\":${number},\"draft\":${draft},\"auto_merge\":${auto},\"labels\":${labelled},\"head\":{\"repo\":${head}},\"base\":{\"repo\":{\"full_name\":\"${repo}\"}}}")
+    rows+=("{\"number\":${number},\"draft\":${draft},\"auto_merge\":${auto},\"labels\":${labelled},\"head\":{\"repo\":${head}},\"base\":{\"ref\":\"${base:-main}\",\"repo\":{\"full_name\":\"${repo}\"}}}")
   done
   local joined
   joined=$(IFS=,; echo "${rows[*]}")
@@ -1790,6 +1797,49 @@ out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
 check "a timeline that cannot be read fails closed" "" "$out"
 contains "and says the disarm is what it could not establish" \
   "whether anybody disarmed it is unknown" "$(cat "$WORK/err")"
+
+# `#331`. Branch protection binds the branch it is configured on, so filter 4's
+# answer says nothing about a pull request into a feature branch — arming one
+# merges it in the same second, unbuilt. `kolonie-platform#847`, 2026-08-13.
+case_setup
+# The required context is named distinctively here, because the assertion below
+# is that this exact string does *not* reach the log: the sentence the sweep used
+# to print named the check it was waiting for, on a pull request where that check
+# was never going to run at all.
+org "Kolonie-AI/kolonie-docs|format, lint, build, typecheck, test"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null||feat/stacked-on-273"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "a pull request into a feature branch is never armed" "" "$out"
+contains "and the reason is the branch it targets" \
+  "targets feat/stacked-on-273 rather than main" "$(cat "$WORK/err")"
+absent "and no check name is named, because none can report" \
+  "format, lint, build, typecheck, test" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null||main"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+contains "one into the default branch is armed exactly as before" \
+  "274" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+# The default branch is read per repository rather than assumed, so a repository
+# that calls it something else is swept rather than skipped.
+case_setup
+org "Kolonie-AI/kolonie-skill-hermes|check|trunk"
+opened "Kolonie-AI/kolonie-skill-hermes" "9|false|{\"full_name\":\"Kolonie-AI/kolonie-skill-hermes\"}|null||trunk"
+mergeability "Kolonie-AI/kolonie-skill-hermes" 9 clean
+contains "the default branch is whatever the repository says it is" \
+  "9" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
+
+case_setup
+org "Kolonie-AI/kolonie-skill-hermes|check|trunk"
+opened "Kolonie-AI/kolonie-skill-hermes" "9|false|{\"full_name\":\"Kolonie-AI/kolonie-skill-hermes\"}|null||main"
+mergeability "Kolonie-AI/kolonie-skill-hermes" 9 clean
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "and there main is the feature branch" "" "$out"
+contains "which the refusal says in those words" \
+  "targets main rather than trunk" "$(cat "$WORK/err")"
 
 # The refusal `#232` already makes where the worker opens its own pull requests.
 # Arming here would land the branch the instant it was enabled.
