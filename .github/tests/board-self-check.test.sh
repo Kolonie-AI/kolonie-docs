@@ -59,19 +59,27 @@ case "$1 $2" in
     # the way it always did — including the short one that proves 5b refuses to
     # accuse a hundred issues on a failed read.
     #
-    # **5d needs a line to be able to say more than that** (`#329`), so three
-    # optional `|`-separated fields follow: Status, state, `closedAt`. A line
-    # without them is `Ready` and `OPEN`, which is what every case written before
-    # 5d existed means by it, and an explicitly empty second field is the item
-    # with no Status at all that 5d is half about.
+    # **5d needs a line to be able to say more than that** (`#329`), so four
+    # optional `|`-separated fields follow: Status, state, `closedAt`, and the
+    # card's own `updatedAt` (`#345`). A line without them is `Ready` and `OPEN`,
+    # which is what every case written before 5d existed means by it, and an
+    # explicitly empty second field is the item with no Status at all that 5d is
+    # a third about.
+    #
+    # **A missing card timestamp is a card with none, not a recent one.** 5d
+    # reports an item whose `updatedAt` it cannot read rather than skipping it,
+    # so the default here has to be the same way round: a case that says nothing
+    # about the card's clock is one where the grace window cannot apply.
     elif [[ "$*" == *"items(first: 100"* ]]; then
       jq -Rn '[inputs | select(length > 0) | split("|")
-        | {status: (.[1] // "Ready"), state: (.[2] // "OPEN"), closedAt: (.[3] // "")}
+        | {status: (.[1] // "Ready"), state: (.[2] // "OPEN"), closedAt: (.[3] // ""),
+           updatedAt: (.[4] // "")}
           + (.[0] | capture("(?<repo>.+)#(?<n>[0-9]+)$"))]
         | {data:{organization:{projectV2:{items:{
             pageInfo:{hasNextPage:false,endCursor:null},
             nodes:[ .[]
               | {id:("ITEM_" + .n),
+                 updatedAt:(if .updatedAt == "" then null else .updatedAt end),
                  fieldValueByName:(if .status == "" then null else {name:.status} end),
                  content:{number:(.n|tonumber), title:"untitled", url:"",
                           state:.state,
@@ -348,16 +356,56 @@ setup; echo "Kolonie-AI/kolonie-docs#827|In Review|CLOSED|$(date -u -d '5 minute
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a freshly closed item is lag, not a finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
+# The mirror, asked in one direction only until `#345`. `kolonie-platform#820`:
+# never closed, because `feat: … (#820)` pushed straight to `main` closes
+# nothing — and its card in Done since the morning.
+setup; echo "Kolonie-AI/kolonie-platform#820|Done|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#820" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an open item sitting in Done fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names it and how long the card has been there" \
+  "$([[ "$out" == *"kolonie-platform#820"* && "$out" == *"in Done since"* ]] && echo yes || echo no)" "$out"
+# The one way this half differs from the other two: the two ways in want
+# opposite repairs, so it prints the item and no destination.
+expect "and suggests no move, because closing the issue may be the repair" \
+  "$([[ "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
+
+# The grace window, and the reason it is the card's clock rather than the
+# issue's: somebody moving a card and closing the issue a moment later is the
+# ordinary way an issue finishes, not a finding.
+setup; echo "Kolonie-AI/kolonie-platform#820|Done|OPEN||$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#820" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a card moved to Done minutes ago is lag, not a finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+# A card whose own timestamp did not arrive must be reported rather than
+# skipped: an absent field that silences a comparison is the failure mode the
+# whole file is written against.
+setup; echo "Kolonie-AI/kolonie-platform#820|Done|OPEN" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#820" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an open item in Done with no card timestamp is still named" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-platform#820"* ]] && echo yes || echo no)" "$out"
+
+# The rejection case `#345` asks for, both halves of it: the two states that are
+# where they belong say nothing at all.
+setup; echo "Kolonie-AI/kolonie-docs#827|Done|CLOSED|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)|$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#821|Ready|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#821" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a closed item in Done and an open item in Ready are both silent" \
+  "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
 # The same floor 5b has, inherited rather than copied: a listing that came back
 # short is a spent budget, and "every item is in no column" is the loudest
 # possible way to be wrong about it.
 setup; echo "Kolonie-AI/kolonie-docs#1|" > "$GH_FIXTURES/board"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "a short listing suppresses both comparisons" \
+expect "a short listing suppresses all three comparisons" \
   "$([[ "$out" != *"These board items are in no column"* && "$out" != *"are closed and are not in Done"* \
-      && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
+      && "$out" != *"open and their cards say Done"* && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
 expect "and says it is unverified rather than staying silent under 5b" \
-  "$([[ "$out" == *"Neither placement comparison was run"* ]] && echo yes || echo no)" "$out"
+  "$([[ "$out" == *"None of the three placement comparisons was run"* ]] && echo yes || echo no)" "$out"
 
 # `state` arrives from the same paginated read as everything else. If it stops
 # arriving, the closed half would report all-clear forever — which is the exact

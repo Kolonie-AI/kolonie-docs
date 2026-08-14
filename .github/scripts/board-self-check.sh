@@ -314,6 +314,10 @@ check_coverage() {
 #   - **One closed item was still In Review** (`kolonie-platform#827`, closed
 #     06:41:06Z, still there two hours later). 5a only looks at what is already in
 #     Done, so a closed item that never arrived there is invisible to it.
+#   - **Six items were open and sitting in Done** (`#345`, added 2026-08-14).
+#     The question was asked in one direction only for a day, and the mirror is
+#     where the expensive case lives: a live `red-on-main` finding reopened into
+#     the column the loop does not read.
 #
 # Both were the collateral of deleting the `Backlog` option, which disabled the
 # four built-in workflows that *write* Status at 2026-08-12T21:56:01Z — including
@@ -338,7 +342,8 @@ STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
 STATUS_INBOX=${STATUS_INBOX:-78639a6d}
 STATUS_DONE=${STATUS_DONE:-d37dbc2a}
 
-# How long a closed item may sit outside Done before it is a finding. The
+# How long an item may sit in a column its state contradicts before it is a
+# finding — a closed one outside Done, or an open one in it (`#345`). The
 # built-in workflow moves it in seconds and an agent that closes an issue moves
 # the card in its next call, so this is not bounding the automation — it is
 # bounding the human-and-agent lag either side of it. Hours rather than 5a's
@@ -351,13 +356,13 @@ STATUS_DONE=${STATUS_DONE:-d37dbc2a}
 CLOSED_SETTLE_HOURS=6
 
 check_placement() {
-  local cutoff statusless closed stated
+  local cutoff statusless closed reopened stated
   if ! load_board; then
     # 5b has already printed the number and the likely causes; repeating them
     # would be two paragraphs about one failure. What has to be said here is
-    # that neither comparison ran, because a silent 5d under a failing 5b reads
+    # that no comparison ran, because a silent 5d under a failing 5b reads
     # as *the columns are fine*.
-    echo "5d — **Neither placement comparison was run**, because the board listing did not pass its floor. See 5b for the number and the likely cause. This is unverified rather than clean: an item in no column and a closed item outside Done would both look exactly like this."
+    echo "5d — **None of the three placement comparisons was run**, because the board listing did not pass its floor. See 5b for the number and the likely cause. This is unverified rather than clean: an item in no column, a closed item outside Done and an open item sitting in Done would all look exactly like this."
     return 1
   fi
 
@@ -380,7 +385,7 @@ check_placement() {
   # written against.
   stated=$(jq -r '[.items[] | select(.content.state != null)] | length' "$BOARD_JSON" 2>/dev/null)
   if [ "${stated:-0}" -eq 0 ]; then
-    echo "5d — **The board listing carries no issue state**, so the closed-item comparison was not run. Nothing on it says whether an issue is open or closed, which means \`board-read\` is answering without \`state\` and \`closedAt\` — a defect in this checkout rather than a finding about the board."
+    echo "5d — **The board listing carries no issue state**, so neither comparison that reads it was run. Nothing on it says whether an issue is open or closed, which means \`board-read\` is answering without \`state\` and \`closedAt\` — a defect in this checkout rather than a finding about the board."
     [ -n "$statusless" ] && { echo; echo "The status-less comparison did run, and found:"; echo; printf '%s\n' "$statusless"; }
     return 1
   fi
@@ -396,19 +401,55 @@ check_placement() {
     | "    \(.content.repository)#\(.content.number) — closed \(.content.closedAt), still in \(.status) — gh project item-edit --id \(.id) --project-id \($p) --field-id \($f) --single-select-option-id \($done)"
     ' "$BOARD_JSON" 2>/dev/null)
 
-  [ -z "$statusless" ] && [ -z "$closed" ] && return 0
+  # Open, and sitting in Done — the mirror of the comparison above, asked of the
+  # same document for the same nothing (`#345`). Six items on the live board on
+  # 2026-08-13, and two failures wearing one symptom: `kolonie-docs#285` was
+  # **reopened by `red-on-main`** into the column nobody working §6 reads, and
+  # five `kolonie-platform` items were **never closed at all**, because a commit
+  # pushed straight to `main` whose subject ends `(#820)` closes nothing —
+  # GitHub closes on `Closes #N` or on a pull request merging, and the
+  # parenthesised number is a convention inherited from squash-merge titles.
+  #
+  # **No destination is printed, deliberately**, which is the one way this half
+  # differs from the other two. The reopened kind belongs in Inbox for triage;
+  # the never-closed kind belongs nowhere in particular, because the repair is
+  # closing the issue rather than moving the card, and a suggested move would
+  # paper over exactly the thing this found. 5a already prints an item and lets a
+  # person choose.
+  #
+  # The window is cut against the **card's** `updatedAt` and not the issue's:
+  # the question is how long the card has sat in Done, and an issue's own
+  # timestamp moves when somebody comments on it. A card with no timestamp at all
+  # is reported rather than skipped — an absent field must not be able to silence
+  # a comparison.
+  reopened=$(jq -r --arg c "$cutoff" '
+    .items[]
+    | select(.content.state == "OPEN")
+    | select(.status == "Done")
+    | select((.updatedAt // "") < $c)
+    | "    \(.content.repository)#\(.content.number) — open, and its card has been in Done since \(.updatedAt // "an unrecorded time") — \(.content.url)"
+    ' "$BOARD_JSON" 2>/dev/null)
+
+  [ -z "$statusless" ] && [ -z "$closed" ] && [ -z "$reopened" ] && return 0
 
   if [ -n "$statusless" ]; then
     echo "5d — **These board items are in no column.** They are on the board, so 5b is satisfied and says nothing about them, and nobody working the loop can see them — the queue reads columns. The likeliest cause is that the built-in Status workflows are still disabled (§4); this is the per-item repair, not the repair:"
     echo
     printf '%s\n' "$statusless" | head -20
-    [ -n "$closed" ] && echo
+    { [ -n "$closed" ] || [ -n "$reopened" ]; } && echo
   fi
 
   if [ -n "$closed" ]; then
     echo "5d — **These items are closed and are not in Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not the built-in workflow being slow. A closed item outside Done is never archived either, so it stays on the board and every board read is charged for it — which is 5a's failure arriving by another route:"
     echo
     printf '%s\n' "$closed" | head -20
+    [ -n "$reopened" ] && echo
+  fi
+
+  if [ -n "$reopened" ]; then
+    echo "5d — **These items are open and their cards say Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not somebody mid-way through finishing one. There are two ways in and they want opposite repairs, so no move is suggested: an issue **reopened** by a watcher belongs in Inbox, where the loop's queries can see it, while an issue that was **never closed** belongs where it is until somebody closes it — a commit pushed to \`main\` whose subject ends \`(#n)\` closes nothing, and \`Closes #n\` in the body is what does. Read the issue before moving the card:"
+    echo
+    printf '%s\n' "$reopened" | head -20
   fi
   return 1
 }

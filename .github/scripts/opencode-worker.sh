@@ -233,6 +233,7 @@ query($org: String!, $project: Int!, $after: String) {
         pageInfo { hasNextPage endCursor }
         nodes {
           id
+          updatedAt
           fieldValueByName(name: "Status") {
             ... on ProjectV2ItemFieldSingleSelectValue { name }
           }
@@ -267,6 +268,14 @@ GRAPHQL
 # still one paginated read rather than two. What they buy is the only question
 # 5a and 5b between them cannot ask — *is this card in the right column* — which
 # needs the issue's own state next to the card's Status, in the same document.
+#
+# The item's own `updatedAt` is here on the same terms and answers a question the
+# issue's cannot (`#345`): **how long the card has been where it is.** An issue's
+# `updatedAt` moves when somebody comments and does not move when the card does,
+# so a card parked in Done under an issue that is still open looks freshly
+# handled by it — measured 2026-08-14 on the five `kolonie-platform` items that
+# `#345` names, every one of them commented on ten hours after its card last
+# moved. The card's own timestamp is what a grace window has to be cut against.
 # **The pages accumulate in a file and never on a command line** (`#142`). The
 # first draft of this held the running board in a shell variable and passed it to
 # the next page's `jq` with `--argjson`, which is exactly the defect `#142` spent
@@ -314,6 +323,7 @@ board_read() {
       [ .data.organization.projectV2.items.nodes[]
         | select(.content.number != null)
         | { id: .id,
+            updatedAt: .updatedAt,
             status: (.fieldValueByName.name // ""),
             title: .content.title,
             labels: [ .content.labels.nodes[].name ],

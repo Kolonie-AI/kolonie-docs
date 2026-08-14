@@ -1487,8 +1487,21 @@ the reason §4 gives.
 **5d — the placement.** 5a asks what has left the board and 5b asks what never
 reached it, so between them they see only its edges; 5c asks about the machinery
 around it rather than its contents. **5d is the only one that looks at an item
-that is on the board and in the wrong place**: no Status at all, or closed and
-still sitting in a working column six hours later.
+that is on the board and in the wrong place**, and it asks three things: no
+Status at all, closed and still sitting in a working column six hours later, or
+**open with its card in Done** for the same six.
+
+**The third was missing for a day and it is where the expensive case lives**
+(`#345`, 2026-08-14). Six items on 2026-08-13: `kolonie-docs#285`, a live
+`red-on-main` finding **reopened by the watcher** into the one column the loop's
+queries never read, and five `kolonie-platform` items **never closed at all** —
+a commit pushed straight to `main` whose subject ends `(#820)` closes nothing,
+because GitHub closes on `Closes #n` in the body or on a pull request merging,
+and the parenthesised number is a convention inherited from squash-merge titles
+where it names the pull request. **That half prints no destination**, unlike the
+other two: the reopened kind belongs in Inbox and the never-closed kind belongs
+where it is until somebody closes the issue, so suggesting a move would paper
+over the finding.
 
 **It exists because that class of failure is what the board is producing right
 now.** Measured on 2026-08-13 against 154 items: two issues had no Status at all
@@ -1501,9 +1514,13 @@ issue arrives with no Status and every closed issue stays where it was. Its valu
 afterwards is that it notices the next time a workflow is switched off.
 
 **It costs no additional read.** The board is fetched once for 5b, and 5d asks
-its questions of the same document — `state` and `closedAt` ride along in the
-paginated query, because a GraphQL score counts the nodes asked for and not the
-scalars on them.
+its questions of the same document — `state`, `closedAt` and the card's own
+`updatedAt` ride along in the paginated query, because a GraphQL score counts the
+nodes asked for and not the scalars on them. The card's timestamp rather than the
+issue's is what the six-hour window is cut against: an issue's `updatedAt` moves
+when somebody comments and does not move when the card does, and on 2026-08-14
+all five never-closed items had been commented on ten hours after their cards
+last moved.
 
 **No answer is acted on automatically, and that is a decision.** 5a's fix is
 a dashboard setting no API can reach — `ProjectV2Workflow` exposes `enabled` and
