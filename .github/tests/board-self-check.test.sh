@@ -103,9 +103,19 @@ case "$1 $2" in
   # which is the whole point of the check, so the fixtures are per repository
   # too. A file that is absent is the gap; `case_setup` writes the healthy ones.
   "label list")
+    # **A `.fail` sentinel, because this stub ends in `exit 0`** and could
+    # otherwise not express a listing that failed at all (`#349`). An absent
+    # fixture is not that case: it is `cat` finding nothing, which reaches the
+    # caller as a repository that answered and has no labels. The two want
+    # opposite fixes — one is a credential, the other is `gh label create` — so
+    # the stub has to be able to produce both.
     for _i in $(seq 1 $#); do
       eval "_a=\${$_i}"
-      [ "$_a" = --repo ] && { eval "_r=\${$((_i + 1))}"; cat "$GH_FIXTURES/labels_${_r##*/}" 2>/dev/null; }
+      [ "$_a" = --repo ] && {
+        eval "_r=\${$((_i + 1))}"
+        [ -f "$GH_FIXTURES/labels_${_r##*/}.fail" ] && exit 1
+        cat "$GH_FIXTURES/labels_${_r##*/}" 2>/dev/null
+      }
     done ;;
   "api repos/"*)
     _p=${2#repos/}
@@ -245,10 +255,28 @@ expect "and does not accuse the repositories that are fine" \
 
 # The label half must not be able to report the whole vocabulary as missing off
 # a listing that failed — the same floor 5b has, one repository wide.
-setup; : > "$GH_FIXTURES/labels_kolonie-infra"
+#
+# **The stub could not express this case until `#349`**, and that is why the
+# check was wrong about it in production. `: >` writes an empty fixture, which is
+# `cat` succeeding with no output — a repository that answered and has no labels.
+# The stub ends in `exit 0`, so nothing it did could make the call fail. This
+# case stubbed *answered and empty* and asserted *could not be listed*, so it was
+# pinning the inference the check has now stopped making rather than the failure
+# it is named after. The `.fail` sentinel is what actually makes the call fail.
+setup; : > "$GH_FIXTURES/labels_kolonie-infra.fail"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a repository whose labels could not be listed is not accused of having none" \
   "$([ $rc -eq 1 ] && [[ "$out" == *"could not be listed"* && "$out" != *"missing labels:"* ]] && echo yes || echo no)" "$out"
+
+# The other half, and the case that was reported wrongly in production (`#349`).
+# A repository that answers with GitHub's nine defaults and none of the Colony's
+# eight has every wanted label missing and a listing that worked perfectly. It
+# read as *the vocabulary is unverified*, which sends a reader to debug a token
+# for something one `gh label create` fixes.
+setup; : > "$GH_FIXTURES/labels_kolonie-infra"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository that answered and has none of them is told which are missing" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"missing labels:"* ]] && [[ "$out" != *"could not be listed"* ]] && echo yes || echo no)" "$out"
 
 setup; rm -f "$GH_FIXTURES/triage_kolonie-website"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
