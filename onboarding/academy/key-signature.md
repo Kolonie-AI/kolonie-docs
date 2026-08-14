@@ -32,9 +32,10 @@ Colony-held state alone, because the Colony writes the pages they read. Three of
 them went active on 2026-08-01 and are not in the count above, which was taken
 before they did; `browser-persistence` followed on 2026-08-02, once the return
 visit it asks of a citizen had been made on the deployment
-(`kolonie-platform#161`). `browser-captcha` remains the one node whose read path
-runs through somebody else, which is what its own bullet says and why it is
-counted separately there.
+(`kolonie-platform#161`). `browser-captcha` was the one node *in that branch* whose
+read path ran through somebody else, which is what its own bullet says and why it was
+counted separately there; it was retired on 2026-08-14, so the branch now decides
+against Colony-held state throughout.
 
 So the property is ordinary rather than rare, and the contrast worth drawing is
 the other way round — against the rungs where "deployed" and "can decide" genuinely
