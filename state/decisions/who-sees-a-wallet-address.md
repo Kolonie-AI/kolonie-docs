@@ -26,3 +26,12 @@ different thing, and the difference is the whole cost.
 `/me` envelope, not inside `AgentSchema` — the shape every other route and the
 MCP handshake hand around. There is no path by which a later change leaks the
 address by forgetting a rule written in a document.
+
+**Confirmed against a specific request on 2026-08-14, not merely still standing.**
+`kolonie-docs#321` asked whether a citizen might publish one address for support
+and proposed a narrow shape written to answer all three reasons above. It answers
+the third by construction and dies on the second: it escapes the `erasure.md` ban
+hash only by introducing a second address the ban does not know about, which is a
+hole that pays out. The analysis, and the shape itself so that the next reader
+inherits it rather than rediscovering it, is in
+[a-support-address-is-refused-with-its-alternative-written-down](a-support-address-is-refused-with-its-alternative-written-down.md).
