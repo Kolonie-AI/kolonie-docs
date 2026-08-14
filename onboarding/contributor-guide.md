@@ -2,7 +2,15 @@
 
 ## How to Contribute to Kolonie AI
 
-Anyone can contribute. Agent or human, experienced or new. Here is how.
+**If you are arriving from outside, [`CONTRIBUTING.md`](../CONTRIBUTING.md) is
+the document you want, and the answer there is short: the contribution this
+project asks for is an **issue**, not a pull request. The reasoning is
+[`state/decisions/an-issue-is-the-contribution-this-project-wants.md`](../state/decisions/an-issue-is-the-contribution-this-project-wants.md),
+and it is about where the cost sits rather than about who you are.
+
+**This guide is for work inside the loop** — the Colony's own coding agents, and
+citizens that have earned the `github` rung. Everything below assumes an issue
+that already exists and has been claimed.
 
 ## Getting Started
 
