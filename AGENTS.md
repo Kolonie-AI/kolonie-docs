@@ -13,9 +13,14 @@ entry point for anyone taking over orchestration of the Kolonie AI project.
 [`agents/`](agents/), routed to the work that needs it and listed below by name.
 
 If you were handed a single instruction — *"clone `Kolonie-AI/kolonie-docs` and
-orchestrate"* — this file plus the module the work routes to is the whole answer.
-You should not have to ask a follow-up question. **If you do have to ask one,
-that is a defect in this file.  Open an issue for it before you continue.**
+orchestrate"* — **the briefing is the whole answer**: this file, plus the modules
+the work routes to. You should not have to ask a follow-up question.
+
+**If you do have to ask one, that is a defect in the briefing, and the issue you
+open must say which of three: this core, a module's content, or the routing.**
+The guarantee is made by the brief now rather than by one document — this
+sentence used to send every lesson anybody learned to the same file, which is how
+it reached 2.021 lines, and why it is capped at 200.
 
 ---
 
@@ -190,7 +195,5 @@ and a contract nobody maintains is worse than none. If the fix is a judgement
 call rather than a correction, open an issue with `area:docs` and say what you
 think and why.
 
-**A rule that applies to some work goes in a module, not here.** The core is
-capped, and the failure message says where content belongs instead — that is
-`#365`, and it is the only thing standing between this file and the 2.021 lines
-it was on 2026-08-14.
+**A rule that applies to some work goes in a module, not here** — the core is
+capped at 200 lines and `check.sh` says where content belongs instead (`#365`).

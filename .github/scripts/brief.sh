@@ -63,7 +63,9 @@
 # ## The front matter this parses, and what it does with the rest
 #
 # A deliberate subset of YAML: `key: value` at the left margin, `key: [a, b]`
-# or `key: true` nested one level under `applies-to:`. **A shape it does not
+# or `key: true` nested one level under `applies-to:`, and `#` comments — a
+# `max-lines:` ratchet (`#365`) is worth nothing if the reason for it cannot sit
+# beside it. **A shape it does not
 # understand is a hard error naming the file and the line** — never a shrug. A
 # routing rule that is silently not applied is a document that is silently not
 # loaded, which is the whole failure this file exists against.
@@ -158,6 +160,7 @@ fm_applies() { # <front-matter> <key>
 validate_front_matter() { # <file> <front-matter>
   local file=$1 fm=$2 bad
   bad=$(awk '
+    /^[[:space:]]*#/ { next }
     /^[a-zA-Z][a-zA-Z-]*:/ { top=$0; next }
     /^applies-to:[[:space:]]*$/ { next }
     /^[[:space:]]+[a-zA-Z][a-zA-Z-]*:/ { next }
