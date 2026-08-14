@@ -208,6 +208,15 @@ modules_for_reading() {
     }'
 }
 
+# Two modules answering to one name makes `--module <name>` a coin toss, and the
+# loser is a document nobody can reach. Cheap to check, impossible to notice.
+assert_unique_names() {
+  local dupes
+  dupes=$(modules | awk -F'\t' '{print $1}' | sort | uniq -d)
+  [ -z "$dupes" ] || die "two modules share a name, so --module could not answer:
+$(for d in $dupes; do modules | awk -F'\t' -v n="$d" '$1==n {printf "  %s  %s\n", $1, $2}'; done)"
+}
+
 path_of_module() { # <name>
   modules | awk -F'\t' -v n="$1" '$1==n {print $2; exit}'
 }
@@ -318,12 +327,30 @@ HEADER
 
 LOOP
 
+  # Parents carry their summary; children are named under them.
+  #
+  # **The convention is the directory**: a module at the root called `agents`
+  # owns `agents/`, and everything in it is one of its parts. That is derived
+  # from where the files are rather than from a table, which is the same reason
+  # `applies-to:` decides routing — a second list is a list that goes stale.
+  #
+  # Every module is still *named*, which is the guarantee this manifest makes;
+  # what a child gives up is its one-line summary, and `--modules` prints those.
+  # Nineteen summaries would be a third of the start budget, and the budget is
+  # the whole point of the arrangement.
   printf -- '--- The modules ---\n\n'
-  local name path summary
+  local name path summary dir kids
   while IFS=$'\t' read -r name path summary; do
+    dir=${path%%/*}
+    # A child: it sits in a directory a root module is named after. Listed under
+    # its parent rather than on a line of its own.
+    [ "$dir" != "$path" ] && modules | awk -F'\t' -v n="$dir" '$1==n && $2 !~ /\// {f=1} END {exit !f}' && continue
     printf -- '- %-13s %s\n' "$name" "$summary"
+    kids=$(modules | awk -F'\t' -v d="$name/" '$2 ~ "^" d {printf "%s ", $1}')
+    [ -z "$kids" ] || printf '    %s\n' "$kids"
   done < <(modules_for_reading)
-  printf '\n  bash .github/scripts/brief.sh --module <name>   any of them, in full\n\n' 
+  printf '\n  bash .github/scripts/brief.sh --module <name>   any of them, in full\n'
+  printf '  bash .github/scripts/brief.sh --modules        every module with its summary\n\n' 
 
   # One line, counts only. Eight directory names with an example file each cost
   # more of this budget than they answer, and `--index` names every file for
@@ -499,6 +526,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+assert_unique_names
 
 case $mode in
   manifest) cmd_manifest ;;

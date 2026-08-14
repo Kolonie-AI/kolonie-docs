@@ -18,3 +18,7 @@
 # Added 2026-08-14 with kolonie-docs#363, which cut AGENTS.md from 2.021 lines
 # into a 181-line core plus eight routed modules.
 AGENTS.md 2657fa07816ce8f218444f2507b524758fc0ddce AGENTS.md agents/*.md agents/history/*.md
+
+# Added 2026-08-15 with kolonie-docs#366, which cut ARCHITECTURE.md from 789
+# lines into a 142-line core plus five subsystem modules.
+ARCHITECTURE.md 958f3dfcf5f3e4f764eb51c267f3d736affeb947 ARCHITECTURE.md architecture/*.md

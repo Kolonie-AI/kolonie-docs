@@ -148,6 +148,32 @@ made status labels and board columns disagree until the labels were deleted.
 
 The rule applies to **every** `STATUS.md` in the project, not only this one.
 
+### The third rule, and it is the one that bounds the size
+
+The two rules above decide **how** a sentence is written and **whether** it
+belongs. Neither decides **how many** there may be, and that is why `STATUS.md`
+went from 194 lines on 2026-07-29 to 919 on 2026-08-15 with both of them in
+force the whole time.
+
+> **`state/STATUS.md` is what a reader needs to decide something this week, not
+> a catalogue of what is true.** A sentence stays while somebody choosing what to
+> do next would be worse off without it. What is merely true belongs to the
+> document that owns that subsystem — `ARCHITECTURE.md` and its modules,
+> `governance/`, a decision record — and it is one link away from here.
+
+Membership by *usefulness to a decision* is bounded, because the number of
+decisions in front of the Colony in a week is bounded. Membership by *truth* is
+not: a new subsystem produces sentences that are true, present tense, and not the
+board's answer twice, and nothing ever removed one.
+
+**The §2 diagnostic does not catch this, and that is worth knowing before
+trusting it.** Measured over 114 commits: **+2.055/−1.136**, deletions at 55 % of
+additions — the signature of a reference *under* control. The file is being
+rewritten in place exactly as required and grew 4,7× anyway. `git log --numstat`
+catches a chronicle pretending to be a reference; it does not catch an honestly
+maintained reference that simply covers more every week. The whole argument is in
+[`state/decisions/status-md-grew-because-both-rules-bound-shape-and-neither-bound-count.md`](../state/decisions/status-md-grew-because-both-rules-bound-shape-and-neither-bound-count.md).
+
 ### Where a new issue belongs
 
 | Kind of work | Repository |
