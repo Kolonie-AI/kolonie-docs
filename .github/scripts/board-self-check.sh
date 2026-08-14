@@ -265,15 +265,30 @@ check_coverage() {
     [ -n "$repo" ] || continue
     gaps=""
 
-    missing=$(comm -23 <(printf '%s\n' "$wanted" | sort) \
-      <(gh label list --repo "$ORG/$repo" --limit 200 --json name --jq '.[].name' 2>/dev/null | sort) \
-      | tr '\n' ' ')
-    # Every label reading as missing is a listing that failed, not a repository
-    # with no labels — the same floor 5b has, one repository wide.
-    if [ "$(wc -w <<<"$missing")" -ge "$(wc -l <<<"$wanted")" ]; then
-      gaps+="        its labels could not be listed, so the vocabulary is unverified"$'\n'
-    elif [ -n "${missing// /}" ]; then
-      gaps+="        missing labels: ${missing% } — \`bash .github/scripts/board-triage.sh vocabulary\` names the set"$'\n'
+    # **Ask `gh` whether it could read them, rather than inferring it from the
+    # answer** (`#349`). This counted the missing labels and called *all of them*
+    # a failed listing, on the reasoning that a repository with no labels at all
+    # is not a real state. It is the ordinary state: a repository nobody has
+    # touched carries GitHub's nine defaults — `bug`, `documentation`,
+    # `duplicate`, `enhancement`, `good first issue`, `help wanted`, `invalid`,
+    # `question`, `wontfix` — and not one of them is in this vocabulary.
+    #
+    # So the six skill repositories, whose listings answered perfectly on
+    # 2026-08-14 with exactly those nine, were reported as *its labels could not
+    # be listed, so the vocabulary is unverified*. That sends a reader to debug a
+    # token for a finding whose fix is `gh label create`, and it is the more
+    # expensive direction of the two: an unverified reading invites nothing,
+    # while a named missing label is one command.
+    local listed listing_failed=0
+    listed=$(gh label list --repo "$ORG/$repo" --limit 200 --json name --jq '.[].name' 2>/dev/null) ||
+      listing_failed=1
+
+    if [ "$listing_failed" -eq 1 ]; then
+      gaps+="        its labels could not be listed — \`gh label list --repo $ORG/$repo\` failed, so this is a reading and not a finding about the repository"$'\n'
+    else
+      missing=$(comm -23 <(printf '%s\n' "$wanted" | sort) <(printf '%s\n' "$listed" | sort) | tr '\n' ' ')
+      [ -n "${missing// /}" ] &&
+        gaps+="        missing labels: ${missing% } — \`bash .github/scripts/board-triage.sh vocabulary\` names the set"$'\n'
     fi
 
     listing=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null)
