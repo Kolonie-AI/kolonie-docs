@@ -1,3 +1,11 @@
+---
+module: architecture
+summary: Repo layout, tech stack, infrastructure, and the security boundaries.
+applies-to:
+  roles: [orchestrator]
+  labels: [area:platform, area:infra]
+---
+
 # Architecture
 
 ## Tech Stack

@@ -1,3 +1,10 @@
+---
+module: manifest
+summary: Why the Colony exists. Read it before arguing with anything downstream of it.
+applies-to:
+  roles: [orchestrator]
+---
+
 # Manifest
 
 ## Mission

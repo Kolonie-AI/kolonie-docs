@@ -1,3 +1,10 @@
+---
+module: agents
+summary: The binding contract — claim the checkout, the red lines, the check command, writing an issue.
+applies-to:
+  always: true
+---
+
 # AGENTS.md — kolonie-docs
 
 This file is binding for any agent working in this repository, and it is the
@@ -72,6 +79,40 @@ abandoned claim is a stop sign in front of work nobody is doing — [§6 step
 7](#6-the-orchestration-loop)'s rule about the board, one level down. A live
 claim held by somebody else is refused; `take --force` walks past it and names
 who it displaced.
+
+### What you are given to read, and where the rest is
+
+**A session starts with a directory, not with documents** (`#362`). One
+assembler decides what accompanies a piece of work, and it lives here rather
+than on a machine:
+
+```bash
+bash .github/scripts/brief.sh --manifest          # what a session starts with
+bash .github/scripts/brief.sh --module <name>     # one module, in full
+bash .github/scripts/brief.sh --issue <owner/repo> <n>   # what one issue asks for
+bash .github/scripts/session.sh take <issue>      # claims the checkout and prints that brief
+```
+
+**Routing is derived and never maintained.** A module is any Markdown file whose
+front matter names it, and `applies-to:` says who gets it unasked — `always`,
+`roles:`, `labels:`, `repos:`, `paths:`. There is no list of modules to keep in
+step: adding one is adding a file. `brief.sh --modules` prints what there is.
+
+The rule the whole arrangement enforces is **nothing is in context because it
+might be relevant** — and its counterweight, which matters as much: *a file that
+is not loaded but not mentioned is a file nobody knows to look for*. Every brief
+names what it left out, with each module's own summary and the command that
+loads it, and says what a budget made it drop.
+
+**The red lines are the exception and are never routed**: `governance/red-lines.md`
+is emitted in full at the start of every session, because a rule that arrives
+after the act it forbids has not been loaded at all.
+
+The measurement this came from: the SessionStart context was ~72.000 tokens
+before an agent read anything, and a worker on an ordinary code issue needs about
+250 of this file's lines. If a brief did not answer your question, that is a
+defect in the briefing — and the issue you open must say which of three: the
+manifest, a module's content, or the routing.
 
 ## 2. What this repository is
 

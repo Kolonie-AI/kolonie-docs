@@ -2,7 +2,9 @@
 # One checkout, one session, and a commit that says which. `kolonie-docs#318`.
 #
 # Usage:
-#   session.sh take [<agent>] [--branch <name>] [--force]   # claim this checkout
+#   session.sh take [<agent>] [<issue>] [--branch <name>] [--force]
+#                                                           # claim this checkout,
+#                                                           # and print that issue's brief
 #   session.sh check                                        # what the hooks run
 #   session.sh status                                       # who holds it, on what
 #   session.sh release                                      # give it back
@@ -253,13 +255,17 @@ cmd_check() {
 }
 
 cmd_take() {
-  local agent="" want_branch="" force=no
+  local agent="" want_branch="" force=no issue=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --branch) want_branch=${2:-}; shift 2 ;;
       --force) force=yes; shift ;;
+      --issue) issue=${2:-}; shift 2 ;;
       -*) echo "session.sh take: unknown option $1" >&2; exit 2 ;;
-      *) agent=$1; shift ;;
+      # A bare argument is the agent, unless it is shaped like an issue —
+      # `412`, `#412`, `kolonie-platform#412`, `Kolonie-AI/kolonie-platform#412`.
+      # No agent name is a number, so the two cannot collide (`#362`).
+      *) if [[ $1 =~ ^([A-Za-z0-9_.-]+/)?([A-Za-z0-9_.-]+)?#?[0-9]+$ ]]; then issue=$1; else agent=$1; fi; shift ;;
     esac
   done
   [ -n "$agent" ] || agent=${KOLONIE_AGENT:-}
@@ -350,6 +356,39 @@ cmd_take() {
     echo
     echo "  ! KOLONIE_AGENT is not '$agent' in this shell, and the hooks read it."
     echo "    export KOLONIE_AGENT=$agent"
+  }
+
+  [ -n "$issue" ] && print_brief "$issue"
+  return 0
+}
+
+# The brief for the issue this session just took (`kolonie-docs#362`).
+#
+# **This is one of the three loading triggers and the only one that costs an
+# agent nothing to remember**: `take` is already mandatory, so routing the
+# documents off the issue happens whether or not anybody thought to ask for it.
+# A split that relies on an agent *deciding* to go and read the other modules
+# buys nothing.
+print_brief() { # <issue>, in any of the four shapes take accepts
+  local ref=$1 org=${ORG:-Kolonie-AI} root repo number
+  root=$(git rev-parse --show-toplevel)
+  number=${ref##*#}
+
+  case "$ref" in
+    */*#*) repo=${ref%#*} ;;                       # Kolonie-AI/kolonie-platform#412
+    *#*)   repo="$org/${ref%#*}" ;;                # kolonie-platform#412
+    # A bare number means this repository — and its name comes from the remote,
+    # not from the directory: a worktree is called `kolonie-docs-<session>` and
+    # guessing from the path would ask GitHub for a repository that is not there.
+    *)     repo=$(git -C "$root" config --get remote.origin.url |
+                  sed -E 's#(\.git)?$##; s#.*[:/]([^/]+/[^/]+)$#\1#') ;;
+  esac
+  [ -n "$repo" ] || { echo "  ! no remote to resolve '#$number' against; pass <owner/repo>#<n>."; return 0; }
+
+  echo
+  bash "$root/.github/scripts/brief.sh" --issue "$repo" "$number" || {
+    echo "  ! the brief for $repo#$number could not be assembled."
+    echo "    The checkout is claimed either way — that half succeeded."
   }
 }
 

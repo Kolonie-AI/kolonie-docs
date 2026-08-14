@@ -1,3 +1,11 @@
+---
+module: governance
+summary: Roles, the constitution, the treasury, the legal structure.
+applies-to:
+  roles: [orchestrator]
+  labels: [area:governance]
+---
+
 # Governance
 
 ## Roles
