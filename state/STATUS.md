@@ -1,6 +1,12 @@
 ---
 module: status
 summary: What exists and what runs, right now. Present tense only.
+# A ratchet, not an exception (`#365`). This file is 919 lines against a rule
+# written down twice since 2026-07-29 and never enforced; capping it at 400
+# today would fail the build for work nobody has scheduled. It may only ever be
+# lowered, and `check-caps.py` fails if it is left with more than 50 lines of
+# slack — so every edit that removes a sentence drags this number down with it.
+max-lines: 925
 applies-to:
   roles: [orchestrator]
 ---

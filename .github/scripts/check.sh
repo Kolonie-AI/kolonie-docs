@@ -73,8 +73,15 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/session.test.sh
   bash .github/tests/brief.test.sh
   bash .github/tests/check-brief-coverage.test.sh
+  bash .github/tests/check-caps.test.sh
   bash .github/tests/session-context.test.sh
 '
+
+# `#365`. 216 lines on 2026-07-27, 2.021 on 2026-08-14 — every one of them a
+# good-faith improvement, which is why a habit was never going to hold this. The
+# `max-lines:` declarations are a ratchet and the check prints them on every run.
+step "the core and every module are within their caps" \
+  python3 .github/scripts/check-caps.py
 
 # `#363`. A prose file split by hand loses paragraphs at the seams and nobody
 # notices for weeks, so the promise that nothing was lost is a build failure
