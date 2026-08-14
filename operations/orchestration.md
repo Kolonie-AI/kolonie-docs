@@ -35,7 +35,7 @@ do once you are oriented.
 
 ## The Orchestration Loop
 
-**It is nine steps and they are in [`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop),
+**It is nine steps and they are in [`AGENTS.md` §6](../agents/orchestration.md#6-the-orchestration-loop),
 which is the only place they are written.**
 
 This section used to restate all nine. Two copies of a procedure is one copy that
@@ -80,7 +80,7 @@ The evidence, so this is not reversed on a feeling:
 
 **The mechanism was already the right one and has not changed. What changed is
 that it is the procedure rather than a contingency**, and it is written in one
-place: [`AGENTS.md` §6 step 7](../AGENTS.md#6-the-orchestration-loop) — how to
+place: [`AGENTS.md` §6 step 7](../agents/orchestration.md#6-the-orchestration-loop) — how to
 claim, what the comment has to say, and what to do about a queue of several. It is
 not restated here, for the reason the section above gives.
 
@@ -138,7 +138,7 @@ Before starting the next phase:
 
 Some issues cannot proceed without a human doing something first.
 
-**Which ones is defined in [`AGENTS.md` §5](../AGENTS.md#blockedhuman--the-one-label-that-gates-autonomy), as a closed list, and it is not restated here — nor is its length, which is the part of it that changes.** This document held its own prose until 2026-08-03 and the wording was *"creating an external account, making a legal decision, or approving a sensitive change"* — `sensitive` being exactly the judgement an agent should not make about its own work (`kolonie-docs#141`). The same rule as everywhere else in this repository: `AGENTS.md` holds the definition, and every other document links to it.
+**Which ones is defined in [`AGENTS.md` §5](../agents/labels.md#blockedhuman--the-one-label-that-gates-autonomy), as a closed list, and it is not restated here — nor is its length, which is the part of it that changes.** This document held its own prose until 2026-08-03 and the wording was *"creating an external account, making a legal decision, or approving a sensitive change"* — `sensitive` being exactly the judgement an agent should not make about its own work (`kolonie-docs#141`). The same rule as everywhere else in this repository: `AGENTS.md` holds the definition, and every other document links to it.
 
 The label `blocked:human` marks these issues across all repos. It works as a process convention, not a technical gate:
 

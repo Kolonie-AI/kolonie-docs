@@ -600,7 +600,14 @@ brief() {
   # The two rules, quoted from where they live rather than restated (`#259`,
   # `#260`). A prompt carrying its own copy of the routing table is a third copy
   # of it, and the third copy is the one that goes stale.
-  routes=$(awk '/^### The three routes/,/^#### What this is not/' "$ROOT/AGENTS.md")
+  # Where §5 lives is asked rather than assumed. `#363` moved it out of
+  # `AGENTS.md` into a routed module, and a path spelled out here would have
+  # been the fourth copy of a fact the module's own front matter already states.
+  local routes_file
+  routes_file=$(bash "$ROOT/.github/scripts/brief.sh" --module routes --no-content 2>/dev/null | awk -F'\t' '{print $2}')
+  [ -n "$routes_file" ] || die "no module called 'routes' — the routing rule has to be quoted from somewhere" 1
+  routes=$(awk '/^### The three routes/,/^#### What this is not/' "$ROOT/$routes_file")
+  [ -n "$routes" ] || die "'### The three routes' is not in $routes_file, so the prompt would carry no routing rule" 1
   prohibitions=$(cat "$ROOT/operations/worker-prohibitions.md")
 
   local slice

@@ -15,7 +15,7 @@ label, and status is the column the issue sits in on the
 [board](https://github.com/orgs/Kolonie-AI/projects/1).
 
 The query for what is on the critical path and startable right now is in
-[AGENTS.md §6](AGENTS.md#6-the-orchestration-loop).
+[AGENTS.md §6](agents/orchestration.md#6-the-orchestration-loop).
 
 There are deliberately no checkboxes here. A checkbox in a document is state in
 the wrong place, and it drifts. See [AGENTS.md §3](AGENTS.md).

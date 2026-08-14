@@ -1,6 +1,6 @@
 ---
 module: architecture
-summary: Repo layout, tech stack, infrastructure, and the security boundaries.
+summary: Repo layout, stack, infrastructure, security boundaries.
 applies-to:
   roles: [orchestrator]
   labels: [area:platform, area:infra]
@@ -589,7 +589,7 @@ is the state `#262` measured: a queue that only a conversation fills.
 Projects' own doing rather than this repository's.** Four built-in workflows write
 the Status field, and **deleting a Status option disables all of them** — the
 mechanism, the four names, the date it happened and how it is repaired are in
-`AGENTS.md` [§4](AGENTS.md#deleting-a-status-option-disables-every-workflow-that-writes-status),
+`AGENTS.md` [§4](agents/board.md#deleting-a-status-option-disables-every-workflow-that-writes-status),
 which is where the field and its option ids live. It is worth knowing here because
 the symptom looks like a triage failure: issues that sit in no column are not
 issues the pass declined to route, they are issues it never saw.

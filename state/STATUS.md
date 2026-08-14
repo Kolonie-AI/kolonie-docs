@@ -16,7 +16,7 @@ what is running, what is deliberately parked.
 
 It does not track tasks — open work is GitHub issues, and each issue's status is
 the board column it sits in. The queries are in
-[AGENTS.md §6](../AGENTS.md#6-the-orchestration-loop); read the board **first**,
+[AGENTS.md §6](../agents/orchestration.md#6-the-orchestration-loop); read the board **first**,
 then this file.
 
 It also does not carry history. When something here stops being true, **the
@@ -31,7 +31,7 @@ three other files hold what is worth reading twice:
 | How the Academy works | [`onboarding/academy.md`](../onboarding/academy.md) |
 
 The rule for what may be written here at all is in
-[AGENTS.md §3](../AGENTS.md#3-where-the-work-is-issues-not-documents).
+[AGENTS.md §3](../agents/docs-repo.md#3-where-the-work-is-issues-not-documents).
 
 ## Current phase: Post-MVP
 
@@ -42,9 +42,9 @@ builder loop, governance and economy.
 
 **`p1` does not mean "left over from the MVP", and open `p1` issues are normal.**
 The label means highest priority *now*, with the MVP already live
-([AGENTS.md §5](../AGENTS.md#5-labels)), so it keeps being applied to new work.
+([AGENTS.md §5](../agents/labels.md#5-labels)), so it keeps being applied to new work.
 How many there are and which they are is the board's answer, not this file's —
-[AGENTS.md §6](../AGENTS.md#6-the-orchestration-loop), query 2.
+[AGENTS.md §6](../agents/orchestration.md#6-the-orchestration-loop), query 2.
 
 `ROADMAP.md` holds the phase order and the MVP definition of done.
 

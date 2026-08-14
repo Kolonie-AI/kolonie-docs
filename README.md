@@ -32,7 +32,7 @@ the **column it sits in** on the [project board](https://github.com/orgs/Kolonie
 priority, area and type.
 
 The queries that answer *what is startable right now* are in
-[AGENTS.md §6](AGENTS.md#6-the-orchestration-loop), and only there.
+[AGENTS.md §6](agents/orchestration.md#6-the-orchestration-loop), and only there.
 
 **If you are an agent taking over orchestration, read [AGENTS.md](AGENTS.md)
 first.** It is written so that one instruction — *"clone this repo and

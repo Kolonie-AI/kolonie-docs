@@ -193,6 +193,21 @@ modules() {
   done < <(cd "$ROOT" && git ls-files '*.md' | sort)
 }
 
+# The same rows in reading order: the binding core, then what it routes to, then
+# the documents. `modules` stays sorted by path because a script wants a stable
+# order; a person wants the contract first.
+modules_for_reading() {
+  modules | awk -F'\t' '
+    $2 == "AGENTS.md"        { core = $0; next }
+    $2 ~ /^agents\//         { routed[++r] = $0; next }
+                             { rest[++t] = $0 }
+    END {
+      if (core) print core
+      for (i = 1; i <= r; i++) print routed[i]
+      for (i = 1; i <= t; i++) print rest[i]
+    }'
+}
+
 path_of_module() { # <name>
   modules | awk -F'\t' -v n="$1" '$1==n {print $2; exit}'
 }
@@ -274,11 +289,8 @@ cmd_manifest() {
   cat <<HEADER
 === Kolonie AI — a directory, not documents ===
 
-Nothing here is the whole of anything except the red lines, which are complete
-and binding as written. Everything else is named below and one command away.
-The rule: nothing is in context because it might be relevant.
-
-All commands run from $ROOT.
+Complete here: the red lines. Everything else is named below and one command
+away, from $ROOT. Nothing is in context because it might be relevant.
 
 HEADER
 
@@ -296,18 +308,13 @@ HEADER
 --- The loop, as commands ---
 
   export KOLONIE_AGENT=<your-session-name>
+  bash .github/scripts/session.sh take <issue>   # claims the checkout, prints its brief
+  gh api -X POST repos/$ORG/<repo>/issues/<n>/comments -f body='...'   # say you took it
+  bash .github/scripts/check.sh                  # the verdict is in the log, not the exit code
+  gh pr create --fill                            # finish the branch first; it merges on green
 
-  # 1. what can be started, by anyone
-  bash .github/scripts/opencode-worker.sh board-read > /tmp/board.json
-  jq -r '.items[]|select(.status=="Ready" and ((.labels//[])|index("agent:opencode")|not))|"\(.content.repository)#\(.content.number) \(.title)"' /tmp/board.json
-
-  # 2. take it — column, then comment, then work. Never the other way round
-  bash .github/scripts/session.sh take <issue>   # claims the checkout, prints that issue's brief
-  gh api -X POST repos/$ORG/<repo>/issues/<n>/comments -f body='...'
-
-  # 3. hand it in — the verdict is in the log, never in the exit code
-  bash .github/scripts/check.sh
-  gh pr create --fill        # finish the branch first; it merges itself on green
+  The board query that says what can be started, and the order to decide in:
+  bash .github/scripts/brief.sh --module orchestration
 
 LOOP
 
@@ -315,29 +322,23 @@ LOOP
   local name path summary
   while IFS=$'\t' read -r name path summary; do
     printf -- '- %-13s %s\n' "$name" "$summary"
-  done < <(modules)
-  printf '\n  bash .github/scripts/brief.sh --module <name>          one of them, in full\n'
-  printf '  bash .github/scripts/brief.sh --issue %s/<repo> <n>   what one issue asks for\n\n' "$ORG"
+  done < <(modules_for_reading)
+  printf '\n  bash .github/scripts/brief.sh --module <name>   any of them, in full\n\n' 
 
-  # Counts and no examples. The alphabetically first file of a directory is not
-  # a sample of it, and eight arbitrary filenames cost more of this budget than
-  # they answer — the command below names all of them when somebody wants them.
-  printf -- '--- Everything else, by directory ---\n\n'
-  local dir count
-  while IFS= read -r dir; do
-    count=$(cd "$ROOT" && git ls-files "$dir/*.md" | wc -l | tr -d ' ')
-    [ "$count" -gt 0 ] || continue
-    printf -- '- %-13s %3s %s\n' "$dir/" "$count" "$([ "$count" = 1 ] && echo file || echo files)"
-  done < <(cd "$ROOT" && git ls-files '*/*.md' | cut -d/ -f1 | sort -u)
-  printf '\n  bash .github/scripts/brief.sh --index                  every file, by name\n'
+  # One line, counts only. Eight directory names with an example file each cost
+  # more of this budget than they answer, and `--index` names every file for
+  # anybody who wants them — which is the rule this whole manifest turns on.
+  printf -- '--- Everything else: '
+  (cd "$ROOT" && git ls-files '*/*.md' | cut -d/ -f1 | sort | uniq -c |
+     awk '{printf "%s/%s ", $2, $1}')
+  printf -- '---\n\n  bash .github/scripts/brief.sh --index   names every one of them\n'
 
   cat <<'FOOT'
 
 --- If this did not answer your question ---
 
-That is a defect in the briefing. The issue you open must say which of three:
-this manifest, a module's content, or the routing that decided you did not get
-one. Naming which is the difference between a fix and a file that grows back.
+That is a defect in the briefing. The issue you open says which of three: this
+manifest, a module, or the routing that gave you the wrong one.
 FOOT
 }
 
@@ -351,6 +352,21 @@ cmd_index() {
     hint=$(grep -m1 -E '^#{1,2} ' "$ROOT/$file" 2>/dev/null | sed 's/^#\{1,2\} //')
     printf -- '- %s — %s\n' "$file" "${hint:-no heading}"
   done < <(cd "$ROOT" && git ls-files '*.md' | sort)
+}
+
+# The same rows in reading order: the binding core, then what it routes to, then
+# the documents. `modules` stays sorted by path because a script wants a stable
+# order; a person wants the contract first.
+modules_for_reading() {
+  modules | awk -F'\t' '
+    $2 == "AGENTS.md"        { core = $0; next }
+    $2 ~ /^agents\//         { routed[++r] = $0; next }
+                             { rest[++t] = $0 }
+    END {
+      if (core) print core
+      for (i = 1; i <= r; i++) print routed[i]
+      for (i = 1; i <= t; i++) print rest[i]
+    }'
 }
 
 # ---------------------------------------------------------------------------

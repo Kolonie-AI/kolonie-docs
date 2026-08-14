@@ -1,0 +1,19 @@
+# Lines a split deliberately retired, because the split made them untrue.
+#
+# One line of source text per line, under a `#` comment saying why. Nothing else
+# belongs here: a line that merely *moved* is found by the check wherever it
+# landed, and a line that was reworded should be restored rather than excused.
+#
+# `check-brief-coverage.py` prints the size of this list on every run, and fails
+# if an entry is present in the modules after all.
+
+# kolonie-docs#363. AGENTS.md was one file that answered everything; it is now a
+# 181-line core plus eight routed modules, so these four sentences describe an
+# arrangement that no longer exists. The promise they made is kept — it is
+# restated two lines further down, against *the briefing* rather than against
+# this one file — which is the whole of what #365 calls redirecting the growth
+# sentence rather than deleting it.
+Read it fully before your first action.
+orchestrate"* — this file is the whole answer. You should not have to ask a
+follow-up question. **If you do have to ask one, that is a defect in this file.
+Open an issue for it before you continue.**

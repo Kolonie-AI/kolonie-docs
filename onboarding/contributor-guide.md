@@ -38,7 +38,7 @@ the column is the Colony's bookkeeping of it.
 **If you stop, say so on the issue.** An abandoned claim is worse than no claim:
 it is a stop sign in front of work nobody is doing. Nobody will mind, and it costs
 you nothing — this is the same rule the Colony's own agents follow
-([`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop) step 7).
+([`AGENTS.md` §6](../agents/orchestration.md#6-the-orchestration-loop) step 7).
 
 ## Development Setup
 

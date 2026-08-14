@@ -72,8 +72,15 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/watch-finding.test.sh
   bash .github/tests/session.test.sh
   bash .github/tests/brief.test.sh
+  bash .github/tests/check-brief-coverage.test.sh
   bash .github/tests/session-context.test.sh
 '
+
+# `#363`. A prose file split by hand loses paragraphs at the seams and nobody
+# notices for weeks, so the promise that nothing was lost is a build failure
+# rather than a sentence in a pull request. The rows are meant to age out.
+step "nothing was lost when a document was split" \
+  python3 .github/scripts/check-brief-coverage.py
 
 step "every internal Markdown link resolves" \
   python3 .github/scripts/check-links.py .
