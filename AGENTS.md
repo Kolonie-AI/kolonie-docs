@@ -1729,6 +1729,31 @@ already, about locking, and it was right.
 An abandoned claim is worse than no claim: it is a stop sign in front of work that
 nobody is doing.
 
+**If the work goes through a pull request, three rules about landing it.** Each
+is something that was measured here, not a preference about how to work.
+
+- **Finish the branch, then open the pull request.** Measured 2026-08-14: of six
+  pull requests opened in one session, five were merged by another agent session
+  within minutes of opening. An open pull request is not a draft that waits for
+  you — pushing to one races a merge that may be a minute away.
+- **After a multi-commit pull request merges, check that your last commit is on
+  `main`**, rather than reading the merged badge. `kolonie-infra#164` carried
+  `#163` and `#158` and was squash-merged as `a9739bb`; the badge was green, and
+  `git merge-base --is-ancestor abe6ab0 origin/main` answers no. The whole of
+  `#158` — `scripts/health-triage.sh` and `scripts/rehearse-host-resources.sh` —
+  is not on `main`. The check is one command:
+
+  ```bash
+  git merge-base --is-ancestor <sha> origin/main && echo "on main" || echo "NOT on main"
+  ```
+
+  **Why that squash behaved that way is not written here**, because nobody
+  measured it. A cause invented to explain one merge is exactly what
+  [§7](#7-writing-an-issue) refuses, and the rule holds whatever the cause was.
+- **One issue per pull request, wherever the issues can be separated.** A pull
+  request carrying two issues is merged, or *partly* merged — and the second has
+  no badge for it. One carrying a single issue is merged or it is not.
+
 **8. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
 
