@@ -749,7 +749,14 @@ cmd_errors_changed() {
 # Two triggers, and they are separate because they are different claims: a burst
 # of fallbacks means the gateway was down and everything still worked, and a
 # refusal means something did not happen at all.
-cmd_gateway_wobbled() {
+# **The two numbers, read in one place** (`#351`). The predicate below and the
+# report beside it each had their own copy, which was survivable while the only
+# question was *file or not*. It stops being survivable the moment the finding
+# can also close itself: the condition and its end have to be the same
+# measurement read twice, and two copies of the arithmetic are two places for a
+# second threshold to appear. A rule that filed at 5 and closed at 4 would flap
+# forever on a gateway sitting at 4.
+gateway_numbers() {
   local dir="$1" peak refusals
 
   peak=$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)
@@ -757,6 +764,14 @@ cmd_gateway_wobbled() {
 
   refusals=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/refusals.tsv" 2>/dev/null)
   refusals=${refusals:-0}
+
+  printf '%s\t%s\n' "$peak" "$refusals"
+}
+
+cmd_gateway_wobbled() {
+  local peak refusals
+
+  IFS=$'\t' read -r peak refusals < <(gateway_numbers "$1")
 
   [ "$peak" -ge "$FALLBACK_BURST" ] && return 0
   [ "$refusals" -ge "$REFUSAL_FLOOR" ] && return 0
@@ -766,12 +781,16 @@ cmd_gateway_wobbled() {
 report_gateway_finding() {
   local dir="$1" peak refusals body_file
 
-  cmd_gateway_wobbled "$dir" || return 0
+  IFS=$'\t' read -r peak refusals < <(gateway_numbers "$dir")
 
-  peak=$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)
-  case "$peak" in ''|*[!0-9]*) peak=0 ;; esac
-  refusals=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/refusals.tsv" 2>/dev/null)
-  refusals=${refusals:-0}
+  # Not wobbling is not nothing to do: an open `gateway-not-serving` issue is a
+  # statement about today, and today it is false. `resolve` writes nothing when
+  # there is no such issue, which is what every ordinary day is.
+  if ! cmd_gateway_wobbled "$dir"; then
+    bash "$FINDING" resolve gateway-not-serving \
+      "the busiest hour of the last day carried **$peak fallback(s)**, under the burst threshold of $FALLBACK_BURST, and **$refusals call(s) were refused**. The gateway is serving the Colony again."
+    return 0
+  fi
 
   body_file=$(mktemp)
   {

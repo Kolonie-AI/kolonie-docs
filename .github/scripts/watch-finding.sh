@@ -3,6 +3,7 @@
 #
 # Usage:
 #   watch-finding.sh place <identity> <title> <body-file> [label ...]
+#   watch-finding.sh resolve <identity> <comment>   # allowlisted findings only
 #   watch-finding.sh find <identity>         # the issue carrying it, as JSON, or nothing
 #   watch-finding.sh key <identity>          # the marker line, for a body
 #
@@ -61,6 +62,17 @@
 # **Reopening rather than filing.** A recurrence is the same fact, and its
 # history is the useful part — *this is the third time since August* is a
 # sentence only the reopened issue can say.
+#
+# ## And a fourth case, for some findings only: it ended (`#351`)
+#
+#   the condition has measurably stopped   CLOSE it, saying what the number is now
+#
+# `#328` is why. It reported nine gateway fallbacks in one hour; measured two
+# days later the burst had run for three hours and nothing had fallen back since.
+# The condition ended before anybody read the issue, and the issue said the same
+# thing throughout, because there was no path by which it could say anything
+# else. An issue that cannot close is an issue that stops being read, which is
+# `#237`'s cost arriving by a different road.
 set -uo pipefail
 
 REPO=${GITHUB_REPOSITORY:-Kolonie-AI/kolonie-docs}
@@ -143,6 +155,72 @@ Reopened rather than filed again, so that how often this recurs stays readable i
   await_visible "$identity" || true
 }
 
+# **Which findings may close themselves is an allowlist, not a default**
+# (`kolonie-docs#351`).
+#
+# A finding that *can* resolve itself and one that *must not* are different
+# kinds, and the difference is whether the condition is deterministic. *Were
+# there N fallbacks in an hour* is a number, and *there have been none since* is
+# the same number answering the other way. **A model's reading of an error line
+# is not**, and whether that has been dealt with is a person's call — a watcher
+# that could close it is the thing this must not become.
+#
+# So the list is a constant and not an environment variable: a knob that widens
+# it is a knob that widens it by accident, at 06:00, in a workflow nobody is
+# reading. A new entry is a line in this file, in a diff somebody reviewed.
+RESOLVABLE_IDENTITIES="gateway-not-serving"
+
+is_resolvable() {
+  local one
+  for one in $RESOLVABLE_IDENTITIES; do
+    [ "$one" = "$1" ] && return 0
+  done
+  return 1
+}
+
+# **The condition has ended, so say so and close it** (`#351`).
+#
+# Three properties, and the second and third are what make it safe to run on a
+# timer:
+#
+#   - it refuses an identity that is not on the allowlist, **loudly and
+#     non-zero**, rather than quietly doing nothing — a caller that has added a
+#     `resolve` for a model-judged finding must find out at the first run
+#   - with no open issue of that identity it writes nothing and exits 0. Every
+#     ordinary day is that case: the gateway serves everything, and a watcher
+#     that treated *nothing to close* as a failure would be red every day it had
+#     nothing to say
+#   - it closes and does not delete, so the reopen path in `cmd_place` is what
+#     handles the condition coming back — one issue, still, with its recurrences
+#     readable in one place
+cmd_resolve() {
+  local identity=$1 comment=$2 found number state
+
+  if ! is_resolvable "$identity"; then
+    echo "refusing to resolve $identity: it is not on the allowlist ($RESOLVABLE_IDENTITIES)." >&2
+    echo "A finding may close itself only where the condition is a measurement with a precise end. If this one is, add it to RESOLVABLE_IDENTITIES in watch-finding.sh, in a diff somebody reads." >&2
+    return 2
+  fi
+
+  found=$(find_by_identity "$identity")
+  [ -n "$found" ] || { echo "no issue carries $identity — nothing to resolve"; return 0; }
+
+  number=$(jq -r '.number' <<<"$found")
+  state=$(jq -r '.state' <<<"$found")
+  [ "$state" = OPEN ] || { echo "#$number ($identity) is already closed — nothing to resolve"; return 0; }
+
+  gh issue comment "$number" --repo "$REPO" --body \
+"**Resolved — the condition has ended.** $(date -u +%Y-%m-%d): $comment
+
+Identity: \`$identity\`. [Full run]($RUN_URL)
+
+Closed by the watcher that filed it, because this condition is a measurement with a precise end rather than a judgement about what a log line meant. **The end is the same measurement that filed this, read the other way** — not a second, lower threshold, which would flap.
+
+If the condition returns, **this issue is reopened** rather than filed again, so how often it recurs stays readable here."
+  gh issue close "$number" --repo "$REPO" >/dev/null
+  echo "resolved #$number ($identity)"
+}
+
 # **The body is a reference, so it is rewritten in place** (`kolonie-docs#315`).
 #
 # ## What it cost to not do this
@@ -223,8 +301,22 @@ await_visible() {
 # open a second issue; **closing it is what tells the machine the condition was
 # handled**; and what the identity joins on, so somebody who thinks two different
 # problems have been merged into one can see exactly how.
+# **And the footer has to say which kind of finding this is** (`#351`). *Closing
+# this is how you tell the machine it was handled* was true of every finding
+# until one of them could close itself; on a resolvable one it now understates
+# what the machine does, and a reader who closed it expecting that to be the only
+# path would be wrong about what happens tomorrow. The sentence is derived from
+# the allowlist rather than passed in, so the two cannot disagree.
 cmd_footer() {
-  local identity=$1 joins_on=$2 workflow=$3
+  local identity=$1 joins_on=$2 workflow=$3 handled
+  if is_resolvable "$identity"; then
+    handled="**This one also closes itself when the condition ends**, because it is a
+measurement with a precise end rather than a judgement — and the end is the same
+measurement that filed it, read the other way. Closing it by hand is still the
+way to say *handled*; if the condition is still true tomorrow it reopens."
+  else
+    handled="**Closing this is how you tell the machine it was handled.** Nothing else does."
+  fi
   cat <<FOOTER
 $(key_line "$identity")
 
@@ -235,7 +327,7 @@ condition holds it will **comment here** rather than open a second issue, and if
 this is closed and the condition returns it will **reopen this one** — so how
 often it recurs stays readable in one place.
 
-**Closing this is how you tell the machine it was handled.** Nothing else does.
+$handled
 
 **What it treats as "the same finding":** $joins_on — recorded as \`$identity\`.
 That is right often enough and wrong sometimes: two different underlying causes
@@ -250,5 +342,6 @@ case "${1:-}" in
   find)   shift; find_by_identity "${1:?find needs an identity}" ;;
   footer) shift; cmd_footer "${1:?footer needs an identity}" "${2:?footer needs what it joins on}" "${3:?footer needs a workflow name}" ;;
   place) shift; cmd_place "${1:?place needs an identity}" "${2:?place needs a title}" "${3:?place needs a body file}" "${@:4}" ;;
-  *)     echo "usage: watch-finding.sh place <identity> <title> <body-file> [label ...] | find <identity> | key <identity> | footer <identity> <joins-on> <workflow>" >&2; exit 2 ;;
+  resolve) shift; cmd_resolve "${1:?resolve needs an identity}" "${2:?resolve needs a comment saying what the measurement now is}" ;;
+  *)     echo "usage: watch-finding.sh place <identity> <title> <body-file> [label ...] | resolve <identity> <comment> | find <identity> | key <identity> | footer <identity> <joins-on> <workflow>" >&2; exit 2 ;;
 esac

@@ -10,7 +10,10 @@
 #   - an issue is opened only when something is wrong, and **never a second one
 #     while the first is open** — "the guard is code, not convention"
 #   - the body **leads with the numbers** and puts the judgement last
-#   - it holds no write beyond opening an issue — here, that it never closes one
+#   - it holds no write beyond opening an issue — and, since `#351`, closing the
+#     one finding whose condition is a number with a precise end. Nothing else:
+#     a silent service is a judgement, and it is asserted below that it is not
+#     closed by the machine that filed it
 #
 # Both `curl` and `gh` are stubbed. A stub is the only way to exercise the branch
 # where an issue already exists without filing one, and the only way to prove the
@@ -246,7 +249,14 @@ expect "and no comment" "$(logged "issue comment" && echo no || echo yes)" "$(ca
 # `#133`: "It reads. It does not act." — including on its own issue. This is
 # where it deliberately differs from board-self-check.sh, so it is asserted
 # rather than left to a reading.
-expect "it never closes an issue" "$(logged "issue close" && echo no || echo yes)" "$(cat "$GH_LOG")"
+#
+# `#351` narrowed that from *never* to *never, except one finding whose condition
+# is a number with a precise end*, and this assertion is where the narrowing is
+# visible: a silent service is a judgement about whether a runner should be
+# running, nobody has measured its end, and it is not on `watch-finding.sh`'s
+# allowlist. So on this day the agent still closes nothing.
+expect "it never closes a silent-service issue, which is not a measurement with an end" \
+  "$(logged "issue close" && echo no || echo yes)" "$(cat "$GH_LOG")"
 expect "it edits nothing" "$(logged "issue edit" && echo no || echo yes)" "$(cat "$GH_LOG")"
 expect "it touches no board item" \
   "$( { logged "project item-add" || logged "project item-edit"; } && echo no || echo yes)" "$(cat "$GH_LOG")"
@@ -648,6 +658,35 @@ out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "and no finding" "$([ $rc -eq 0 ] && echo yes || echo no)" "rc=$rc $out"
 bash "$SCRIPT" report "$WORK/out" >/dev/null
 expect "and nothing is filed" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+expect "and with no issue open there is nothing to close either" \
+  "$(logged "issue close" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# **The condition ended** (`#351`). `#328` sat open for two days saying nine
+# fallbacks in one hour while the measurement behind it read zero. The same quiet
+# day as above, with that issue open, has to close it — and what makes this one
+# measurement rather than two is that the fixture is the *same* quiet fixture,
+# with nothing added but the issue.
+setup
+jq -n '[{number:328, state:"OPEN", title:"The Colony was served by its second-choice provider",
+         body:"<!-- watch-finding: gateway-not-serving -->"}]' > "$FIX/existing"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "an open gateway finding is closed once the gateway is serving again" \
+  "$(logged "issue close 328" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and the comment says what the measurement now is" \
+  "$(logged "0 fallback(s)" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and it is closed rather than filed again" \
+  "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
+# The other half of the same rule: a day that *is* a burst must not close it. A
+# watcher that filed and resolved on the same run would be one nobody could read.
+setup
+jq -n '[{number:328, state:"OPEN", title:"whatever", body:"<!-- watch-finding: gateway-not-serving -->"}]' > "$FIX/existing"
+printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"9"]]}]}}\n' > "$FIX/fallback_peak"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "a burst does not close the issue it is the reason for" \
+  "$(logged "issue close" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 # A trickle is not a burst. Three ordinary days carried one fallback each in the
 # measured week, and a rule that fired on them would have taught nobody anything.
