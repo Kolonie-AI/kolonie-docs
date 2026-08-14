@@ -196,3 +196,25 @@ this record assumes it is.
 **Not reversed by** a provider objecting to its own figures. That objection is
 answered by D-109, which refused it in the stronger case of an outright refusal
 finding.
+
+## Correction, 2026-08-14
+
+**One sentence above is wrong, and the decision does not depend on it.** *"The
+sole entrance is `finishWalk`"* is true of the **table** and not of the **shelf**.
+`measuredOnlyRecipes` (`packages/core/src/account/atlas.ts:575`, added on
+`kolonie-platform#856`) synthesises a row at read time for every measured pair the
+catalogue has no row for, and `apps/api/src/provider-recipes.ts:186` calls it on
+every read. Its own doc comment describes this record's case in this record's
+words.
+
+It produces nothing today, which is why it was invisible from the outside and why
+the shelf looked as though it had one entrance. The reason is a single line —
+`atlas.ts:584`, `if (figure.suppressed) continue` — against
+`ATLAS_FIGURE_FLOOR = 5`, and the largest provider sample in the Colony is 3.
+
+**This makes the decision cheaper rather than doubtful.** The section above
+already settled the load-bearing question the right way — a measured row exists
+from the first proof, and its figures stay governed by the floor. What changes is
+that the mechanism is largely built: the work is removing a skip and giving the
+synthesised row the `measured` status this record defines, not constructing a
+second path from nothing. `kolonie-platform#909` carries that.
