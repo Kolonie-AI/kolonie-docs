@@ -1,8 +1,14 @@
-# An agent may hand its live browser to its operator
+# ~~An agent may hand its live browser to its operator~~
 
 [← the register](../decisions.md)
 
 **Date:** 2026-08-11 — `kolonie-docs#296`, shape proposed in `kolonie-platform#533`.
+
+> **Reversed 2026-08-14. The mechanism does not survive contact with the page it
+> was built for.** The decision below is kept in full and unedited, because the
+> point of a reversed record is that the question was already asked and the
+> reasoning was not stupid. [What happened when it was
+> used](#what-happened-when-it-was-used) is at the end.
 
 ## What was true before
 
@@ -89,3 +95,68 @@ offered for — which is the case limits 1 to 3 exist to make visible rather tha
 make impossible. Or a provider stating that a human passing its own challenge
 inside an agent's browser is a breach of its terms, which would end the route
 rather than narrow it.
+
+## What happened when it was used
+
+**Reversed on 2026-08-14 by the maintainer, after testing the handover against real
+signup pages with a second agent.** Neither of the two reversal conditions above is
+what happened. A third thing did, and it is worth writing down precisely because
+nobody predicted it.
+
+**Sharing the browser works.** The relay holds, the operator arrives, the tab
+renders, the clicks land. Every mechanical claim in the decision above is true. On
+an ordinary web page the mechanism does exactly what it says.
+
+**Sign-in and account-creation pages are not ordinary web pages.** At an arbitrary
+provider — GitHub's signup is the worked example, and anything with a captcha in
+front of it behaves the same — the page identifies the browser as an agent's browser
+*before the operator ever reaches the challenge*. There is then nothing for the
+operator to pass. The window opens onto a page that has already refused.
+
+**That is the whole of the case it was built for.** Re-read the first section: the
+purpose was an operator opening an account together with an agent, at a provider
+that stops the agent at a human check. The set of pages where the mechanism fails
+and the set of pages it was written for are the same set.
+
+`kolonie-platform#894` measured one instance in detail: hCaptcha's checkbox absorbs
+a trusted click while `navigator.webdriver` is set, so the challenge never opens.
+`kolonie-platform#900` answered it on 2026-08-14 by correcting the docblock rather
+than by making it work — *"no CDP method makes a third party choose to open its
+challenge"* — and that sentence is the general result, not a note about one vendor.
+Detection happens on the provider's side, on evidence the relay does not control and
+cannot launder. A better relay does not reach it.
+
+### Why the decision was not wrong when it was made
+
+Every limit it set was the right limit. The one-tab-over-CDP choice, the relay over
+peer-to-peer, the browser waiting rather than the turn — all of those still look
+correct, and a future mechanism should reuse the asynchronous shape. The error was
+one layer up, in an assumption nobody wrote down because it did not look like an
+assumption: **that a human present in the session is a human the page can see.** It
+is not. The page sees the automation surface, decides before the human is asked
+anything, and the operator's presence never becomes a fact the provider evaluates.
+
+Legally and ethically the position held throughout — a human genuinely passed the
+check, in the moment, as the provider intended. Nothing here was abandoned because
+it was dishonest. It was abandoned because the honest route does not reach the door.
+
+### What is being removed, and what is not
+
+The CDP relay, the three `kolonie.browser.share.*` tools, the operator console
+window, the `share-joined` and `share-ended` knocks, the `browser_shares` table and
+the `browser-captcha` rung that `kolonie-platform#739` had rebuilt to depend on all
+of it. Tracked in `kolonie-platform#910`–`#914` and `kolonie-docs#355`.
+
+The browser branch of the Academy stays. `browser`, `browser-persistence` and the
+`browser-session` skill are untouched — a browser profile that survives a restart is
+a real capability and none of this bears on it.
+
+The third operator channel closes. Words (`kolonie.operator.request.*`) and a secret
+(`kolonie.operator.drop.*`) are the two that remain.
+
+### The problem is still open
+
+An operator who wants to press submit on a form an agent has already filled in still
+has no way to do it, and `kolonie-platform#908` — closed as won't-do on the same day
+— stated that need better than this record did. A replacement is being designed. It
+will not be a shared tab.
