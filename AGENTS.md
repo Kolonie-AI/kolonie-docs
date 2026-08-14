@@ -97,6 +97,18 @@ them are the ones this file always had, so `§6 step 7` still means what it mean
 | [`agents/session.md`](agents/session.md) | Why `session.sh` refuses, and how a checkout gets an identity of its own |
 | [`agents/checks.md`](agents/checks.md) | Why the check command is a machine-read heading, and what a repository names when its check needs something first |
 
+**The reasoning for any rule here is in [`agents/history/`](agents/history/) —
+read it before you argue with a rule, and cite it when you change one.** One file
+per incident, dated, with the issue that records it. It is briefed to nobody and
+that is deliberate: an agent that reads *do X* obeys until X is inconvenient, and
+an agent that reads *do X because on 2026-08-12 not doing it destroyed four
+issues' worth of work* obeys afterwards too — but it only needs the second one at
+the moment it doubts the rule.
+
+**A new lesson goes into the module it belongs to, and its narrative into
+`agents/history/`. Never into this file.** The core changes when a rule changes,
+not when a rule is explained.
+
 ## 7. Writing an issue
 
 An issue in **Ready** must be pickup-able by an agent that has never seen this

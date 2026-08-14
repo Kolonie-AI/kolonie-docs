@@ -39,11 +39,9 @@ The last three used to be one file, and it quadrupled in size in two days becaus
 every change was appended to it. See §3.
 
 **`state/decisions.md` then caught the same disease its parent died of**, and the
-split above is the cure, taken on `kolonie-docs#143` on 2026-08-03. It was 3052
-lines and had taken +3135/−82 in three weeks — it added more than its own size
-and deleted 2.6 % of it. `STATUS.md` saw *more* traffic over the same window,
-+1704/−1025, and stayed at 679 lines, because this file requires it to be present
-tense and so it is rewritten rather than extended.
+split above is the cure, taken on `kolonie-docs#143` on 2026-08-03 —
+[`history/2026-08-03-two-reference-files-became-chronicles.md`](history/2026-08-03-two-reference-files-became-chronicles.md)
+has both files' numbers.
 
 ### The rule that produced that split, so it does not have to be rediscovered
 
@@ -106,11 +104,10 @@ These are all forbidden, and all of them were in the file on 2026-07-29:
 - *"Half-resolved 2026-07-28: …"*
 - *"This also retires the claim that stood here until …"*
 
-Each one is cheap to write and permanent to read. A reader then has to work
-through a refuted premise to reach the current fact, and every future edit has
-more text to stay consistent with. The file grew from 11 KB to 43 KB in two days
-this way, across 25 commits, not one of which made it smaller — until it broke the
-session hook that loads this repository.
+Each one is cheap to write and permanent to read: a reader has to work through a
+refuted premise to reach the current fact. Doing it 25 times took `STATUS.md`
+from 11 KB to 43 KB in two days and broke the session hook that loads this
+repository — [`history/2026-08-03-two-reference-files-became-chronicles.md`](history/2026-08-03-two-reference-files-became-chronicles.md).
 
 **The history is not lost, because Git has it.** What a bullet said yesterday is
 one `git log -p` away, and that is the correct place for it.

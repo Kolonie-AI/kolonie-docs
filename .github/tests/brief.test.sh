@@ -265,6 +265,24 @@ contains "the loop is there as commands" "session.sh take" "$out"
 contains "and the way to everything else" "--index" "$out"
 
 echo
+echo "history is reachable and is briefed to nobody"
+
+for f in "$ROOT"/agents/history/*.md; do
+  name=$(sed -n 's/^module: //p' "$f" | head -1)
+  [ -n "$name" ] || continue
+  out=$(bash "$ROOT/.github/scripts/brief.sh" --module "$name" 2>&1)
+  if [ -n "$out" ]; then pass "$name loads by name"; else fail "$name could not be loaded by name"; fi
+done
+for repo in kolonie-platform kolonie-docs kolonie-infra; do
+  out=$(bash "$ROOT/.github/scripts/brief.sh" --issue "Kolonie-AI/$repo" 1 --role orchestrator 2>/dev/null)
+  if grep -q "MODULE history" <<<"$out"; then
+    fail "a history module was briefed for a $repo issue"
+  else
+    pass "no history module is briefed for a $repo issue"
+  fi
+done
+
+echo
 echo "against this repository, where the measurements are claims about it"
 
 manifest=$(bash "$ROOT/.github/scripts/brief.sh" --manifest)
