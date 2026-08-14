@@ -218,6 +218,42 @@ contains "and so is the line" "- area:infra" "$out"
 (cd "$REPO" && git rm -q agents/broken.md && git -c user.email=t@t.invalid -c user.name=t commit -qm fixed)
 
 echo
+echo "a module in a directory its parent is named after is listed under it"
+
+mkdir -p "$REPO/agents"
+cat > "$REPO/agents/extra.md" <<'MD'
+---
+module: extra
+summary: A part of the contract.
+applies-to:
+  roles: [orchestrator]
+---
+UNIQUE-EXTRA-STRING
+MD
+(cd "$REPO" && git add -A && git -c user.email=t@t.invalid -c user.name=t commit -qm extra)
+out=$(bash "$BRIEF" --manifest)
+contains "the parent carries the summary" "The binding contract." "$out"
+contains "and the child is named under it" "extra" "$out"
+absent   "without a second summary line" "A part of the contract." "$out"
+
+echo
+echo "two modules cannot share a name"
+
+cat > "$REPO/agents/twin.md" <<'MD'
+---
+module: board
+summary: A second module claiming a name.
+applies-to:
+  roles: [orchestrator]
+---
+UNIQUE-TWIN-STRING
+MD
+(cd "$REPO" && git add -A && git -c user.email=t@t.invalid -c user.name=t commit -qm twin)
+out=$(bash "$BRIEF" --modules 2>&1) && fail "two modules sharing a name passed" || pass "two modules sharing a name is refused"
+contains "and both files are named" "agents/twin.md" "$out"
+(cd "$REPO" && git rm -q agents/twin.md && git -c user.email=t@t.invalid -c user.name=t commit -qm untwin)
+
+echo
 echo "the manifest is a directory and not a document"
 
 out=$(bash "$BRIEF" --manifest)
