@@ -542,22 +542,54 @@ echo "an error count says how its level was arrived at, where that is not obviou
 # `#241` reports the api failing on, in the same window. One event, two issues,
 # and the triage pass guessed the relationship twice because the issue never said
 # what its own number meant.
-# The constant as well as the function: the list of services is half the
+# The constants as well as the function: each list of services is half the
 # behaviour, and sourcing the function alone made every assertion below pass on
 # an unbound-variable error instead of on an answer.
+#
+# **Every one of them, matched by shape rather than by name** (`#285`). This
+# named `STATUS_DERIVED_LEVEL` and only that, so `#327`'s second list arrived and
+# the harness kept extracting one constant for a function that now reads two:
+# `website` fell through to `NGINX_TWO_ROUTE_LEVEL: unbound variable` and the
+# suite went red on `main` for a change that was correct. A list named by hand is
+# a list that goes stale silently, which is the same failure the function itself
+# is written to avoid.
 note() {
   {
-    sed -n '/^STATUS_DERIVED_LEVEL=/p' "$SCRIPT"
+    sed -n '/^[A-Z_][A-Z_]*_LEVEL=/p' "$SCRIPT"
     sed -n '/^level_note_for()/,/^}/p' "$SCRIPT"
   } > "$WORK/note.sh"
   ( . "$WORK/note.sh"; level_note_for "$1" )
 }
 
-for service in traefik website pgadmin; do
+# The naming rule the extraction above depends on, asserted rather than trusted:
+# a third list added under a name that does not end `_LEVEL` would not be
+# extracted, and the assertions for its services would fail on an unbound
+# variable rather than on an answer — which is exactly how this was found.
+expect "every list the note function reads is extractable by that shape" \
+  "$([ "$(grep -c '^[A-Z_][A-Z_]*_LEVEL=' "$SCRIPT")" = "$(sed -n '/^level_note_for()/,/^}/p' "$SCRIPT" | grep -c 'for one in \$')" ] && echo yes || echo no)" \
+  "$(grep -n '^[A-Z_][A-Z_]*_LEVEL=' "$SCRIPT")"
+
+for service in traefik pgadmin; do
   out=$(note "$service") || out=""
   expect "$service says its level came from the HTTP status" \
     "$([[ "$out" == *"derived from the HTTP status"* ]] && echo yes || echo no)" "$out"
 done
+
+# **`website` is not in that loop, and that is `#327`'s decision rather than an
+# omission.** It is nginx and writes two log formats: an access line levelled
+# from the HTTP status, and an error-log line carrying nginx's own severity. A
+# note saying flatly that the level came from the status is true of one route and
+# wrong about the other, which is what sent a reader looking for a service that
+# answered 500 when every one of the 56 lines was a `404`. So it gets its own
+# note, and what is asserted here is that it names both routes and neither as the
+# answer.
+web=$(note website) || web=""
+expect "website is told both rules, because it is nginx and has two" \
+  "$([[ "$web" == *"stage 5b"* && "$web" == *"stage 5c"* ]] && echo yes || echo no)" "$web"
+expect "and is not told the flat answer that is wrong about half its lines" \
+  "$([[ "$web" != *"derived from the HTTP status"* ]] && echo yes || echo no)" "$web"
+expect "and that on the error-log route there is no partner service to look for" \
+  "$([[ "$web" == *"no partner service"* ]] && echo yes || echo no)" "$web"
 
 expect "and it says which status, because 4xx is the client and 5xx is us" \
   "$([[ "$(note traefik)" == *"5xx"* && "$(note traefik)" == *"4xx"* ]] && echo yes || echo no)"
