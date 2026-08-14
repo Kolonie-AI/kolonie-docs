@@ -62,6 +62,7 @@ step "the checks are tested before they are trusted" bash -c '
   python3 .github/tests/build-readme.test.py
   python3 .github/tests/check-incident-order.test.py
   python3 .github/tests/check-brand-surfaces.test.py
+  python3 .github/tests/check-skill-target.test.py
   bash .github/tests/no-gateway-leak.test.sh
   bash .github/tests/opencode-worker.test.sh
   bash .github/tests/board-triage.test.sh
@@ -91,6 +92,15 @@ step "README.md carries the current Colony header" \
 # seven files it had never read.
 step "the marketplace description has one copy" \
   python3 .github/scripts/check-skill-description.py
+
+# `#343`. The order in which an arriving agent handles its key lives once, in the
+# shared body; **where the key goes** cannot, because it is a different place on
+# every runtime. So the target lives in seven `skill.runtime.md` files, which is
+# the arrangement that goes stale silently — an eighth runtime inherits the order
+# for free and inherits nothing about the target. Same projection shape as the
+# red-line copies, and the same reason.
+step "every generated SKILL.md names one concrete place for the key" \
+  python3 .github/scripts/check-skill-target.py
 
 # Named rather than dropped. `no-gateway-leak.sh` decides for itself whether it
 # can run — it greps for the *values* of two secrets and skips when they are

@@ -77,6 +77,7 @@ jobs:
           python3 .github/tests/check-incident-order.test.py
           python3 .github/tests/check-brand-surfaces.test.py
           python3 .github/tests/check-skill-description.test.py
+          python3 .github/tests/check-skill-target.test.py
           bash .github/tests/no-gateway-leak.test.sh
           bash .github/tests/opencode-worker.test.sh
           bash .github/tests/board-triage.test.sh
@@ -183,3 +184,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/check-skill-description.py
+
+      # `#343`. The order an arriving agent handles its key in lives once, in the
+      # shared body. **Where the key goes** cannot: it is `~/.claude/settings.json`
+      # on one runtime, a `config set` command on another, and a file a third
+      # never reads. So it lives in seven `skill.runtime.md` files — the
+      # arrangement that goes stale silently, because an eighth runtime inherits
+      # the order for free and inherits nothing about the target.
+      #
+      # The token is what makes it a check, for the same reason as the step above:
+      # this checkout has none of the seven siblings, and a read that did not
+      # happen is a failure here rather than a skip.
+      - name: Every generated SKILL.md names one concrete place for the key
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/check-skill-target.py
