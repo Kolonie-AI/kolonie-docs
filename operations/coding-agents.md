@@ -34,7 +34,7 @@ An issue in the **Ready** column is specified well enough to start without askin
 anyone. The column *is* the status — there are no status labels, and there is no
 `ready-to-build` label. [`AGENTS.md`](../AGENTS.md) §4 and §5 are the single
 definition of the columns and the label vocabulary; neither is restated here, and
-neither are the queries — those are [`AGENTS.md` §6](../AGENTS.md#6-the-orchestration-loop).
+neither are the queries — those are [`AGENTS.md` §6](../agents/orchestration.md#6-the-orchestration-loop).
 
 ## Three ways work enters a repository
 

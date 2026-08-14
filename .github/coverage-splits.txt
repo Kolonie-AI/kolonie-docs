@@ -1,0 +1,20 @@
+# What a split promised, turned into something that fails the build.
+#
+# One row per split:  <source-path> <pre-split-sha> <destination-glob>...
+#
+# Every non-blank line of the source, as it was at that commit, must still be
+# present in one of the destinations. `check-brief-coverage.py` has the whole
+# argument, including why this asserts *at least one* rather than *exactly one*.
+#
+# **Rows are meant to be deleted.** One release after a split has landed, the
+# modules are the thing being maintained and the pre-split file is only history;
+# a row left here past that point turns every deleted sentence red.
+#
+# **Pin a SHA that is on `main`.** A commit from the branch the split was written
+# on is reachable in that working copy and in no fresh clone, so the check goes
+# green locally and red in CI with `cannot read <path> at <sha>` — which reads
+# like the file moved rather than like the pin did.
+
+# Added 2026-08-14 with kolonie-docs#363, which cut AGENTS.md from 2.021 lines
+# into a 181-line core plus eight routed modules.
+AGENTS.md 2657fa07816ce8f218444f2507b524758fc0ddce AGENTS.md agents/*.md agents/history/*.md

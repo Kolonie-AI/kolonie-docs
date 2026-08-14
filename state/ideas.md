@@ -4,13 +4,13 @@ Half-formed thoughts that nobody has decided to do.
 
 ## Why this is not the board
 
-[`AGENTS.md` §3](../AGENTS.md#3-where-the-work-is-issues-not-documents) says
+[`AGENTS.md` §3](../agents/docs-repo.md#3-where-the-work-is-issues-not-documents) says
 every open **task** is a GitHub issue, and it is right. An idea is not a task: it
 waits on nobody, nothing is in progress, and it blocks nothing. It carries no
 state, so the rule that keeps state out of documents does not reach it.
 
 Putting one on the board makes it look like work. The board answers *what can
-somebody start right now* — [§6](../AGENTS.md#6-the-orchestration-loop), query 1
+somebody start right now* — [§6](../agents/orchestration.md#6-the-orchestration-loop), query 1
 — and a column full of things nobody can start makes that question
 unanswerable. Decided 2026-08-07, after the Inbox had grown to fifteen items,
 most of which were thinking rather than work.

@@ -1516,9 +1516,12 @@ for path in ".github/workflows/" "opencode.json" ".github/scripts/opencode-worke
     "Do not edit $path" "$workflow_text"
 done
 
-contains "AGENTS.md §5 sends the labeller to the document" \
+# §5 is `agents/routes.md` since `#363` split `AGENTS.md` into routed modules.
+# The assertion is the same one — the labeller is sent to the document rather
+# than given a copy of it — read from the file that now carries that section.
+contains "§5, wherever it lives, sends the labeller to the document" \
   "operations/worker-prohibitions.md" \
-  "$(step_block '## 5. Labels' '## 6. The orchestration loop' "$ROOT/AGENTS.md")"
+  "$(cat "$ROOT/agents/routes.md")"
 
 echo
 echo "the pull requests that cannot merge (#256)"

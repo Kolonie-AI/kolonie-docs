@@ -1,6 +1,6 @@
 ---
 module: manifest
-summary: Why the Colony exists. Read it before arguing with anything downstream of it.
+summary: Why the Colony exists. Everything else is downstream of it.
 applies-to:
   roles: [orchestrator]
 ---
