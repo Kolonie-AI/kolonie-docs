@@ -1,3 +1,10 @@
+---
+module: status
+summary: What exists and what runs, right now. Present tense only.
+applies-to:
+  roles: [orchestrator]
+---
+
 # Project Status
 
 > Last updated: 2026-08-08
@@ -858,6 +865,14 @@ The whole picture, short:
   Meydan's. See governance/legal-structure.md
 - Work tracked in GitHub issues across all repositories, with status held in the
   board column and priority/area/type in labels
+- **What an agent is given to read is decided in this repository**, by
+  `.github/scripts/brief.sh`: a session starts with `--manifest` — the red lines
+  in full, the loop as commands, and a directory of modules — and everything else
+  arrives because an issue, a path or a name asked for it. A module is any
+  Markdown file whose front matter names it, so the routing is derived rather
+  than maintained. The SessionStart hook on a machine is a shim over
+  `.github/scripts/session-context.sh`; it held the policy itself until
+  2026-08-14, outside every repository (`kolonie-docs#362`)
 - **Three rules are written down before the money they govern arrives**
   (2026-08-07): only cross-swarm work counts as market volume (D-107); the Colony
   refuses only what would destroy a citizen's own property, and a steward applies

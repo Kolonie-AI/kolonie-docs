@@ -224,6 +224,30 @@ No URL appearing anywhere below has been fetched, and none should be.
 
 HEADER
 
+# The documents half, from the one assembler (`kolonie-docs#362`).
+#
+# **This script decides which issues accompany the task; it no longer decides
+# which documents do.** That decision was a hard-coded list in a machine-local
+# hook, and the reason it moved is that a repository could not change its own
+# document structure without editing a file outside every repository. Here it is
+# a caller of `brief.sh` rather than a second implementation beside it — the
+# routing lives in the modules' own front matter, and adding one is adding a
+# file.
+#
+# It is `|| true` because a brief that cannot be assembled must not cost the
+# worker its references: half a context is worth more than none, and the failure
+# is printed where the worker will read it.
+brief=$(bash "$(dirname "${BASH_SOURCE[0]}")/brief.sh" --issue "$repo" "$number" 2>&1) || brief=''
+if [ -n "$brief" ]; then
+  printf -- '---\n\n## The documents this issue routes to\n\n'
+  printf '%s\n\n' "$brief"
+else
+  printf -- '---\n\n## The documents this issue routes to\n\n'
+  printf 'The brief could not be assembled, so no document was routed. Read `AGENTS.md`\n'
+  printf 'in `kolonie-docs` by hand, and say in your report that the routing failed —\n'
+  printf 'that is a defect in the briefing and it has an issue of its own to be filed.\n\n'
+fi
+
 if [ "${#refs[@]}" -eq 0 ]; then
   printf 'The assigned issue references no other issue in `%s`. There is no background to read.\n' "$ORG"
 else

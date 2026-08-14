@@ -133,10 +133,20 @@ issue Kolonie-AI/kolonie-platform 588 "The one that shipped" "Body of 588."
 issue Kolonie-AI/kolonie-platform 604 "The one that has not" "Body of 604."
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-platform 601 2>/dev/null)
 contains "a referenced issue is gathered" "kolonie-platform#588" "$out"
+# `#362`. The documents half comes from the one assembler rather than from a
+# list in this script or in a machine-local hook, and its absence would be
+# invisible: the context would still read as complete.
+contains "the routed documents arrive with the references" "The documents this issue routes to" "$out"
 contains "and so is the second one" "kolonie-platform#604" "$out"
 contains "each carries its board column" "| Board column | Ready |" "$out"
 contains "and its open/closed state" "| State | open |" "$out"
-absent "the assigned issue is not gathered as its own background" "#601 — The assigned one" "$out"
+# The reference-block heading, and not the title anywhere in the output. Since
+# `#362` the context opens with the brief for the assigned issue, which names it
+# in its own header — so a bare title match now finds the brief and reads it as
+# the defect. What this case is about is unchanged: the assigned issue must not
+# appear as one of its own gathered references.
+absent "the assigned issue is not gathered as its own background" \
+  "### Kolonie-AI/kolonie-platform#601" "$out"
 
 case_setup
 issue Kolonie-AI/kolonie-platform 601 "Alone" "This one references nothing at all."

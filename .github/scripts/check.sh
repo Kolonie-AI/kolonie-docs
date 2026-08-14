@@ -71,6 +71,8 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/waiting-list.test.sh
   bash .github/tests/watch-finding.test.sh
   bash .github/tests/session.test.sh
+  bash .github/tests/brief.test.sh
+  bash .github/tests/session-context.test.sh
 '
 
 step "every internal Markdown link resolves" \

@@ -1,3 +1,10 @@
+---
+module: roadmap
+summary: Phase order, and the MVP definition of done as a contract.
+applies-to:
+  roles: [orchestrator]
+---
+
 # Roadmap
 
 ## How to read this file
