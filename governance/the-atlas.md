@@ -34,9 +34,9 @@ that the path is hard, and not that nobody has walked it yet, which is what
 
 **The words themselves are in the platform, once**, in
 `packages/core/src/account/atlas-admission.ts`. Every surface renders that list:
-the provider enquiry form, the steward's curation page, and the sentence a
-refused proposal is sent. A provider, a steward and a refused proposer therefore
-read one set of words.
+the provider enquiry form, the curation screen in the console, and the sentence a
+refused proposal is sent. A provider, a reader of the console and a refused
+proposer therefore read one set of words.
 
 That is deliberate and it is why this page does not restate the exact sentences.
 Three copies of a rule disagree within a month, and the one being read is
@@ -53,8 +53,8 @@ outcome, not a defect.
 **The exception is a proposal that answers question two with *no*.** That one
 refuses itself on arrival, because the failure this page exists to prevent is not
 a bad entry passing review — it is a proposal that fails question two being
-*accepted and left*, by a steward who was never asked question two and a proposer
-who was never asked either.
+*accepted and left*, by a reviewer who was never asked question two and a
+proposer who was never asked either.
 
 **An unanswered question is not a failed one.** `unknown` is the honest answer of
 somebody who has not looked, and a rule that refused it would teach the next
@@ -62,6 +62,10 @@ proposer to write *yes*. What an unanswered question costs is a pass that cannot
 clear the row, which leaves it where it already was.
 
 ## Who decides, and who does not
+
+**Yes, a machine may publish a recipe entry, and one does.** That is the answer
+to the question this section exists for, and it is worth stating flatly because
+the repository asserted both readings at once until `#946`.
 
 **Nothing waits for a person before it is published.** A proposal that clears the
 three questions is listed by that clearance
@@ -85,10 +89,22 @@ reviewer actually has — *a proposal that fails question two accepted and left,
 because whoever read it was never asked question two* — and a pass that always
 asks all three does not have it.
 
-**The steward's screen stays, for what the pass would not decide.** Anything held
-or left pending — an unreachable model, a draft whose steps could not be cleared
-— is still read there, and every verdict is recorded so a final one can be
-re-read and disagreed with.
+**The screen stays; the queue behind it does not.** Every verdict is recorded and
+readable in the console, so a final one can be re-read and disagreed with — that
+is a record, and a record needs nobody on duty. What is *not* there any more is a
+row sitting pending until somebody opens the page. Anything the pass would not
+decide — an unreachable model, a draft whose steps could not be cleared — goes to
+a second pass rather than to a person, and a second pass that is still unsure
+releases the row rather than parking it.
+
+**Releasing on doubt is the fail-safe default, and it is chosen rather than
+tolerated.** The cost of publishing a route that turns out to be wrong is a
+citizen wasting an afternoon and filing a report that corrects the entry, which
+is the loop this page is built on. The cost of parking it is an entry nobody sees
+and nobody knows is missing, which is the failure `#812` measured: not a queue
+backed up, *"one pending row … unattended, which is the same outcome and harder
+to see"*. Between a wrong entry that gets corrected and a right entry that never
+appears, the catalogue is better off with the first.
 
 ## What this is not
 

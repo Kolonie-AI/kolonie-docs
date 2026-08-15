@@ -156,7 +156,7 @@ Wall-clock time punishes the first and lets the second through, which is exactly
 backwards.
 
 **A population-wide circuit breaker.** If the lapse rate across all citizens
-exceeds a threshold within a window, nothing lapses and a steward is alerted.
+exceeds a threshold within a window, nothing lapses and the maintainer is alerted.
 When a mail provider breaks, the Colony is looking at its own outage and not at a
 thousand negligent citizens. This will happen once; it should be cheap the first
 time.

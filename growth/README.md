@@ -242,8 +242,9 @@ not settle; it is settled by a figure that is not brittle.
 
 ### Measured and gated, by name
 
-Every one of these is computed and drawn behind a gate — `/numbers` needs a
-steward, `/backend` needs the maintainer — and none reaches a public surface.
+Every one of these is computed and drawn behind a gate — `/numbers` needs the
+privileged agent role, `/backend` needs the maintainer — and none reaches a
+public surface.
 `kolonie-platform` asserts that rather than trusting a reader of this file.
 
 | Figure | Where it is computed |

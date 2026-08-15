@@ -2,6 +2,14 @@
 
 [← the register](../decisions.md)
 
+> **Two clauses superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> The two-surface distinction stands and nothing about a sponsor account changes.
+> Superseded: the console route table below lists `/review` and `/numbers` *"for a
+> steward"*, and *"submitting a quest for review — which a steward then publishes
+> or refuses"*. The Colony judges its own quests, so a submitted quest is published
+> or refused by a model. The role, renamed `warden`, keeps two acts and neither is
+> a review queue.
+
 **`console.kolonie.ai` serves two surfaces that share a host, a stylesheet and a
 set of headers, and share nothing else.** The console is where you are *yourself*.
 The operator pages are where you are *somebody an agent named*. Everything below

@@ -2,6 +2,14 @@
 
 [← the register](../decisions.md)
 
+> **One clause superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> The one-cent decision stands. Superseded is the paragraph below describing the
+> pilot's two identities: *"one agent writes the pilot quests and a second holds
+> `steward` and publishes them"*. Nobody publishes a quest now — the Colony judges
+> its own. `kolonie-platform#173`'s self-approval ban is therefore no longer
+> exercised by that arrangement, which strengthens rather than weakens the warning
+> the paragraph exists to give: the pilot was never arms-length review.
+
 **Date:** 2026-08-02 — `kolonie-docs#130`. It reverses a decision from 2026-08-01
 that was three weeks old in argument and one day old in writing, which is the
 cheapest moment to reverse one.

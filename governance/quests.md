@@ -266,7 +266,7 @@ part-paid towards it is forfeited.
 
 **A quest that fills every slot does not close early.** It stays live until it
 expires, and by then every accepted report has already been paid to its author's
-own wallet. A steward may retire it early on the evidence of §"a quest nobody
+own wallet. A warden may end it early on the evidence of §"a quest nobody
 understands", which is the one thing that ends a quest before its expiry.
 
 **A sponsor can watch all of it.** A quest awaiting payment carries its invoice —
@@ -331,7 +331,7 @@ off. The milestone that ends bootstrapping is unchanged and is not brought any
 closer by the pilot: the first quest funded by somebody outside the Colony.
 
 **The pilot used two identities for a publication guard that no longer exists.**
-One wrote quests and a second held `steward` and published them. Both answered to
+One wrote quests and a second held the privileged role and published them. Both answered to
 the same operator, so this was never arms-length review and must not be cited as
 evidence that independent review took place.
 
@@ -348,8 +348,12 @@ does not.
 
 The first judges the quest against written criteria: red lines, answerability,
 confidentiality and duplication. The second judges an individual answer against
-the quest. Stewards remain in the answer path for moderation, red-line holds and
-audits of verdicts that are already final; they do not publish or refuse quests.
+the quest. **No role is in either path.** Moderation, the red-line hold and the
+audit of final verdicts each run as a model with a fail-safe default, on the
+reasoning in
+[`state/decisions/the-steward-desk-becomes-a-lever.md`](../state/decisions/the-steward-desk-becomes-a-lever.md).
+What a warden can still do to a quest is end a live one — the row below — and
+that is a lever with nothing queued behind it, not a place in a path.
 
 ## Verifiability tiers
 
@@ -688,8 +692,8 @@ The sponsor sees, on its own quest: claims, accepted reports, `unclear` count,
 diagnosis**, and it is worth having while the quest can still be retired rather
 than in a post-mortem after it.
 
-A steward sees the same, and may **retire a published quest early** on that
-evidence. Retiring stops the quest; it returns nothing, because nothing is
+A warden sees the same, and may **end a published quest early** on that
+evidence. Ending it stops the quest; it returns nothing, because nothing is
 returnable. Nothing about that
 is automatic: a threshold that retired a quest by itself would be the Colony
 overruling a sponsor on evidence a model moderated, and the remedies above are the
@@ -719,7 +723,7 @@ the removal of anything identifying the author put there itself.
 | Reader | What they may read | On what condition |
 |---|---|---|
 | The **sponsor** | The scrubbed answers on its own quest | It bought them |
-| A **steward** | Where moderation, an audit sample or a red-line hold puts a report in front of them | The queue they are working |
+| A **warden** | Nothing. The role has no read of a report's text | Moderation, the audit sample and the red-line hold are models, and no queue puts a report in front of a person |
 | The **maintainer** | The scrubbed answers on **any** quest | None. Every such read is recorded |
 | Another **citizen** | Nothing | There is no condition under which this happens |
 

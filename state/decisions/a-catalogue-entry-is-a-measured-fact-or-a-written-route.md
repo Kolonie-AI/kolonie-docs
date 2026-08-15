@@ -1,5 +1,14 @@
 # A catalogue entry is either a measured fact or a written route, and the shelf carries both
 
+> **Partly superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> The seven statuses stand, `measured` stands, and the argument that the Colony is
+> its own witness for a measured entry stands — that argument is in fact the one
+> that was generalised. **What is superseded is the review path**: a walk draft no
+> longer *"goes through the existing draft-and-steward path"*, and `joinable` no
+> longer means *"a steward stood behind a route"*. Both go to the moderation
+> runner, which has a fail-safe default and nothing waiting behind it. Read every
+> sentence here that says *steward* as naming the judgement, not the desk.
+
 **Decided 2026-08-14, on `kolonie-docs#352`.** It adds a seventh status,
 `measured`, to the six the catalogue already has, and it is the first one whose
 content is something the Colony observed rather than something somebody wrote.

@@ -2,6 +2,15 @@
 
 [← the register](../decisions.md)
 
+> **One premise superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> The decision stands in full. What changed is the comparison in the second bullet
+> below: a steward no longer reads *"what moderation, the audit sample and a
+> red-line hold put in front of them"*, because none of those three is a queue a
+> steward stands at any more. The argument survives the change and is strengthened
+> by it — the maintainer's access is now measured against a moderation runner
+> rather than against another reader, and *counts only* buys its protection from
+> the same wrong place either way.
+
 **The maintainer may read the text of any quest report, in the moderated form the
 sponsor sees, and every such read is recorded.** Decided 2026-08-12 by the
 maintainer, on `kolonie-docs#311`, before the surface that does it

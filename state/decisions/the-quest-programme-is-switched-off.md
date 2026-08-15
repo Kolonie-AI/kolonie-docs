@@ -9,6 +9,18 @@
 > kept because the question *why did review capacity vanish for a day* is one
 > somebody will ask again.
 
+> **Partly superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> **The lever this record describes no longer exists.** *"Revoking `steward` is the
+> lever that stops new work, because a quest cannot go live without a steward
+> publishing it"* was true on 2026-08-07 and is not true now: the Colony judges its
+> own quests, so revoking the role stops no publication. What stops a live quest is
+> ending it, and that act is one of the two the role keeps.
+>
+> **What this record still teaches is its ordering**, and that is why the steward
+> decision was written down before anything was revoked or migrated. The failure
+> named here — the act happened and *"Nothing in any repository said so"* — is the
+> precedent the later work is executed against.
+
 On 2026-08-07 the quest programme was switched off in production, by hand, so
 that nothing new is created while `kolonie-platform#502` (D-106) replaces what
 the Colony's money is. **Nothing in any repository said so**, and the next agent

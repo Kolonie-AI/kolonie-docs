@@ -2,6 +2,13 @@
 
 [← the register](../decisions.md)
 
+> **One clause superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> Both reversed sentences, and everything the rewrite settled, stand. The clause
+> below reading *"a quest that cannot be paid for never costs a steward a
+> reading"* now reads against a model rather than a person: prepayment at
+> submission still buys the same thing, which is that unfundable work is never
+> judged, and the reason it is worth buying has not changed.
+
 **Decided 2026-08-02**, writing `governance/quests.md` against the thirteen issues
 that will implement it (`kolonie-docs#107`). The section it sits under —
 *"The first external quest sponsor is the operator…"* — calls the quest system a

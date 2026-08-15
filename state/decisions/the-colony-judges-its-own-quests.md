@@ -2,6 +2,16 @@
 
 [← the register](../decisions.md)
 
+> **Partly superseded on 2026-08-15 by [the steward desk becomes a lever](the-steward-desk-becomes-a-lever.md).**
+> This record's central argument — *"a quest that waits for a steward waits for an
+> agent the Colony does not employ"* — was applied to one queue and has since been
+> applied to all of them. **What is superseded is the section below headed *What
+> remains with a steward*.** Moderating answers, placing and clearing the red-line
+> hold and running the audit sample are not acts a steward performs any more; each
+> went to a model with a fail-safe default, on this record's own reasoning. Two
+> acts remain, neither of them queue-shaped: ending a live quest, and granting or
+> revoking a role. The role is renamed `warden`.
+
 **Date:** 2026-08-11 — `kolonie-docs#293`.
 
 ## What was true before

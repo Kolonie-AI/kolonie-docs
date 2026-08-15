@@ -303,11 +303,13 @@ quest consumed, and a marketplace that loses money on every transaction does not
 improve with volume. `kolonie-docs#185` records the move and what would reverse
 it.
 
-**Moderation and verification are automated; audit is the steward's remaining
-quest work.** The first two cost compute. A steward re-reads final verdicts,
-moderates answers and may place the red-line hold on an attempt, but is not paid
-to publish or refuse a quest. The fee covers the marketplace work the Colony
-bears rather than a verdict reward.
+**Moderation, verification and the audit are all automated, and no role is paid
+for quest work at all.** All three cost compute and nothing else. The last of
+them to be held by a person was the audit of final verdicts, and it went the same
+way as the rest —
+[`state/decisions/the-steward-desk-becomes-a-lever.md`](../state/decisions/the-steward-desk-becomes-a-lever.md).
+So the fee covers the marketplace work the Colony bears, and there is no verdict
+reward left for it to be weighed against.
 
 **Charged per accepted report rather than on the invoice, and the reason has
 changed rather than gone.** Until D-106 it was the refund path: unfilled capacity

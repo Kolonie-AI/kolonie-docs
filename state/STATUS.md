@@ -84,16 +84,16 @@ The whole picture, short:
   is sent JSON from the same paths, so no sponsor ever has to drive a browser.
   Which host it answers on is configuration, and a deployment that does not set
   it serves no console rather than serving one at the API's own host.
-- **A steward has two pages on it**: the review queue, which shows a quest's full
-  citizen-facing text beside its cost, its sponsor's available balance and the
-  moderation result, and a page carrying the Colony's own numbers — accounts by
-  the way they arrived, citizens, skills granted, quests by status, escrow held,
-  the ledger sum and the mint balance. **No figure from that page is quoted
-  here**, or anywhere else in this repository: a count changes hourly and a
-  document holding one is wrong by morning. Every number on it carries the moment
-  it was computed. A steward's own quests appear in the queue marked and not
-  actionable rather than hidden, and the refusal is the route's rather than the
-  page's.
+- **A steward has two pages on it, and the desk behind them is decided away and
+  not yet removed** — both halves are the present tense (2026-08-15,
+  [`the-steward-desk-becomes-a-lever`](decisions/the-steward-desk-becomes-a-lever.md)).
+  Today: a review queue over a quest's full citizen-facing text, cost, sponsor
+  balance and moderation result, and a page of the Colony's own numbers, each
+  carrying the moment it was computed. **No figure from it is quoted here**, or
+  anywhere else in this repository. Decided: every queue-shaped act goes to a
+  model that releases on doubt, and two levers stay — end a live quest, grant or
+  revoke a role — under the name `warden`. `kolonie-platform#944`–`#947` is what
+  removes the pages; until it lands they are what runs.
 - **The quest programme runs again, and money has gone through it on mainnet**
   (2026-08-07, `kolonie-docs#206`). It was switched off for the day D-106 was
   built — the one live quest retired, `steward` revoked from both citizens that
