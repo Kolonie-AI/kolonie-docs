@@ -1,0 +1,168 @@
+name: Push the shared skill body to the seven
+
+# The Colony-facing half of every `SKILL.md` lives once, here, in
+# `onboarding/skill/`. The seven runtime repositories regenerate against it and
+# open a pull request when it has moved — `skill.yml` in each of them, on a cron
+# at `17 6 * * *`. This asks the same seven to do that **now** instead of
+# tomorrow morning.
+#
+# ## What made a daily clock the wrong one
+#
+# `#359`. `kolonie.browser.share.*` was withdrawn on 2026-08-14 at 15:26 and the
+# generated copies had last been written at 10:40 that morning, so six of the
+# seven distributed skill files documented three tools, a sequence and a wake
+# event that all answered `-32602 Tool not found`. Nothing was broken and nothing
+# was skipped: `sync` proposed the removal the next morning exactly as designed.
+#
+# **What was never weighed is that one kind of body change cannot wait for a
+# daily clock.** An ordinary edit arriving within a day costs a slightly stale
+# sentence. A *withdrawal* arriving within a day costs an agent following a
+# document it was told to follow, into a tool that is gone —
+# `withdrawn-browser-share.test.ts` in `kolonie-platform` already argues this one
+# step further in, about the name answering as unknown rather than as forbidden:
+#
+# > *you may not* is a thing to go and earn, and an agent told that about a
+# > withdrawn channel spends a rung's worth of effort on a door that no longer
+# > has a wall around it.
+#
+# A skill file that still documents the channel is the same failure further out,
+# and worse, because the agent does not meet a wall at all. It meets a document.
+#
+# ## The human gate is untouched, and that is the point
+#
+# This changes **latency and nothing else**. `sync` still regenerates, still
+# opens a pull request, and still does not merge — a change reaching seven
+# repositories at once stays a decision a person takes seven times. What was up
+# to a day plus the review is now minutes plus the review.
+#
+# The cron in each of the seven stays exactly where it is, as the fallback. Same
+# arrangement as `board-triage.yml`'s schedule behind the host timer: the fast
+# path is an optimisation over a clock that still works on its own.
+#
+# ## Why a token, and why the absence of one is a warning rather than a failure
+#
+# `GITHUB_TOKEN` reaches this repository and no other, so dispatching a workflow
+# in `kolonie-claude` needs a credential that spans them. `SKILL_SYNC_TOKEN` is
+# the one that already does — the seven use it to open the sync pull request —
+# and on 2026-08-15 its selected-repositories list was the seven plus
+# `kolonie-dns`, **not this repository**, so this workflow cannot read it yet.
+# Scoping it is a credential decision and belongs to a maintainer (`agents/routes.md`).
+#
+# So the two states are told apart rather than blurred, which is the same
+# distinction `kolonie-platform#971` is about one repository over:
+#
+#   - **no token** — nothing is wired up yet, the seven are on their cron, and
+#     that is the state this repository has been in all along. A `::warning::`,
+#     a step summary naming the one setting to change, and **exit 0**. Failing
+#     here would turn `main` red on every edit to the shared body, block the
+#     auto-merge sweep for everything else, and report a regression where there
+#     is only an unfinished wiring.
+#   - **a token, and a dispatch that did not land** — this is wired up and
+#     broken. `::error::` and exit 1, because the fast path silently not working
+#     is precisely the failure `#359` is about, one level up.
+#
+# ## What it may never do
+#
+# **It does not merge anything, in any repository.** It asks seven workflows to
+# run. Each of them decides for itself whether the body has moved, and each of
+# them opens a pull request a person reads.
+#
+# **It does not re-run or restart anything here** — `watch-agent.yml`'s rule.
+
+on:
+  push:
+    branches: [main]
+    # The generated half only. `skill.runtime.md` is each runtime's own file and
+    # does not live here; a change to anything else in this repository moves no
+    # `SKILL.md` and must not wake seven repositories to discover that.
+    paths:
+      - "onboarding/skill/**"
+  # For a body that moved before this workflow existed, and for testing it.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A second push to the shared body while the first round of dispatches is
+  # still going makes the first round pointless: `sync` regenerates against
+  # `main` at the moment it runs, so the later dispatch subsumes the earlier.
+  group: skill-dispatch
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: ask the seven to regenerate now
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # Empty when the secret is not scoped to this repository, which is the
+      # state the header describes and the step below reports.
+      SKILL_SYNC_TOKEN: ${{ secrets.SKILL_SYNC_TOKEN }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # The list is written out rather than derived. There is no API that
+      # answers *which repositories carry a generated SKILL.md*, and a wrong
+      # answer here is a repository that silently keeps a withdrawn tool — the
+      # exact failure this exists to prevent. `check-skill-target.py` and
+      # `check-skill-description.py` carry the same seven for the same reason.
+      REPOS: >-
+        kolonie-skill
+        kolonie-claude
+        kolonie-codex
+        kolonie-hermes
+        kolonie-kilo
+        kolonie-openclaw
+        kolonie-antigravity
+
+    steps:
+      - name: Ask them
+        run: |
+          set -uo pipefail
+
+          if [ -z "${SKILL_SYNC_TOKEN:-}" ]; then
+            echo "::warning::the shared skill body moved and the seven were not told; they will regenerate on their own cron at 06:17 instead. SKILL_SYNC_TOKEN is not readable from this repository."
+            {
+              echo "### The seven were not told"
+              echo
+              echo "The shared skill body moved and this workflow could not dispatch \`skill.yml\` anywhere, because \`SKILL_SYNC_TOKEN\` is not readable here."
+              echo
+              echo "**They are on their cron.** Each of the seven regenerates at \`17 6 * * *\` and opens a pull request if the body has moved, so nothing is lost — only delayed, by up to a day. That is the state \`#359\` measured."
+              echo
+              echo "**One setting closes it.** \`SKILL_SYNC_TOKEN\` is an organisation secret whose selected-repositories list is the seven plus \`kolonie-dns\`; adding \`kolonie-docs\` to it is the whole change. The token also needs \`actions: write\` on the seven — \`workflow_dispatch\` is a different permission from the \`contents\` and \`pull-requests\` writes it already uses."
+              echo
+              echo "This is a credential decision and belongs to a maintainer (\`agents/routes.md\`). Nothing here is broken and this run is deliberately green."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          failed=0
+          asked=0
+          for repo in $REPOS; do
+            if GH_TOKEN="$SKILL_SYNC_TOKEN" gh workflow run skill.yml \
+                 --repo "Kolonie-AI/$repo" --ref main; then
+              echo "::notice::$repo was asked to regenerate"
+              asked=$((asked + 1))
+            else
+              # Named one at a time rather than counted. Six of seven arriving is
+              # the case that reads as success from a distance and is not one:
+              # the seventh keeps serving a withdrawn tool for up to a day, and
+              # whoever reads this needs to know which.
+              echo "::error::Kolonie-AI/$repo could not be asked to regenerate, so it stays on its 06:17 cron with a stale shared body. Dispatch skill.yml there by hand: $RUN_URL"
+              failed=1
+            fi
+          done
+
+          {
+            echo "### Asked the seven to regenerate"
+            echo
+            echo "**$asked of 7** dispatched \`skill.yml\`."
+            echo
+            if [ "$failed" -ne 0 ]; then
+              echo "The rest are named in the annotations above. Each one keeps a stale shared body until its own cron at 06:17, which is the delay \`#359\` is about."
+            else
+              echo "Each opens a pull request if the body has moved, and **merges nothing** — the human gate on a change reaching seven repositories is unchanged (\`#359\`)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$failed"
