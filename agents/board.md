@@ -52,6 +52,24 @@ on a third party's merge decision, which no agent can pick up. So after removing
 startable. Ready means *any agent can take this without asking*; it is a promise
 to the next reader, not a synonym for *not blocked by us*.
 
+### The saved views, and the one that shows what waits for a person
+
+**"Needs clearance"** — [view 4](https://github.com/orgs/Kolonie-AI/projects/1/views/4),
+filtered on `is:open label:needs-clearance`. It is every issue held for a member
+of the organisation to clear, across both repositories, in one place
+(`kolonie-docs#391`).
+
+**A held issue is invisible without it, and that is the point.** `needs-clearance`
+goes on an issue opened from outside the organisation ([`labels.md`](labels.md)),
+and while it is on, triage keeps the item out of Ready — so it sits in **Inbox**,
+which is also where undecided work lives. Nothing about the column says anybody is
+expected to do something, and neither worker will ever pick it up. Only a member
+takes the label off.
+
+The view is the board answer to that; the daily list issue is the other one, and
+it says the same thing in a section of its own so that nobody has to remember to
+open a view. Both are the same query and neither is authoritative over the other.
+
 ### A dependency is a link, not a sentence
 
 **If this issue cannot start until another one is finished, record it as a

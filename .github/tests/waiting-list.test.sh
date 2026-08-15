@@ -67,6 +67,22 @@ case "$1 $2" in
       "$GH_FIXTURES/board" 2>/dev/null ;;
   "api "*)
     case "$2" in
+      # When the hold went on (`#391`). One fixture per issue, and **no fixture
+      # is a timeline that could not be read** rather than a timeline with
+      # nothing in it — which is the case the fallback exists for.
+      */timeline)
+        key=${2#repos/}
+        key=${key%/timeline}
+        fixture="$GH_FIXTURES/timeline_${key//\//_}"
+        [ -f "$fixture" ] || { echo "HTTP 403" >&2; exit 1; }
+        expression=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --jq) expression=$2; shift 2 ;;
+            *)    shift ;;
+          esac
+        done
+        if [ -n "$expression" ]; then jq -r "$expression" "$fixture"; else cat "$fixture"; fi ;;
       */dependencies/blocked_by)
         key=${2#repos/}
         key=${key%/dependencies/blocked_by}
@@ -132,18 +148,21 @@ absent() {
   fi
 }
 
-# $1 is the label, the rest are `number|createdAt|labels(comma)|owner/repo|title`.
+# $1 is the label, the rest are `number|createdAt|labels(comma)|owner/repo|title`
+# with an optional sixth field for the author — every row written before `#391`
+# gets `somebody`, which is what the script itself falls back to.
 searched() {
   local label=$1; shift
   local rows=()
   for row in "$@"; do
-    IFS='|' read -r number created labels repo title <<<"$row"
+    IFS='|' read -r number created labels repo title author <<<"$row"
+    author=${author:-somebody}
     local names=()
     IFS=',' read -ra parts <<<"$labels"
     for name in "${parts[@]}"; do names+=("{\"name\":\"$name\"}"); done
     local joinedLabels
     joinedLabels=$(IFS=,; echo "${names[*]}")
-    rows+=("{\"number\":$number,\"title\":\"$title\",\"createdAt\":\"$created\",\"labels\":[$joinedLabels],\"repository\":{\"nameWithOwner\":\"$repo\"}}")
+    rows+=("{\"number\":$number,\"title\":\"$title\",\"createdAt\":\"$created\",\"author\":{\"login\":\"$author\"},\"labels\":[$joinedLabels],\"repository\":{\"nameWithOwner\":\"$repo\"}}")
   done
   local joined
   joined=$(IFS=,; echo "${rows[*]}")
@@ -190,6 +209,17 @@ blocked_by() {
   local joined
   joined=$(IFS=,; echo "${rows[*]}")
   echo "[$joined]" > "$GH_FIXTURES/blocked_${repo//\//_}_issues_$number"
+}
+
+# $1 is `owner/repo|number`, $2 is how many days ago the hold went on. Writing no
+# fixture at all is a timeline the run could not read, which is a different case
+# from a timeline with no `labeled` event in it and has its own assertion below.
+labelled_at() {
+  local when repo number
+  IFS='|' read -r repo number <<<"$1"
+  when=$(date -u -d "$2 days ago" +%Y-%m-%dT%H:%M:%SZ)
+  printf '[{"event":"labeled","label":{"name":"needs-clearance"},"created_at":"%s"}]\n' \
+    "$when" > "$GH_FIXTURES/timeline_${repo//\//_}_issues_$number"
 }
 
 echo "what is waiting"
@@ -278,6 +308,11 @@ boarded "10:Ready:Kolonie-AI/kolonie-docs"
 body=$(bash "$SCRIPT" body "$WORK/entries")
 contains "the body says so in as many words" "Nothing is waiting" "$body"
 absent "and claims no count" "issue(s) are waiting" "$body"
+# A day with nothing at all still answers the clearance question (`#391`) — the
+# body somebody reads is the same body either way, and a question that is
+# silently absent reads as a section that broke.
+contains "and answers the clearance question too" \
+  "Nothing is waiting for your clearance either" "$body"
 
 case_setup
 : > "$WORK/entries"
@@ -356,6 +391,75 @@ check "a newly stuck card is announced" "Kolonie-AI/kolonie-docs#10" \
   "$(bash "$SCRIPT" arrivals "$WORK/nothing-here" "$WORK/entries" 2>/dev/null)"
 check "and not again the next day" "" \
   "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
+
+echo
+echo "what is waiting for a person to clear (#391)"
+
+# A held issue does not merely sit — it sits in **Inbox**, which is also where
+# undecided work lives, so nothing about the column says anybody is expected to
+# do something. This section is the whole of what tells them.
+case_setup
+searched needs-clearance \
+  "40|2026-08-01T00:00:00Z|needs-clearance|Kolonie-AI/kolonie-docs|Something from outside|astranger" \
+  "41|2026-08-02T00:00:00Z|needs-clearance|Kolonie-AI/kolonie-platform|Another one|anotherstranger"
+labelled_at "Kolonie-AI/kolonie-docs|40" 6
+labelled_at "Kolonie-AI/kolonie-platform|41" 1
+boarded "40:Inbox:Kolonie-AI/kolonie-docs" "41:Inbox:Kolonie-AI/kolonie-platform"
+entries=$(bash "$SCRIPT" entries 2>/dev/null)
+contains "a held issue is on the list" \
+  "Kolonie-AI/kolonie-docs	40	held:needs-clearance" "$entries"
+contains "and so is one in another repository" \
+  "Kolonie-AI/kolonie-platform	41	held:needs-clearance" "$entries"
+contains "the entry names who opened it" 'opened by `astranger`' "$entries"
+# The body is rewritten every morning, and a plain mention would notify whoever
+# opened the issue every single time.
+absent "and never as a mention" "@astranger" "$entries"
+contains "and how long the hold has been on" "held for 6 days" "$entries"
+check "the oldest hold is first" "40" "$(head -1 <<<"$entries" | cut -f2)"
+
+printf '%s\n' "$entries" > "$WORK/entries"
+bash "$SCRIPT" body "$WORK/entries" > "$WORK/body" 2>/dev/null
+body=$(cat "$WORK/body")
+# *2 waiting for your clearance, oldest 6 days* gets somebody out of their chair
+# and *2 waiting* does not. The age is in the heading for that reason.
+contains "the heading counts them and ages the oldest" \
+  "## 2 waiting for your clearance, oldest 6 days" "$body"
+contains "and says who can end it" "only a member of the organisation takes that off" "$body"
+contains "and names the issue" "[\`Kolonie-AI/kolonie-docs#40\`]" "$body"
+# Three kinds of row in one file, and the headline counts one of them.
+contains "a held issue is not counted as waiting to be started" \
+  "Nothing is waiting for a Claude agent or for a person" "$body"
+
+# The comment is the notification, and it comes from `arrivals` unchanged: a held
+# row is a row, so this needed no new code and gets an assertion instead.
+check "a newly held issue is announced" "Kolonie-AI/kolonie-docs#40" \
+  "$(bash "$SCRIPT" arrivals "$WORK/nothing-here" "$WORK/entries" 2>/dev/null | head -1)"
+check "and a day where the set is unchanged announces nothing" "" \
+  "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
+
+# **The rejection case.** Nothing held is a sentence and not an empty heading —
+# the rule this file already follows for the list itself.
+case_setup
+searched agent:claude "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|A thing"
+boarded "10:Ready:Kolonie-AI/kolonie-docs"
+bash "$SCRIPT" entries > "$WORK/entries" 2>/dev/null
+absent "nothing held is no held row" "held:needs-clearance" "$(cat "$WORK/entries")"
+body=$(bash "$SCRIPT" body "$WORK/entries" 2>/dev/null)
+contains "and the body says so in a sentence" "**Nothing is waiting for your clearance.**" "$body"
+absent "rather than an empty heading" "waiting for your clearance, oldest" "$body"
+
+# **A timeline that cannot be read does not lose the row.** An age that is
+# quietly the wrong age is worse than one that names what it measured, so the
+# entry falls back to how long the issue has been open and says which it is.
+case_setup
+searched needs-clearance \
+  "40|$(date -u -d '10 days ago' +%Y-%m-%dT%H:%M:%SZ)|needs-clearance|Kolonie-AI/kolonie-docs|Something from outside|astranger"
+boarded "40:Inbox:Kolonie-AI/kolonie-docs"
+entries=$(bash "$SCRIPT" entries 2>/dev/null)
+contains "the row survives a timeline that cannot be read" \
+  "Kolonie-AI/kolonie-docs	40	held:needs-clearance" "$entries"
+contains "and the entry says which age it is measuring" \
+  "open for 10 days, and when the hold went on could not be read" "$entries"
 
 echo
 echo "a read that fails is not an empty list"
