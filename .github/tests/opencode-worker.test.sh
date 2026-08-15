@@ -103,9 +103,12 @@ case "$1 $2" in
             pageInfo: { hasNextPage: false, endCursor: null },
             nodes: [ .items[]
               | { id: .id,
+                  updatedAt: (.updatedAt // null),
                   fieldValueByName: { name: .status },
                   content: { number: .content.number,
                              title: .content.title,
+                             state: (.content.state // "OPEN"),
+                             closedAt: (.content.closedAt // null),
                              url: ("https://github.com/\(.content.repository)/issues/\(.content.number)"),
                              repository: { nameWithOwner: .content.repository,
                                            url: ("https://github.com/\(.content.repository)") },
@@ -368,12 +371,37 @@ step_block() {
 }
 
 boarded() {
-  # $1.. are `number:Status[:owner/repo]` rows.
+  # $1.. are `number:Status[:owner/repo][@hours][+label,label][!CLOSED]` rows.
+  #
+  # The three optional suffixes are marked rather than positional because two of
+  # the fields they carry contain colons themselves — a timestamp and a label
+  # both do — so a fifth `:` field would have been unparseable.
+  #
+  # `@hours` is **how long ago the card last moved**, which is the clock `#381`
+  # escalates on and the one a comment does not reset. It defaults to *now*, so
+  # every case written before `#381` reads as a card that has just moved and
+  # nothing about them changes.
   local items=()
   for row in "$@"; do
+    local state=OPEN labels="" carded_hours=0
+    case "$row" in *'!CLOSED') state=CLOSED; row=${row%'!CLOSED'} ;; esac
+    case "$row" in *+*) labels=${row#*+}; row=${row%%+*} ;; esac
+    case "$row" in *@*) carded_hours=${row#*@}; row=${row%@*} ;; esac
+
     IFS=':' read -r number status repo <<<"$row"
     repo=${repo:-Kolonie-AI/kolonie-docs}
-    items+=("{\"id\":\"ITEM_${number}\",\"status\":\"${status}\",\"content\":{\"number\":${number},\"repository\":\"$repo\",\"title\":\"issue $number\"}}")
+
+    local labelJson=()
+    if [ -n "$labels" ]; then
+      local names name
+      IFS=',' read -ra names <<<"$labels"
+      for name in "${names[@]}"; do labelJson+=("\"$name\""); done
+    fi
+    local joinedLabels carded
+    joinedLabels=$(IFS=,; echo "${labelJson[*]}")
+    carded=$(date -u -d "$carded_hours hours ago" +%Y-%m-%dT%H:%M:%SZ)
+
+    items+=("{\"id\":\"ITEM_${number}\",\"updatedAt\":\"$carded\",\"status\":\"${status}\",\"labels\":[$joinedLabels],\"content\":{\"number\":${number},\"repository\":\"$repo\",\"state\":\"$state\",\"title\":\"issue $number\"}}")
   done
   local joined
   joined=$(IFS=,; echo "${items[*]}")
@@ -1322,6 +1350,114 @@ out=$(bash "$SCRIPT" forgotten-claims 2>"$WORK/err"); rc=$?
 check "an issue that cannot be read is not reported" "" "$out"
 check "and the sweep still exits 0" "0" "$rc"
 contains "and says it said nothing rather than guessing" "rather than guessing" "$(cat "$WORK/err")"
+
+echo
+echo "the clock that grows, and what the claim is costing (#381)"
+
+# The sweep speaks on the *issue* clock, which its own comment resets — that is
+# the de-duplication and it stays. What it *says* is the **card** clock, which a
+# comment does not touch, so the number grows across reports and a threshold
+# expressed in it can fire. Before this, an item forgotten for a month reported
+# four hours, every time, forever.
+case_setup
+boarded "10:In Progress@30"
+aged "Kolonie-AI/kolonie-docs|10|9"
+out=$(bash "$SCRIPT" forgotten-claims 2>/dev/null)
+contains "the issue clock decides whether to speak" "Kolonie-AI/kolonie-docs	10	9" "$out"
+check "and the card clock is what is said" "30" "$(cut -f4 <<<"$out")"
+
+# The two really are independent: an issue commented on a minute ago is still
+# reported as a card that has not moved in two days, once the issue clock passes
+# the threshold again.
+case_setup
+boarded "10:In Progress@48"
+aged "Kolonie-AI/kolonie-docs|10|5"
+check "a comment resets one and not the other" "48" \
+  "$(bash "$SCRIPT" forgotten-claims 2>/dev/null | cut -f4)"
+
+# A board that answered without an `updatedAt` reports `-1` rather than `0`.
+# *Moved just now* is the opposite of the finding, and inventing it would make
+# the escalation silently unreachable for that item.
+case_setup
+boarded "10:In Progress"
+jq -c '.items[0].updatedAt = null' "$GH_FIXTURES/board" > "$WORK/no-card-clock.json"
+aged "Kolonie-AI/kolonie-docs|10|9"
+check "a card with no clock is not guessed at" "-1" \
+  "$(BOARD_FILE="$WORK/no-card-clock.json" bash "$SCRIPT" forgotten-claims 2>/dev/null | cut -f4)"
+
+# **What the claim is costing.** `pick` skips every issue in a repository that
+# has anything In Progress, so the same forgotten claim is urgent in a repository
+# with a queue and housekeeping in an empty one — and until `#381` the report
+# could not tell them apart. The filters are `pick`'s.
+case_setup
+boarded "10:In Progress@30" \
+  "11:Ready+agent:opencode" \
+  "12:Ready+agent:opencode,blocked:human" \
+  "13:Ready+agent:claude" \
+  "14:Ready+agent:opencode,opencode:forbidden" \
+  "15:Ready+agent:opencode!CLOSED" \
+  "16:Ready+agent:opencode:Kolonie-AI/kolonie-platform" \
+  "17:Inbox+agent:opencode"
+aged "Kolonie-AI/kolonie-docs|10|9"
+check "only what pick would actually take next is counted" "1" \
+  "$(bash "$SCRIPT" forgotten-claims 2>/dev/null | cut -f5)"
+
+case_setup
+boarded "10:In Progress@30"
+aged "Kolonie-AI/kolonie-docs|10|9"
+check "and an empty repository says so rather than nothing" "0" \
+  "$(bash "$SCRIPT" forgotten-claims 2>/dev/null | cut -f5)"
+
+echo
+echo "the escalated half, for a reader that is not the issue (#381)"
+
+# The daily waiting list runs on its own schedule and under the board app, which
+# cannot read an issue at all. So `--escalated` answers from the board alone: no
+# issue clock, no `gh api repos/...`, and only cards past the threshold.
+case_setup
+boarded "10:In Progress@48" "11:In Progress@2" "12:Ready+agent:opencode"
+out=$(bash "$SCRIPT" forgotten-claims --escalated 2>/dev/null)
+contains "a card past a day is escalated" "Kolonie-AI/kolonie-docs	10	48	1" "$out"
+absent "and a fresh one is not" "	11	" "$out"
+absent "no issue is read for it" "api repos/" "$(cat "$GH_LOG")"
+
+case_setup
+boarded "10:In Progress@48"
+check "the threshold is where the constant says" "" \
+  "$(FORGOTTEN_CLAIM_ESCALATE_HOURS=72 bash "$SCRIPT" forgotten-claims --escalated 2>/dev/null)"
+
+echo
+echo "asking the board where an issue is (#381)"
+
+# `release` and `move` both write a column and neither read one back, which is
+# how a failure comment came to say *put back in Ready* about a card that had not
+# moved. One point, one word.
+case_setup
+boarded "10:In Progress"
+check "the column is reported in a word" "In Progress" "$(bash "$SCRIPT" column Kolonie-AI/kolonie-docs 10)"
+
+case_setup
+boarded "10:In Progress"
+out=$(bash "$SCRIPT" column Kolonie-AI/kolonie-docs 99 2>/dev/null); rc=$?
+check "an issue that is not on the board is not a column" "" "$out"
+check "and it exits 3" "3" "$rc"
+
+# An item on the board and in no column is a real state — what an arrival that
+# was never sorted looks like — and it is reported in words, so that a caller
+# putting this into a sentence need not know a blank means anything.
+case_setup
+boarded "10:"
+check "no column is said rather than left blank" "no column" \
+  "$(bash "$SCRIPT" column Kolonie-AI/kolonie-docs 10)"
+
+# The release path reads its own write back, as `claim` has since `#266`. A
+# mutation that reports success and does not take is what `#381` is about.
+case_setup
+boarded "10:In Progress"
+echo yes > "$GH_FIXTURES/edit_ignored"
+out=$(bash "$SCRIPT" release Kolonie-AI/kolonie-docs 10 2>&1); rc=$?
+check "a release that did not take fails" "4" "$rc"
+contains "and says where the card actually is" "reads back In Progress" "$out"
 
 echo
 echo "a board read by somebody else (BOARD_FILE)"

@@ -55,12 +55,15 @@ case "$1 $2" in
           pageInfo:{hasNextPage:false,endCursor:null},
           nodes:[ .items[]
             | {id:.id,
+               updatedAt:(.updatedAt // null),
                fieldValueByName:{name:.status},
                content:{number:.content.number,
                         title:(.content.title // "untitled"),
                         url:(.content.url // ""),
+                        state:(.content.state // "OPEN"),
+                        closedAt:(.content.closedAt // null),
                         repository:{nameWithOwner:.content.repository, url:""},
-                        labels:{nodes:[]}}} ]}}}}}' \
+                        labels:{nodes:[ (.labels // [])[] | {name:.} ]}}} ]}}}}}' \
       "$GH_FIXTURES/board" 2>/dev/null ;;
   "api "*)
     case "$2" in
@@ -147,12 +150,28 @@ searched() {
   echo "[$joined]" > "$GH_FIXTURES/search_${label//:/_}"
 }
 
-# $1.. are `number:Status:owner/repo` rows.
+# $1.. are `number:Status:owner/repo`, each with three optional suffixes:
+# `@hours` for how long ago the *card* last moved, and `+label,label` for the
+# labels on the issue. Both are marked rather than positional, because a
+# timestamp and a label list each contain colons of their own.
+#
+# `@0` is the default, so every row written before `#381` reads as a card that
+# moved just now — which is what those cases meant when they said nothing.
 boarded() {
   local items=()
   for row in "$@"; do
+    local labels="" carded_hours=0 carded joinedLabels
+    case "$row" in *+*) labels=${row#*+}; row=${row%%+*} ;; esac
+    case "$row" in *@*) carded_hours=${row#*@}; row=${row%@*} ;; esac
     IFS=':' read -r number status repo <<<"$row"
-    items+=("{\"id\":\"ITEM_${number}\",\"status\":\"${status}\",\"content\":{\"number\":${number},\"repository\":\"$repo\"}}")
+    local names=()
+    if [ -n "$labels" ]; then
+      local parts; IFS=',' read -ra parts <<<"$labels"
+      local name; for name in "${parts[@]}"; do names+=("\"$name\""); done
+    fi
+    joinedLabels=$(IFS=,; echo "${names[*]}")
+    carded=$(date -u -d "$carded_hours hours ago" +%Y-%m-%dT%H:%M:%SZ)
+    items+=("{\"id\":\"ITEM_${number}\",\"updatedAt\":\"$carded\",\"status\":\"${status}\",\"labels\":[$joinedLabels],\"content\":{\"number\":${number},\"repository\":\"$repo\"}}")
   done
   local joined
   joined=$(IFS=,; echo "${items[*]}")
@@ -282,6 +301,61 @@ case_setup
 printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
 check "the first run announces the whole list" "Kolonie-AI/kolonie-docs#10" \
   "$(bash "$SCRIPT" arrivals "$WORK/nothing-here" "$WORK/entries" 2>/dev/null)"
+
+echo
+echo "a claim nobody is behind (#381)"
+
+# The worker has been saying this on the issue every four hours to nobody. The
+# list is the one page the person who can move the card actually reads.
+case_setup
+searched agent:claude "12|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waiting"
+boarded "12:Ready:Kolonie-AI/kolonie-docs" \
+  "10:In Progress:Kolonie-AI/kolonie-docs@48" \
+  "20:Ready:Kolonie-AI/kolonie-docs@1+agent:opencode"
+entries=$(bash "$SCRIPT" entries 2>/dev/null)
+contains "a card that has sat for two days is on the list" \
+  "Kolonie-AI/kolonie-docs	10	stuck:in-progress" "$entries"
+contains "and it says how long it has been there" "In Progress for 48 hours" "$entries"
+contains "and what the claim is costing" "1 issue in that repository is queued behind it" "$entries"
+
+# Two kinds of row in one file, and the headline counts one of them. Folding
+# them together would make the single number on this list mean two things.
+printf '%s\n' "$entries" > "$WORK/entries"
+body=$(bash "$SCRIPT" body "$WORK/entries" 2>/dev/null)
+contains "the headline counts only what is waiting to be started" "**1 issue(s) are waiting" "$body"
+contains "and the stuck card gets a section of its own" "## 1 claim(s) nobody is behind" "$body"
+contains "which names it" "[\`Kolonie-AI/kolonie-docs#10\`]" "$body"
+contains "and says what moving it would start" "\`pick\` skips every other issue" "$body"
+
+# A card that moved this morning is somebody working, not somebody forgetting.
+case_setup
+searched agent:claude "12|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waiting"
+boarded "12:Ready:Kolonie-AI/kolonie-docs" "10:In Progress:Kolonie-AI/kolonie-docs@2"
+entries=$(bash "$SCRIPT" entries 2>/dev/null)
+absent "a claim from two hours ago is not stuck" "stuck:in-progress" "$entries"
+
+# **A day with nothing labelled still has to say this.** The stuck rows are
+# found on the path where the search came back empty, or the one finding this
+# workflow can make that nobody else makes would be reachable only by accident.
+case_setup
+boarded "10:In Progress:Kolonie-AI/kolonie-docs@30"
+entries=$(bash "$SCRIPT" entries 2>/dev/null)
+contains "a stuck card is found on a day with nothing labelled" \
+  "Kolonie-AI/kolonie-docs	10	stuck:in-progress" "$entries"
+absent "and no issue was read to find it, because this step holds a Projects-only token" \
+  "api repos/" "$(cat "$GH_LOG")"
+
+printf '%s\n' "$entries" > "$WORK/entries"
+bash "$SCRIPT" body "$WORK/entries" > "$WORK/body" 2>/dev/null
+body=$(cat "$WORK/body")
+contains "the body still says nothing is waiting to be started" "Nothing is waiting" "$body"
+contains "and still carries the stuck card" "## 1 claim(s) nobody is behind" "$body"
+
+# It is announced once, on the day it becomes stuck, and then not again.
+check "a newly stuck card is announced" "Kolonie-AI/kolonie-docs#10" \
+  "$(bash "$SCRIPT" arrivals "$WORK/nothing-here" "$WORK/entries" 2>/dev/null)"
+check "and not again the next day" "" \
+  "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
 
 echo
 echo "a read that fails is not an empty list"

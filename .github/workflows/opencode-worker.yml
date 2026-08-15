@@ -263,12 +263,46 @@ jobs:
             exit 0
           fi
 
-          while IFS=$'\t' read -r repo issue hours title; do
+          # `sitting` is the card's age and it grows across reports; `hours` is the
+          # issue's and cannot, because writing the comment below resets it
+          # (`kolonie-docs#381`). So the sentence leads with `sitting` and the
+          # threshold is expressed in it. `queued` is what the claim is costing.
+          while IFS=$'\t' read -r repo issue hours sitting queued title; do
             [ -n "${repo:-}" ] || continue
-            echo "::warning::$repo#$issue has been In Progress and untouched for ${hours}h, holding $repo out of the queue: $title"
+
+            # A count phrased in words, because `holding 1 issues` is the kind of
+            # sentence a reader stops trusting the rest of.
+            case "$queued" in
+              0) cost="nothing else in \`${repo}\` is queued behind it" ;;
+              1) cost="**1 issue in \`${repo}\` is queued behind it** and will not be taken until it moves" ;;
+              *) cost="**${queued} issues in \`${repo}\` are queued behind it** and none will be taken until it moves" ;;
+            esac
+
+            # `-1` is the board answering without an `updatedAt`, which is not the
+            # same finding as *moved just now* and is not reported as a duration.
+            if [ "$sitting" -lt 0 ]; then
+              age="for an unknown length of time (the board did not say when the card last moved)"
+              headline="$repo#$issue is In Progress and untouched for ${hours}h"
+            else
+              age="for ${sitting} hours"
+              headline="$repo#$issue has been In Progress for ${sitting}h"
+            fi
+
+            # **The escalation** (`#381`): the same finding said louder once it is
+            # past a day. Under a day is a run that died and will be reported again
+            # in four hours; over a day is nobody coming, and a `::warning::` that
+            # has already been ignored five times is not going to be the sixth
+            # thing that works.
+            if [ "$sitting" -ge "${FORGOTTEN_CLAIM_ESCALATE_HOURS:-24}" ]; then
+              echo "::error::$headline — over a day, and $queued issue(s) in $repo are queued behind it: $title"
+              opening="**This issue has been In Progress ${age}, which is over a day.** It has been reported before and nothing has come; ${cost}."
+            else
+              echo "::warning::$headline, holding $repo out of the queue: $title"
+              opening="**This issue has been In Progress ${age} with nothing touching it**, and while it is there \`pick\` skips every issue in \`${repo}\` (\`kolonie-docs#266\`); ${cost}."
+            fi
 
             gh issue comment "$issue" --repo "$repo" --body \
-              "**This issue has been In Progress for ${hours} hours with nothing touching it**, and while it is there \`pick\` skips every issue in \`${repo}\` (\`kolonie-docs#266\`).
+              "$opening
 
           Either a run died without releasing it, or somebody claimed it and moved on. **Nothing has been changed here** — the column is still In Progress, the labels are untouched, and no automation will take this away from whoever holds it. If it is yours, it is yours; if it is not, moving it back to **Ready** returns the repository to the queue. Reported by $RUN_URL." \
               >/dev/null 2>&1 ||
@@ -1506,14 +1540,50 @@ jobs:
       # needed attention. `failure()` rather than `always()`, so a successful run
       # does not undo its own claim; `cancelled()` too, because a cancelled run
       # holds a claim exactly as a failed one does.
+      #
+      # **And it reports what it managed** (`kolonie-docs#381`). The step below
+      # writes *has put it back in **Ready*** on the issue, and it wrote that
+      # sentence whether or not this step succeeded — because a failing step here
+      # ends with no output and the comment had nothing to read. An issue that
+      # says it was returned is one nobody looks at again, which is how
+      # `kolonie-platform#815` sat for a day.
       - name: Put it back
+        id: putback
         if: (failure() || cancelled()) && steps.held.outputs.mine
         env:
           GH_TOKEN: ${{ steps.board_token.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET_REPO: ${{ steps.queue.outputs.repo }}
+          TARGET_ISSUE: ${{ steps.queue.outputs.issue }}
         run: |
-          bash .github/scripts/opencode-worker.sh release \
-            "${{ steps.queue.outputs.repo }}" "${{ steps.queue.outputs.issue }}"
+          # `bash -e {0}` is the shell GitHub gives this, and an `-e` exit here
+          # would skip the two lines below — which are the whole point of the
+          # step. So the outputs are written before anything is allowed to fail.
+          set +e
+          set -uo pipefail
+
+          bash .github/scripts/opencode-worker.sh release "$TARGET_REPO" "$TARGET_ISSUE"
+          released=$?
+
+          # **Asked, not assumed.** `release` reads its own write back since
+          # `#381`, and this asks a second time under the same token the comment
+          # will quote — so the word on the issue is one the board said, not one
+          # this workflow inferred from an exit code.
+          column=$(bash .github/scripts/opencode-worker.sh column "$TARGET_REPO" "$TARGET_ISSUE" 2>/dev/null) ||
+            column=""
+
+          {
+            echo "released=$released"
+            echo "column=$column"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$column" = "Ready" ]; then
+            echo "$TARGET_REPO#$TARGET_ISSUE is back in Ready"
+            exit 0
+          fi
+
+          echo "::error::$TARGET_REPO#$TARGET_ISSUE is in ${column:-a column that could not be read} rather than Ready after the release. It is holding $TARGET_REPO out of the queue and needs a person: $RUN_URL"
+          exit 1
 
       # ## The reason goes where the failure is announced (`#245`, 2026-08-09)
       #
@@ -1740,6 +1810,9 @@ jobs:
           EXCERPT: ${{ steps.why.outputs.excerpt }}
           ACCOUNT: ${{ steps.why.outputs.account }}
           FORBIDDEN: ${{ steps.why.outputs.forbidden }}
+          # Where the board actually says the issue is, from the step that put it
+          # back (`kolonie-docs#381`). Empty when that step did not run at all.
+          COLUMN: ${{ steps.putback.outputs.column }}
         run: |
           set -uo pipefail
 
@@ -1749,6 +1822,23 @@ jobs:
           body=$(mktemp)
           {
             echo "The opencode worker failed on this issue and has put it back in **Ready**: $RUN_URL"
+
+            # **And corrected underneath when it is not true** (`#381`). The line
+            # above is a fixed string for the reason stated there, so the fix is
+            # a paragraph after it rather than a rewording of it — the count
+            # keeps working and the reader is not left with a sentence the board
+            # contradicts. `kolonie-platform#815` is the incident: this comment
+            # said *Ready*, the card said In Progress, and the repository's queue
+            # stood still for a day because the issue read as attended.
+            if [ "${COLUMN:-}" != "Ready" ]; then
+              echo
+              if [ -z "${COLUMN:-}" ]; then
+                echo "**Correction: the sentence above is wrong, and the board could not be asked where this is.** The move back to Ready either did not run or did not report. Whoever reads this should check the column by hand — if it is still **In Progress**, \`pick\` is skipping every issue in this repository until it moves."
+              else
+                echo "**Correction: the sentence above is wrong. The board says this issue is in \`${COLUMN}\`, not Ready.** The move back failed, so nothing will take this issue and — while it sits in **In Progress** — \`pick\` skips every other issue in this repository too (\`kolonie-docs#266\`). It needs a person to move it."
+              fi
+            fi
+
             echo
             echo "**Where:** \`${STEP}\`"
             echo

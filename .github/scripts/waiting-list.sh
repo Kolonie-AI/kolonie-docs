@@ -63,6 +63,12 @@ SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 # is belt and braces for the day somebody labels it.
 LIST_ISSUE=${LIST_ISSUE:-}
 
+# The route written on a stuck In Progress card (`kolonie-docs#381`). It is not a
+# label and never will be: nothing applies it, nothing reads it off an issue, and
+# it exists so that one TSV can carry two kinds of row without `arrivals` or the
+# workflow having to learn a second shape.
+STUCK_ROUTE=${STUCK_ROUTE:-stuck:in-progress}
+
 die() {
   echo "$1" >&2
   exit "${2:-1}"
@@ -93,6 +99,54 @@ why_waiting() {
   esac
 }
 
+# The claims nobody is behind, in the same eight columns (`kolonie-docs#381`).
+#
+# ## Why the daily list is where this belongs
+#
+# The worker's own sweep says it on the issue every four hours, and that is the
+# right place for a run that died — somebody will come back to it. It is the
+# wrong place for a claim nobody is coming back to at all: after a day the issue
+# has five identical comments on it and the one person who could move the card
+# has never been told. This list is read by that person, once a day.
+#
+# ## Why it is computed from the board and nothing else
+#
+# One step holds one `GH_TOKEN` and this one holds the board app's, which is
+# Projects-only. So the whole finding — how long the card has sat, and how many
+# issues are queued behind it — comes off the board, and no issue is read. That
+# is what `forgotten-claims --escalated` is: the board half, on its own.
+stuck() {
+  # The board the caller has already read, or empty to read one. An empty string
+  # is exactly what `BOARD_FILE` means to the worker — *no hand-over, ask for
+  # yourself* — so the two cases need no branch here.
+  local board=$1 repo number hours queued title cost
+
+  # The exit code is not read as *nothing is stuck*. A board that could not be
+  # read and a board with nothing stuck on it arrive here identically, and
+  # reporting them the same way is the failure this whole workflow exists to
+  # prevent — one applied to itself.
+  local found
+  found=$(BOARD_FILE="$board" bash "$HERE/opencode-worker.sh" \
+    forgotten-claims --escalated 2>/dev/null) ||
+    die "the In Progress cards could not be read, so the list would understate what is stuck"
+
+  [ -n "$found" ] || return 0
+
+  while IFS=$'\t' read -r repo number hours queued title; do
+    [ -n "${repo:-}" ] || continue
+    case "$queued" in
+      0) cost="nothing else in that repository is queued behind it" ;;
+      1) cost="1 issue in that repository is queued behind it" ;;
+      *) cost="$queued issues in that repository are queued behind it" ;;
+    esac
+    # Rank 0, and `created` left empty: this row is not sorted against the
+    # labelled ones and has no creation date of its own to sort by — what it has
+    # is the age of the *card*, which is in the sentence.
+    printf '%s\t%s\t%s\t0\t\t\tIn Progress for %s hours with nothing behind it; %s\t%s\n' \
+      "$repo" "$number" "$STUCK_ROUTE" "$hours" "$cost" "$title"
+  done <<<"$found"
+}
+
 # One row per waiting issue: repo, number, route, rank, created, blockers (space
 # separated, `owner/repo#n`), why, title.
 entries() {
@@ -103,6 +157,7 @@ entries() {
   # issue carries both. A list that is empty for a reason nobody can see is the
   # failure this whole issue is about, so the labels are asked for one at a time
   # and the answers merged here.
+  board=""
   issues='[]'
   for label in $WAITING_LABELS; do
     found=$(gh search issues --owner "$ORG" --state open --label "$label" \
@@ -114,8 +169,15 @@ entries() {
       die "the labelled issues could not be merged"
   done
 
-  [ -n "$issues" ] || return 0
-  [ "$(jq 'length' <<<"$issues")" -gt 0 ] || return 0
+  # **The search is what fails first on a broken credential, and it stays that
+  # way.** The board read below could equally be moved above it — the stuck
+  # section needs no labelled issue — but then a run with no `gh` at all would
+  # report *the board could not be read* about a failure that is really the
+  # search, and the message a red run leaves is most of what it is worth.
+  if [ -z "$issues" ] || [ "$(jq 'length' <<<"$issues")" -eq 0 ]; then
+    stuck ""
+    return 0
+  fi
 
   board=$(mktemp)
   trap 'rm -f "$board"' RETURN
@@ -161,7 +223,10 @@ entries() {
     | @tsv
   ' <<<"$issues") || die "the labelled issues could not be read"
 
-  [ -n "$rows" ] || return 0
+  if [ -z "$rows" ]; then
+    stuck "$board"
+    return 0
+  fi
 
   # The blockers are asked for one issue at a time, which is one call each and a
   # list this size is fifteen of them once a day. An issue whose blockers cannot
@@ -179,6 +244,11 @@ entries() {
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$repo" "$number" "$route" "$rank" "$created" "$waits" "$why" "$title"
   done <<<"$rows"
+
+  # **After the labelled rows and never mixed into them.** A stuck card is not
+  # waiting to be started — somebody started it — so it is a different question
+  # with a different answer, and `body` gives it its own section.
+  stuck "$board"
 }
 
 # The markdown, with a package as one entry (`#265`).
@@ -199,13 +269,23 @@ body() {
     return 0
   fi
 
-  awk -F'\t' '
+  awk -F'\t' -v stuck_route="$STUCK_ROUTE" '
+    # **The stuck rows are taken out first and counted separately** (`#381`).
+    # They are not waiting to be started, so folding them into the headline would
+    # make the one number on this list mean two things — and folding them into
+    # the package union would let a card nobody is behind pull an unrelated
+    # package under its heading.
+    $3 == stuck_route {
+      stuck_key[++stuck_count] = $1 "#" $2
+      stuck_repo[stuck_count] = $1; stuck_number[stuck_count] = $2
+      stuck_why[stuck_count] = $7; stuck_title[stuck_count] = $8
+      next
+    }
     {
       key = $1 "#" $2
-      order[NR] = key
+      order[++count] = key
       repo[key] = $1; number[key] = $2; route[key] = $3
       waits[key] = $6; why[key] = $7; title[key] = $8
-      count++
       # Every issue starts in a package of its own; a link merges two.
       root[key] = key
     }
@@ -220,7 +300,10 @@ body() {
         for (j = 1; j <= n; j++) if (w[j] in root) union(w[j], k)
       }
 
-      print "**" count " issue(s) are waiting for somebody to start them.** The opencode worker will not take any of these; that is what the label means."
+      if (count > 0)
+        print "**" count " issue(s) are waiting for somebody to start them.** The opencode worker will not take any of these; that is what the label means."
+      else
+        print "**Nothing is waiting for a Claude agent or for a person right now.**"
       print ""
 
       for (i = 1; i <= count; i++) {
@@ -248,6 +331,26 @@ body() {
               repo[m], number[m], repo[m], number[m]
           printf "   - `%s` — %s\n", route[m], why[m]
           if (waits[m] != "") printf "   - waits for %s\n", waits[m]
+        }
+        print ""
+      }
+
+      # **The section that is not work to be started** (`#381`). A card that has
+      # been In Progress for over a day is holding its whole repository out of
+      # the opencode queue, and the worker has been saying so on the issue every
+      # four hours to nobody. This is the one page the person who can move it
+      # actually reads.
+      if (stuck_count > 0) {
+        print "---"
+        print ""
+        print "## " stuck_count " claim(s) nobody is behind"
+        print ""
+        print "These are **In Progress** and have not moved in over a day. Nothing here is being taken away from anybody — but while a card sits in In Progress, `pick` skips every other issue in its repository (`kolonie-docs#266`), so one forgotten claim stops a whole repository. If it is yours, it is yours; if it is not, moving it to **Ready** starts that repository again."
+        print ""
+        for (i = 1; i <= stuck_count; i++) {
+          printf "- [`%s#%s`](https://github.com/%s/issues/%s) — %s\n", \
+            stuck_repo[i], stuck_number[i], stuck_repo[i], stuck_number[i], stuck_title[i]
+          printf "   - %s\n", stuck_why[i]
         }
         print ""
       }
