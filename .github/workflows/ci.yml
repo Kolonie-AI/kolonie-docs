@@ -53,7 +53,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # **The whole history, because one of the checks below compares against
+      # it** (`#383`). `check-brief-coverage.py` reads the SHA each row of
+      # `.github/coverage-splits.txt` pins and asks git what the source file said
+      # there — and the default checkout is one commit deep, so every pin is an
+      # object the clone does not have.
+      #
+      # It was adequate until `#378`, and only because the test was not running:
+      # `ci.yml` and `check.sh` each carried a hand-written list, this file was in
+      # neither, and deriving the list is what started running it. `main` was red
+      # from `6c352b7` until this line.
+      #
+      # The checker is right to fail rather than skip a pin it cannot read — that
+      # is one of its own cases — so the clone is what has to change. A local run
+      # cannot see this: a working clone has the history, so `check.sh` was green
+      # on the machine that landed `#378` and red the first time a runner ran it.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # `build-skill.test.py` is here rather than in the seven skill repositories
       # because the generator is here. Whether each `SKILL.md` is *current* is a
