@@ -178,6 +178,24 @@ CLAIM_RACE_WINDOW_MINUTES=${CLAIM_RACE_WINDOW_MINUTES:-10}
 # out of `pick` while it does.
 FORGOTTEN_CLAIM_HOURS=${FORGOTTEN_CLAIM_HOURS:-4}
 
+# How long a card may sit in In Progress before saying so again is no longer
+# enough (`#381`).
+#
+# **This is a different clock from the one above and that is the whole of `#381`.**
+# `FORGOTTEN_CLAIM_HOURS` is measured on the *issue*, so writing the report resets
+# it — deliberately, because it is the de-duplication — and the consequence was
+# that the number in the report could never grow. An item forgotten for a day and
+# an item forgotten for a month both reported four hours. The number below is
+# measured on the **card**, which a comment does not touch (verified against the
+# live board on 2026-08-15: `kolonie-platform#925`'s card last moved at 16:25 and
+# its last comment landed at 19:29, three hours later, with the card unchanged).
+# So it grows across reports, and a threshold on it can fire.
+#
+# Twenty-four hours: `kolonie-platform#815` cost its repository a full day, which
+# is the incident this is sized against. Under a day is a run that died and will
+# be reported again in four hours; over a day is nobody coming.
+FORGOTTEN_CLAIM_ESCALATE_HOURS=${FORGOTTEN_CLAIM_ESCALATE_HOURS:-24}
+
 
 # What a claim comment starts with. Written once here because two things now
 # depend on the exact wording — the workflow that writes it and `verify-claim`,
@@ -1704,15 +1722,66 @@ case "${1:-}" in
     # is hung does not say what it was working on. The worker comments when it
     # takes an issue and when it fails, so an issue nothing has touched in
     # `FORGOTTEN_CLAIM_HOURS` has no run behind it whatever the run list says.
+    # ## Two clocks, because one of them could not grow (`#381`)
+    #
+    # The sweep above answers *when to speak*; it is measured on the issue and
+    # the report resets it, which is the de-duplication and is right. It is also
+    # unusable as a *number*, because after the first report it can never exceed
+    # `FORGOTTEN_CLAIM_HOURS` again — so every report said the same thing and no
+    # threshold expressed in it could ever fire. `kolonie-platform#815` reported
+    # *four hours* three times over a day.
+    #
+    # The card's own `updatedAt` is the clock that does not reset: a comment on
+    # the issue does not touch the item. So the sweep still speaks on the issue
+    # clock and now *says* the card clock, which grows, and escalates on it.
     board=$(board_read) ||
       die "could not read the board, so a forgotten claim cannot be found" 1
 
+    # **Emitted whether or not it is time to speak**, because the escalated half
+    # of this is read by the daily waiting list rather than written to the issue,
+    # and that list runs on its own schedule. `--escalated` is the board alone:
+    # no issue is read, so it costs nothing beyond the board it was handed.
+    escalated_only=false
+    [ "${2:-}" = "--escalated" ] && escalated_only=true
+
     in_progress=$(jq -r '.items[] | select(.status == "In Progress")
-      | "\(.content.repository)\t\(.content.number)\t\(.content.title)"' <<<"$board")
+      | "\(.content.repository)\t\(.content.number)\t\(.updatedAt // "")\t\(.content.title)"' <<<"$board")
     [ -n "$in_progress" ] || exit 0
 
-    while IFS=$'\t' read -r repo number title; do
+    now=$(date +%s)
+    while IFS=$'\t' read -r repo number carded title; do
       [ -n "${repo:-}" ] || continue
+
+      # How long the card has sat where it is. Empty on a board that did not
+      # answer with it, and then this reports `-1` rather than a made-up age:
+      # the two are not the same finding and a zero would read as *moved just
+      # now*, which is the opposite of what is being looked for.
+      sitting=-1
+      if [ -n "$carded" ] && card_at=$(date -d "$carded" +%s 2>/dev/null); then
+        sitting=$(( (now - card_at) / 3600 ))
+      fi
+
+      # **What the claim is costing, off the board that is already in hand**
+      # (`#381`). `pick` skips every candidate in a repository that has anything
+      # In Progress, so a forgotten claim in a repository with a queue behind it
+      # is urgent and one in an empty repository is housekeeping. The filters are
+      # `pick`'s, minus the dependency check, which would be a call per issue.
+      queued=$(jq -r --arg repo "$repo" --arg forbidden "$FORBIDDEN_LABEL" '
+        [ .items[]
+          | select(.content.repository == $repo)
+          | select(.status == "Ready")
+          | select((.content.state // "OPEN") == "OPEN")
+          | select((.labels // []) | index("agent:opencode"))
+          | select((.labels // []) | index("blocked:human") | not)
+          | select((.labels // []) | index($forbidden) | not)
+        ] | length' <<<"$board")
+
+      if [ "$escalated_only" = true ]; then
+        [ "$sitting" -ge "$FORGOTTEN_CLAIM_ESCALATE_HOURS" ] &&
+          printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$number" "$sitting" "$queued" "$title"
+        continue
+      fi
+
       updated=$(gh api "repos/$repo/issues/$number" --jq '.updated_at' 2>/dev/null) || {
         echo "could not read $repo#$number; saying nothing about it rather than guessing" >&2
         continue
@@ -1722,16 +1791,38 @@ case "${1:-}" in
       # Reporting *is* touching the issue, so the comment the caller writes moves
       # `updated_at` and this stays quiet for another `FORGOTTEN_CLAIM_HOURS`.
       # That is the whole of the de-duplication, and it is deliberate: an item
-      # still forgotten four hours later is worth saying again.
+      # still forgotten four hours later is worth saying again. What `#381`
+      # changes is that it is no longer worth saying *identically* — the column
+      # after this one is what has grown since the last time.
       #
       # `date` rather than awk's `mktime`, which reads its argument as local time
       # and would report a four-hour-old item as six on a runner in CEST.
       then=$(date -d "$updated" +%s 2>/dev/null) || continue
-      hours=$(( ( $(date +%s) - then ) / 3600 ))
+      hours=$(( (now - then) / 3600 ))
       [ "$hours" -gt "$FORGOTTEN_CLAIM_HOURS" ] &&
-        printf '%s\t%s\t%s\t%s\n' "$repo" "$number" "$hours" "$title"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$repo" "$number" "$hours" "$sitting" "$queued" "$title"
     done <<<"$in_progress"
 
+    exit 0
+    ;;
+
+  # Where the board says an issue is, in one word and one point. `release` and
+  # `move` both write a column and neither reads one back; `#381` is the incident
+  # where that mattered — a failure comment announced a move to Ready that had
+  # not happened, and the issue looked attended for a day because of it.
+  column)
+    repo=${2:?column needs a repository}
+    number=${3:?column needs an issue number}
+    found=$(board_item_status_for "$repo" "$number") ||
+      die "could not ask the board where $repo#$number is" 1
+    [ -n "$found" ] || die "$repo#$number is not on the board" 3
+
+    # An item with no column is a real state and not an error — it is what an
+    # item added to the board and never sorted looks like. It is reported as the
+    # words rather than as an empty line, because a caller substituting this into
+    # a sentence should not have to know that a blank means anything.
+    where=${found#*$'\t'}
+    printf '%s\n' "${where:-no column}"
     exit 0
     ;;
 
@@ -1759,6 +1850,16 @@ case "${1:-}" in
     if ! set_status "$item" "$STATUS_READY"; then
       die "COULD NOT RELEASE $repo#$number back to Ready. It is stuck in In Progress and needs a person: $RUN_URL" 4
     fi
+
+    # **And read it back** (`#381`). `claim` has done this since `#266` and this,
+    # the path that matters more, did not: a mutation that reported success and
+    # did not take is indistinguishable from one that worked, and the caller then
+    # writes *put back in Ready* on the issue. That sentence was wrong for a day
+    # on `kolonie-platform#815`, and an issue that says it was returned is one
+    # nobody looks at again.
+    read -r _ landed < <(board_item_status_for "$repo" "$number")
+    [ "${landed:-}" = "Ready" ] ||
+      die "released $repo#$number and the board reads back ${landed:-nothing}. It is not in Ready and needs a person: $RUN_URL" 4
 
     exit 0
     ;;
@@ -1921,6 +2022,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims | board-read | board-add <repo> <n> | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | column <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims [--escalated] | board-read | board-add <repo> <n> | leak-check <file>..."
     ;;
 esac
