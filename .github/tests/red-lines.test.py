@@ -438,6 +438,162 @@ check("an older manifest skips it rather than crashing", code == 0, output)
 check("and says so", "not in the manifest" in output, output)
 
 
+# --------------------------------------------------------------------------
+print("\na second subject over the same files (#399)")
+# --------------------------------------------------------------------------
+#
+# The Atlas invitation is compared by this same reader, from a different heading
+# in the same documents. What `#399` changed here is that a manifest names its
+# own section, and the three original `kind` values became aliases carrying the
+# section they always meant.
+#
+# **The first two checks are the ones that matter.** They are what says the red
+# lines are still read exactly as they were, rather than as whatever the
+# generalisation happens to default to — the failure mode this whole file exists
+# to catch, one level up.
+
+check(
+    "markdown-forbidden still means the Forbidden section, bullets or bold",
+    red_lines.Copy("s", "s.md", "markdown-forbidden")._shape_and_section()
+    == ("markdown-bullets-or-bold", "Forbidden"),
+)
+check(
+    "markdown-skill still means the Red lines section, bullets only",
+    red_lines.Copy("s", "s.md", "markdown-skill")._shape_and_section()
+    == ("markdown-bullets", "Red lines"),
+)
+check(
+    "typescript still means the redLines field",
+    red_lines.Copy("s", "s.ts", "typescript")._shape_and_section()
+    == ("typescript", "redLines"),
+)
+
+INVITATION_SOURCE = """# The Atlas
+
+## What this is not
+
+Not a survey.
+
+## The invitation
+
+Prose introducing the four, which is commentary and not a term.
+
+- Walk a provider you would use yourself
+- Go wide across providers rather than deep at one
+- A walk that failed is worth what a walk that succeeded is worth
+- File it with `kolonie.accounts.walk-report` when it closes
+
+**A bolded paragraph here is commentary too**, because this section is read in
+the bullets-only shape.
+
+## History
+
+Nothing here is a rule.
+"""
+
+invitation_rules = red_lines.Copy(
+    "the-atlas.md", "s.md", "markdown-bullets", "The invitation"
+).rules(INVITATION_SOURCE)
+check(
+    "a manifest-named section is what gets read",
+    len(invitation_rules) == 4,
+    f"got {len(invitation_rules)}: {invitation_rules}",
+)
+check(
+    "and the bolded paragraph under it is not a fifth line",
+    not any("commentary" in rule for rule in invitation_rules),
+    str(invitation_rules),
+)
+
+# The failure the generalisation could have introduced and must not: a manifest
+# that names a shape and forgets the section would otherwise read whichever
+# heading the alias defaulted to and report the wrong document as clean.
+try:
+    red_lines.Copy("s", "s.md", "markdown-bullets").rules(INVITATION_SOURCE)
+    check("a shape with no section refuses to guess one", False, "no error raised")
+except ValueError as error:
+    check("a shape with no section refuses to guess one", "names no section" in str(error))
+
+# End to end: two manifests in one directory, over the same fetched files, and
+# `main()` told which to read. This is the whole of what `check-red-lines.yml`
+# and `check.sh` do differently after `#399`.
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / "source.md").write_text(SOURCE, encoding="utf-8")
+    (root / "invitation-source.md").write_text(INVITATION_SOURCE, encoding="utf-8")
+    (root / "copy.md").write_text(INVITATION_SOURCE, encoding="utf-8")
+
+    (root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "source": {"label": "source", "file": "source.md", "kind": "markdown-forbidden"},
+                "copies": [{"label": "skill", "file": "source.md", "kind": "markdown-forbidden"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "manifest-invitation.json").write_text(
+        json.dumps(
+            {
+                "source": {
+                    "label": "the-atlas.md",
+                    "file": "invitation-source.md",
+                    "kind": "markdown-bullets",
+                    "section": "The invitation",
+                },
+                "copies": [
+                    {
+                        "label": "arrival.md",
+                        "file": "copy.md",
+                        "kind": "markdown-bullets",
+                        "section": "The invitation",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    import contextlib
+    import io
+
+    original = red_lines.MINIMUM_COPIES
+    red_lines.MINIMUM_COPIES = 0
+    try:
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            sys.argv = ["red-lines.py", str(root), "manifest-invitation.json"]
+            code = red_lines.main()
+        output = captured.getvalue()
+        check("a named manifest is the one that is read", code == 0, output)
+        check("and it reports the invitation's four lines", "4 rules" in output, output)
+
+        # The same directory, no manifest argument: the red lines, exactly as
+        # every caller before `#399` got them.
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            sys.argv = ["red-lines.py", str(root)]
+            code = red_lines.main()
+        output = captured.getvalue()
+        check("and omitting it still reads manifest.json", code == 0, output)
+        check("which is the red lines, not the invitation", "3 rules" in output, output)
+
+        # A drift in one copy of the invitation, which is the whole point.
+        (root / "copy.md").write_text(
+            INVITATION_SOURCE.replace("Go wide across providers", "Go deep at one provider"),
+            encoding="utf-8",
+        )
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            sys.argv = ["red-lines.py", str(root), "manifest-invitation.json"]
+            code = red_lines.main()
+        output = captured.getvalue()
+        check("a reworded invitation line fails", code == 1, output)
+        check("and the failing copy is named", "arrival.md" in output, output)
+    finally:
+        red_lines.MINIMUM_COPIES = original
+
+
 print()
 if failures:
     print(f"{len(failures)} failing: {', '.join(failures)}")

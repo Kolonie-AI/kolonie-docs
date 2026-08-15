@@ -77,6 +77,15 @@ ARRIVAL_COPY_REPO="$ORG/kolonie-docs"
 ARRIVAL_COPY_PATH=onboarding/arrival.md
 BODY_COPY_REPO="$ORG/kolonie-docs"
 BODY_COPY_PATH=onboarding/skill/body.md
+# The Atlas invitation (`#399`) is a second set of rules written into the *same*
+# documents, so it needs one more source and not one more sweep. Every copy it
+# compares — `about.ts`, `arrival.md`, `body.md` and every discovered `SKILL.md`
+# — is already on disk when the manifests are written, which is why the second
+# comparison costs one local file copy and no requests at all.
+INVITATION_SOURCE_REPO="$ORG/kolonie-docs"
+INVITATION_SOURCE_PATH=governance/the-atlas.md
+INVITATION_SECTION="The invitation"
+INVITATION_FIELD=atlasInvitation
 
 # This repository, wherever it happens to be checked out — from the script's own
 # location rather than from the working directory, because both workflows and
@@ -189,6 +198,7 @@ take "$SOURCE_PATH" "$OUT/source.md" || exit 1
 fetch "$API_COPY_REPO" "$API_COPY_PATH" "$OUT/about.ts" || exit 1
 take "$ARRIVAL_COPY_PATH" "$OUT/arrival.md" || exit 1
 take "$BODY_COPY_PATH" "$OUT/body.md" || exit 1
+take "$INVITATION_SOURCE_PATH" "$OUT/invitation-source.md" || exit 1
 
 # `markdown-skill`: the parser reads a `## Red lines` section with
 # `named_paragraphs=False`, and that is exactly what `arrival.md` is — the seven
@@ -212,6 +222,15 @@ entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript"},{"labe
   "$API_COPY_REPO" "$API_COPY_PATH" "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" \
   "$BODY_COPY_REPO" "$BODY_COPY_PATH")
 
+# The same three files again, read at a different heading and a different field
+# (`#399`). Named `markdown-bullets` rather than `markdown-skill` because the
+# section it reads is not the skills' one: the shape is what the kind says, and
+# the section is beside it.
+invitation_entries=$(printf '{"label":"%s/%s","file":"about.ts","kind":"typescript","section":"%s"},{"label":"%s/%s","file":"arrival.md","kind":"markdown-bullets","section":"%s"},{"label":"%s/%s","file":"body.md","kind":"markdown-bullets","section":"%s"}' \
+  "$API_COPY_REPO" "$API_COPY_PATH" "$INVITATION_FIELD" \
+  "$ARRIVAL_COPY_REPO" "$ARRIVAL_COPY_PATH" "$INVITATION_SECTION" \
+  "$BODY_COPY_REPO" "$BODY_COPY_PATH" "$INVITATION_SECTION")
+
 # Both of these used to be bare `gh api` calls whose failure was swallowed, and
 # that was the quieter half of `#301`. A dropped repository does not turn the run
 # red — it makes the check pass on fewer copies than it should, which is the one
@@ -227,6 +246,9 @@ for repo in $(echo "$repos" | sort); do
     fetch "$repo" "$path" "$OUT/$file" || exit 1
     entries="$entries,$(printf '{"label":"%s/%s","file":"%s","kind":"markdown-skill"}' \
       "$repo" "$path" "$file")"
+    invitation_entries="$invitation_entries,$(printf \
+      '{"label":"%s/%s","file":"%s","kind":"markdown-bullets","section":"%s"}' \
+      "$repo" "$path" "$file" "$INVITATION_SECTION")"
     index=$((index + 1))
     echo "found $repo/$path"
   done
@@ -251,6 +273,28 @@ cat > "$OUT/manifest.json" <<JSON
     "projection": "about.ts"
   },
   "copies": [$entries]
+}
+JSON
+
+# The invitation's own manifest, over the files already fetched (`#399`).
+#
+# **A second manifest rather than a second section in the first one.** The two
+# comparisons fail for different reasons and are reported separately — copies of
+# the red lines disagreeing is `p1` and binds citizens on wrong terms; copies of
+# the invitation disagreeing is `p2` and is stale encouragement. One manifest
+# would have made them one verdict, and the louder of the two would have set the
+# priority for both.
+#
+# No `clarification`: the invitation has none, and the key is optional.
+cat > "$OUT/manifest-invitation.json" <<JSON
+{
+  "source": {
+    "label": "$INVITATION_SOURCE_REPO/$INVITATION_SOURCE_PATH",
+    "file": "invitation-source.md",
+    "kind": "markdown-bullets",
+    "section": "$INVITATION_SECTION"
+  },
+  "copies": [$invitation_entries]
 }
 JSON
 

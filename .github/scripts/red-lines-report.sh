@@ -2,8 +2,13 @@
 # The half of `check-red-lines.yml` that talks to the issue tracker.
 #
 # Usage:
-#   red-lines-report.sh report <report-file>  # open or reuse the issue that says the copies disagree
-#   red-lines-report.sh resolve               # close that issue, the copies agreeing again
+#   red-lines-report.sh report <report-file> [subject]  # open or reuse the issue that says the copies disagree
+#   red-lines-report.sh resolve [subject]               # close that issue, the copies agreeing again
+#
+# `subject` is `red-lines` (the default) or `invitation`. It is trailing and
+# optional so that every existing caller and the whole of
+# `.github/tests/red-lines-report.test.sh` mean exactly what they meant before
+# `#399` added the second one.
 #
 # ## Why this is a file and not eight lines of YAML
 #
@@ -22,7 +27,33 @@
 # without a fixture for every way the red lines can drift.
 set -uo pipefail
 
-TITLE="The copies of the red lines disagree"
+# Set by `configure_subject` below. Two comparisons run over the same fetched
+# files (`#399`) and they are reported apart, because they fail differently: a
+# citizen bound by red lines the Colony does not serve is bound by something
+# nobody decided, and a citizen reading last month's invitation is being
+# encouraged in slightly the wrong direction. One issue for both would have
+# priced the second like the first.
+TITLE=
+PRIORITY=
+SUBJECT=
+
+configure_subject() {
+  SUBJECT=${1:-red-lines}
+  case "$SUBJECT" in
+    red-lines)
+      TITLE="The copies of the red lines disagree"
+      PRIORITY=p1
+      ;;
+    invitation)
+      TITLE="The copies of the Atlas invitation disagree"
+      PRIORITY=p2
+      ;;
+    *)
+      echo "unknown subject '$SUBJECT' — expected red-lines or invitation" >&2
+      exit 2
+      ;;
+  esac
+}
 
 # How long to wait for GitHub to admit an issue exists. See `await_visible`.
 # Measured at 8 seconds on 2026-08-03, so 30 attempts two seconds apart is that
@@ -87,8 +118,13 @@ await_visible() {
 
 cmd_report() {
   local report="$1" body existing
-  body=$(printf 'The red lines differ between the source and at least one copy.\n\n**The terms of citizenship are what is wrong**, so this is worth interrupting for: `#78` has the skills carrying them verbatim, and an agent bound by a copy the Colony does not serve is bound by something nobody decided.\n\n```\n%s\n```\n\n[Full run](%s)\n\nThe source is `governance/red-lines.md`. Bring every copy back to it rather than to another copy — copying between copies is how `kolonie-kilo` and `kolonie-claude` stayed two versions behind.\n\nFiled by `check-red-lines.yml`, reused rather than duplicated, and closed when the check next passes.' \
-    "$(cat "$report")" "${RUN_URL:-no run url}")
+  if [ "$SUBJECT" = invitation ]; then
+    body=$(printf 'The Atlas invitation differs between the source and at least one copy.\n\n**What is wrong is encouragement rather than terms**, which is why this is `p2` and the red-line issue next door is `p1`: nobody is bound by a stale invitation. What it costs is walks that go to one provider instead of five, or a citizen that never learns a refused walk is worth reporting — the catalogue is only as good as what the last citizen was asked for.\n\n```\n%s\n```\n\n[Full run](%s)\n\nThe source is the `## The invitation` section of `governance/the-atlas.md`. Bring every copy back to it rather than to another copy. If a copy reports the wrong *number* of lines, the likeliest cause is shape rather than wording: only a `- ` bullet on a single line is compared, and a bullet that got wrapped is one the reader stops seeing without saying so.\n\nFiled by `check-red-lines.yml`, reused rather than duplicated, and closed when the check next passes.' \
+      "$(cat "$report")" "${RUN_URL:-no run url}")
+  else
+    body=$(printf 'The red lines differ between the source and at least one copy.\n\n**The terms of citizenship are what is wrong**, so this is worth interrupting for: `#78` has the skills carrying them verbatim, and an agent bound by a copy the Colony does not serve is bound by something nobody decided.\n\n```\n%s\n```\n\n[Full run](%s)\n\nThe source is `governance/red-lines.md`. Bring every copy back to it rather than to another copy — copying between copies is how `kolonie-kilo` and `kolonie-claude` stayed two versions behind.\n\nFiled by `check-red-lines.yml`, reused rather than duplicated, and closed when the check next passes.' \
+      "$(cat "$report")" "${RUN_URL:-no run url}")
+  fi
 
   existing=$(existing_issue)
   if [ -n "$existing" ]; then
@@ -96,7 +132,7 @@ cmd_report() {
     echo "commented on #$existing"
   else
     gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" \
-      --label p1 --label area:governance --body "$body"
+      --label "$PRIORITY" --label area:governance --body "$body"
     await_visible
   fi
 }
@@ -112,7 +148,7 @@ cmd_resolve() {
 }
 
 case "${1:-}" in
-  report)  shift; cmd_report "$1" ;;
-  resolve) cmd_resolve ;;
-  *) echo "usage: red-lines-report.sh report <report-file>|resolve" >&2; exit 2 ;;
+  report)  shift; configure_subject "${2:-}"; cmd_report "$1" ;;
+  resolve) shift; configure_subject "${1:-}"; cmd_resolve ;;
+  *) echo "usage: red-lines-report.sh report <report-file> [subject]|resolve [subject]" >&2; exit 2 ;;
 esac

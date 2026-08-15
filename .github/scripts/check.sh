@@ -112,12 +112,29 @@ step "nothing about the private gateway is committed" \
 if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
   step "brand/README.md §3 still describes the surfaces GitHub is serving" \
     python3 .github/scripts/check-brand-surfaces.py brand/README.md
-  step "the copies of the red lines still agree" bash -c '
-    set -o pipefail
-    tmp=$(mktemp -d)
-    bash .github/scripts/find-red-line-copies.sh "$tmp"
-    python3 .github/scripts/red-lines.py "$tmp"
-  '
+  # One discovery run, two comparisons over it (`#399`). The red lines and the
+  # Atlas invitation live in the same documents, so fetching twice would pay the
+  # whole sweep again for the same bytes — and reporting them as one step would
+  # make a green line mean *one of the two things you cannot tell apart*.
+  #
+  # They are separate steps rather than a single `||` chain for that reason: a
+  # chain returns one status, and `step` would name the wrong subject half the
+  # time.
+  COPIES=$(mktemp -d)
+  step "every copy of the red lines and the invitation could be fetched" \
+    bash .github/scripts/find-red-line-copies.sh "$COPIES"
+
+  if [ -f "$COPIES/manifest.json" ]; then
+    step "the copies of the red lines still agree" \
+      python3 .github/scripts/red-lines.py "$COPIES"
+    step "the copies of the Atlas invitation still agree" \
+      python3 .github/scripts/red-lines.py "$COPIES" manifest-invitation.json
+  else
+    # The fetch above already failed and said why. Running the comparisons
+    # against an empty directory would answer it with a traceback and bury the
+    # sentence that actually names the problem.
+    SKIPPED+=("both comparisons — nothing was fetched to compare")
+  fi
 else
   SKIPPED+=("brand surfaces and the red-line copies — both read GitHub, and no GH_TOKEN is set")
 fi

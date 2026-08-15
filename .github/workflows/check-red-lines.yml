@@ -66,14 +66,37 @@ name: Check Red Lines
 # does not make `about.ts` where a rule is *authored*. A red line changes by a
 # governance decision, and those land here. Every other copy is a projection of
 # this file, including the one that binds.
+#
+# ## Why the Atlas invitation is checked here too (`#399`)
+#
+# It is the same problem with a different subject: four lines written once in
+# `governance/the-atlas.md`, copied into `arrival.md`, into `skill/body.md`, into
+# every generated `SKILL.md` and into `atlasInvitation` in `about.ts` — and the
+# same silent failure, because no agent reads two copies.
+#
+# **It costs one local file copy and no extra API calls.** Every file it compares
+# is already fetched by the discovery run above; the only file the invitation
+# needs that the red lines do not is its own source, which lives in this
+# repository and comes off the checkout. A second workflow would have paid the
+# whole discovery again to read the same bytes.
+#
+# **Two manifests and two reports, deliberately.** The comparisons fail
+# differently: red lines disagreeing means citizens are bound on terms nobody
+# decided (`p1`), an invitation disagreeing means citizens are encouraged on last
+# month's terms (`p2`). One issue for both would have priced the second like the
+# first, and the interruption is the expensive part.
 
 on:
   push:
     branches: [main]
     paths:
       - 'governance/red-lines.md'
-      # A compared copy, and one that lives in this repository — so editing it
-      # is an event this workflow can see, unlike a drift in a skill file (#117).
+      # The source of the other thing compared here — the Atlas invitation
+      # (`#399`). Same machinery, same discovery run, different subject.
+      - 'governance/the-atlas.md'
+      # A compared copy of both, and one that lives in this repository — so
+      # editing it is an event this workflow can see, unlike a drift in a skill
+      # file (#117).
       - 'onboarding/arrival.md'
       # And the copy the seven skills are generated from, readable here since
       # `#301` made this repository's copies come off the checkout.
@@ -88,8 +111,12 @@ on:
   pull_request:
     paths:
       - 'governance/red-lines.md'
-      # A compared copy, and one that lives in this repository — so editing it
-      # is an event this workflow can see, unlike a drift in a skill file (#117).
+      # The source of the other thing compared here — the Atlas invitation
+      # (`#399`). Same machinery, same discovery run, different subject.
+      - 'governance/the-atlas.md'
+      # A compared copy of both, and one that lives in this repository — so
+      # editing it is an event this workflow can see, unlike a drift in a skill
+      # file (#117).
       - 'onboarding/arrival.md'
       # And the copy the seven skills are generated from, readable here since
       # `#301` made this repository's copies come off the checkout.
@@ -146,27 +173,67 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/find-red-line-copies.sh "$RUNNER_TEMP/copies"
 
-      - name: Compare
+      # `continue-on-error` on both comparisons, and the job's verdict taken at
+      # the end (`#399`). Without it the first failing comparison skips the
+      # second, so a red-line drift would hide an invitation drift *and* leave
+      # the invitation issue open after its own copies had been fixed. Both
+      # subjects are reported on every run, and neither can mask the other.
+      - name: Compare the red lines
         id: compare
+        continue-on-error: true
         run: |
           set -o pipefail
           python3 .github/scripts/red-lines.py "$RUNNER_TEMP/copies" 2>&1 | tee "$RUNNER_TEMP/report.txt"
+
+      # Same directory, same fetched files, second manifest. The only file this
+      # needs that the comparison above does not is its own source, and that one
+      # came off the checkout.
+      - name: Compare the Atlas invitation
+        id: compare-invitation
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 .github/scripts/red-lines.py "$RUNNER_TEMP/copies" manifest-invitation.json 2>&1 \
+            | tee "$RUNNER_TEMP/report-invitation.txt"
 
       # Only on a real divergence, and not on a pull request: that already shows
       # its own red check to the person who opened it, and filing an issue would
       # be telling somebody about something they are looking at.
       - name: Say so where somebody will see it
-        if: failure() && steps.compare.outcome == 'failure' && github.event_name != 'pull_request'
+        if: steps.compare.outcome == 'failure' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/red-lines-report.sh report "$RUNNER_TEMP/report.txt"
+        run: bash .github/scripts/red-lines-report.sh report "$RUNNER_TEMP/report.txt" red-lines
 
       # The other half of reaching somebody: an issue that stays open after the
       # thing it reports is fixed is an issue people learn to ignore.
       - name: Close the divergence issue once they agree again
-        if: success() && github.event_name != 'pull_request'
+        if: steps.compare.outcome == 'success' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/red-lines-report.sh resolve
+        run: bash .github/scripts/red-lines-report.sh resolve red-lines
+
+      - name: Say so about the invitation
+        if: steps.compare-invitation.outcome == 'failure' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/red-lines-report.sh report "$RUNNER_TEMP/report-invitation.txt" invitation
+
+      - name: Close the invitation issue once they agree again
+        if: steps.compare-invitation.outcome == 'success' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/red-lines-report.sh resolve invitation
+
+      # The job's verdict, which `continue-on-error` took off the two steps
+      # above. A run whose copies disagree is red, exactly as it was before the
+      # second subject existed.
+      - name: The verdict
+        if: steps.compare.outcome == 'failure' || steps.compare-invitation.outcome == 'failure'
+        run: |
+          echo "::error::a comparison failed — see the steps above"
+          exit 1

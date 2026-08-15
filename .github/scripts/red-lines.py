@@ -376,21 +376,65 @@ def compare_clarification(source: list[str], projection: list[str]) -> list[str]
 # --------------------------------------------------------------------------
 
 
+# The shapes this reader understands, by name, and whether a paragraph opening
+# in bold counts as a rule alongside the bullets. A shape is about the *form* a
+# rule takes; which section it is read from is the manifest's to say.
+_MARKDOWN_SHAPES: dict[str, bool] = {
+    "markdown-bullets": False,
+    "markdown-bullets-or-bold": True,
+}
+
+# What a `kind` meant before a manifest could name its own section (`#399`).
+#
+# The three original kinds each stood for a shape **and** a section at once,
+# which was right while the red lines were the only thing compared. `#399` added
+# a second comparison over the same fetched files — the Atlas invitation, four
+# bullets under a different heading in the same documents — and a second reader
+# copied from this one is the drift this whole arrangement exists to prevent.
+#
+# So the section moved into the manifest and these three stayed as aliases. The
+# red-line manifest is unchanged, and its behaviour is unchanged by
+# construction rather than by testing: `markdown-forbidden` still means
+# *`## Forbidden`, bullets or bold paragraphs*, and nothing else resolves to it.
+_LEGACY_KINDS: dict[str, tuple[str, str]] = {
+    "markdown-forbidden": ("markdown-bullets-or-bold", "Forbidden"),
+    "markdown-skill": ("markdown-bullets", "Red lines"),
+    "typescript": ("typescript", "redLines"),
+}
+
+
 @dataclass(frozen=True)
 class Copy:
-    """One place the red lines are written down."""
+    """One place a set of rules is written down."""
 
     label: str
     path: str
     kind: str
+    # The `## heading` to read, for a Markdown copy, or the field name, for a
+    # TypeScript one. Optional only for the three legacy kinds above, which
+    # carry their own.
+    section: str | None = None
+
+    def _shape_and_section(self) -> tuple[str, str]:
+        shape, default = _LEGACY_KINDS.get(self.kind, (self.kind, None))
+        section = self.section or default
+        if section is None:
+            # A manifest naming a shape but no section would otherwise read
+            # whichever heading the alias happened to default to and report the
+            # wrong document as clean. Say so instead.
+            raise ValueError(
+                f"copy {self.label!r} is of kind {self.kind!r} and names no section"
+            )
+        return shape, section
 
     def rules(self, text: str) -> list[str]:
-        if self.kind == "markdown-forbidden":
-            return rules_from_markdown(text, "Forbidden", named_paragraphs=True)
-        if self.kind == "markdown-skill":
-            return rules_from_markdown(text, "Red lines", named_paragraphs=False)
-        if self.kind == "typescript":
-            return rules_from_typescript(text, "redLines")
+        shape, section = self._shape_and_section()
+        if shape in _MARKDOWN_SHAPES:
+            return rules_from_markdown(
+                text, section, named_paragraphs=_MARKDOWN_SHAPES[shape]
+            )
+        if shape == "typescript":
+            return rules_from_typescript(text, section)
         raise ValueError(f"unknown copy kind {self.kind!r}")
 
 
@@ -443,15 +487,23 @@ MINIMUM_COPIES = 6
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: red-lines.py <directory containing manifest.json>", file=sys.stderr)
+    if len(sys.argv) not in (2, 3):
+        print("usage: red-lines.py <directory> [manifest file]", file=sys.stderr)
         return 2
 
     root = Path(sys.argv[1])
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    # One directory can hold more than one comparison over the same fetched
+    # files (`#399`). Defaulted so every existing caller is unchanged.
+    manifest_name = sys.argv[2] if len(sys.argv) == 3 else "manifest.json"
+    manifest = json.loads((root / manifest_name).read_text(encoding="utf-8"))
 
     source_entry = manifest["source"]
-    source = Copy(source_entry["label"], source_entry["file"], source_entry["kind"])
+    source = Copy(
+        source_entry["label"],
+        source_entry["file"],
+        source_entry["kind"],
+        source_entry.get("section"),
+    )
     source_rules = source.rules((root / source.path).read_text(encoding="utf-8"))
 
     if not source_rules:
@@ -460,7 +512,7 @@ def main() -> int:
 
     copies: dict[str, list[str]] = {}
     for entry in manifest["copies"]:
-        copy = Copy(entry["label"], entry["file"], entry["kind"])
+        copy = Copy(entry["label"], entry["file"], entry["kind"], entry.get("section"))
         try:
             copies[copy.label] = copy.rules((root / copy.path).read_text(encoding="utf-8"))
         except LookupError as error:

@@ -131,6 +131,39 @@ expect "a discovered skill is fetched and listed" \
   "$(grep -q 'kolonie-openclaw/skills/kolonie/SKILL.md' "$WORK/copies/manifest.json" \
     && echo yes || echo no)" "$(cat "$WORK/copies/manifest.json" 2>/dev/null)"
 
+# The second subject (`#399`). The assertion that matters is not that a second
+# manifest exists — it is that it names **the same files** as the first, because
+# the whole argument for putting it here rather than in its own workflow is that
+# the discovery run is already paid for.
+expect "the invitation source comes off the checkout too" \
+  "$(cmp -s "$ROOT/governance/the-atlas.md" "$WORK/copies/invitation-source.md" \
+    && echo yes || echo no)"
+expect "a second manifest is written for it" \
+  "$([ -s "$WORK/copies/manifest-invitation.json" ] && echo yes || echo no)"
+expect "and it names its own section rather than relying on a default" \
+  "$(grep -q '"section":"The invitation"' "$WORK/copies/manifest-invitation.json" \
+    && echo yes || echo no)" "$(cat "$WORK/copies/manifest-invitation.json" 2>/dev/null)"
+expect "the discovered skill is compared for the invitation as well" \
+  "$(grep -q 'kolonie-openclaw/skills/kolonie/SKILL.md' "$WORK/copies/manifest-invitation.json" \
+    && echo yes || echo no)" "$(cat "$WORK/copies/manifest-invitation.json" 2>/dev/null)"
+# No file is fetched twice for it: every path in the second manifest is one the
+# first already lists. A `file` appearing in only the second would mean a fetch
+# the header says this arrangement does not pay for.
+expect "it fetches nothing the red-line comparison did not already fetch" \
+  "$(python3 - "$WORK/copies" <<'PY'
+import json, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+first = json.loads((root / "manifest.json").read_text())
+second = json.loads((root / "manifest-invitation.json").read_text())
+have = {first["source"]["file"], *(c["file"] for c in first["copies"])}
+extra = {c["file"] for c in second["copies"]} - have
+print("yes" if not extra else f"no: {sorted(extra)}")
+PY
+)"
+# Both manifests are read by the same script, so a run that fetched nothing must
+# leave neither behind — the *"a read that never happened is not a divergence"*
+# case below asserts this for the first one.
+
 echo
 echo "a slow read is retried rather than believed"
 
@@ -161,6 +194,8 @@ expect "and says the copies were not compared" \
   "$(grep -q 'not a divergence' "$WORK/out" && echo yes || echo no)" "$(cat "$WORK/out")"
 expect "and nothing is left for the comparison to read" \
   "$([ ! -f "$WORK/copies/manifest.json" ] && echo yes || echo no)"
+expect "for either comparison" \
+  "$([ ! -f "$WORK/copies/manifest-invitation.json" ] && echo yes || echo no)"
 
 setup; fails "$ORG_REPOS" 99
 run; rc=$?
