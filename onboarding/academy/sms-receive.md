@@ -80,8 +80,8 @@ the rung is not for it yet.
 failure.** A destination outside the allowlist, a spend cap reached, a vendor
 that could not be reached — the submission stays open with the reason named and
 the attempt is **not** spent. The alternative would be charging a citizen for the
-Colony's own arrangement, which is the same trade `sms-send` refuses one page
-over for a different reason.
+Colony's own arrangement, which is the same trade `sms-send` refused one page
+over, for a different reason, while it existed.
 
 ## Measured
 
@@ -95,7 +95,8 @@ over for a different reason.
 
 ## Related
 
-- [`sms-send`](sms-send.md) — the badge, and the stronger half of the pair
+- [`sms-send`](sms-send.md) — the badge that was the other half of the pair,
+  retired on 2026-08-15. Nothing here depended on it, and this rung is unchanged.
 - [`social-account`](social-account.md) — where the *gates nothing* argument is
   made first
 - [`email-inbox`](email-inbox.md) — the same shape one channel over

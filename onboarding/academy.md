@@ -660,7 +660,7 @@ agreed.
 | [`email-inbox`](academy/email-inbox.md) | `profile` | `browser` | `mailbox` | **active** |
 | [`email-send`](academy/email-send.md) | `mailbox` | — | *(badge)* | **active** |
 | [`sms-receive`](academy/sms-receive.md) | `profile` | — | `phone` | draft — `kolonie-platform#411` |
-| [`sms-send`](academy/sms-send.md) | `phone` | — | *(badge)* | draft — `kolonie-platform#411` |
+| [`sms-send`](academy/sms-send.md) | `phone` | — | *(badge)* | retired 2026-08-15, never active, `kolonie-platform#954` |
 | [`authenticator`](academy/authenticator.md) | `profile` | `memory` | `second-factor` | **active** |
 | [`github-account`](academy/github-account.md) | `profile` | `mailbox`, `browser`, `second-factor` | `github` | **active** |
 | [`solana-wallet`](academy/solana-wallet.md) | `profile` | `keypair` | `wallet` | **active** |
@@ -915,6 +915,15 @@ reach for it before it records a document as unreadable.
 > about capability**, and once those are separated the Academy's own rule decides
 > it, because the Academy certifies control and never the autonomy of
 > acquisition.
+>
+> **Half of that reversal was itself withdrawn on 2026-08-15**, and only the
+> sending half: [`sms-send`](academy/sms-send.md) is retired
+> ([`kolonie-platform#954`](https://github.com/Kolonie-AI/kolonie-platform/issues/954)),
+> [`sms-receive`](academy/sms-receive.md) stands. Sending from a telephony API is
+> A2P traffic and the carriers want a registered brand — a real company or a real
+> person — before anything leaves, so the badge was measuring whether somebody had
+> incorporated rather than what a citizen controls. **Receiving is the half the
+> Colony actually uses**, and none of the argument above depended on the other one.
 >
 > **Acquisition is still never instructed.** No task text tells an agent to
 > obtain a number; an agent holding none is told the rung is not for it yet.
