@@ -1,0 +1,97 @@
+name: An external pull request becomes an issue
+
+# `kolonie-docs#367`. The policy is that an issue is the contribution this
+# project wants and a pull request is not — and the half that matters is what
+# happens to somebody who opened one anyway.
+#
+# **Not closed silently, and not closed rudely.** The content becomes an issue
+# crediting the author by name, the pull request is closed with a link to it and
+# the reason, and the branch is untouched. Automated because the alternative is a
+# contribution sitting unanswered until somebody is awake, and a slow *no* is
+# worse than an immediate one with a reason.
+#
+# ## Two conditions, and they are not the same one
+#
+# **A fork**, not an unfamiliar author: the Colony's own agents push branches to
+# this repository, and one of them opening a pull request must not be answered
+# with a form letter.
+#
+# `pull_request_target`, because a fork's `pull_request` run has a read-only
+# token and could open nothing. **This workflow therefore never checks out the
+# pull request's code and runs nothing from it** — it reads the title, the body
+# and the author through the API, and writes. That is the whole of why
+# `pull_request_target` is safe here and would not be in a job that builds.
+#
+# ## What it does not do
+#
+# It does not judge the change. The issue it opens carries the description
+# verbatim, marked as arriving from outside, and goes to Inbox like any other —
+# the routing rule in `agents/routes.md` then caps it at `agent:claude` if it is
+# not a defect, which is what puts a person in front of a proposal nobody asked
+# for.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  convert:
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open an issue crediting the author, then close the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+
+          issue_body=$(cat <<EOF
+          **Reported by @${AUTHOR}**, who opened [${PR_URL}](${PR_URL}) with the
+          change. The pull request is closed and the branch is untouched; this
+          issue is the record, and the credit is @${AUTHOR}'s.
+
+          ## What they wrote
+
+          ${BODY:-_(the pull request had no description)_}
+
+          ---
+
+          Opened automatically by \`external-pr.yml\` — the policy is
+          \`operations/contributions.md\`, and the reasoning is
+          \`state/decisions/an-issue-is-the-contribution-this-project-wants.md\`.
+          **This is not a judgement about the change.** It is where the change
+          gets read.
+          EOF
+          )
+
+          url=$(gh api -X POST "repos/${REPO}/issues" \
+            -f title="${TITLE}" \
+            -f body="${issue_body}" \
+            -f 'labels[]=from:external' \
+            -f 'labels[]=needs-triage' \
+            --jq .html_url)
+
+          echo "opened ${url}"
+
+          gh api -X POST "repos/${REPO}/issues/${NUMBER}/comments" -f body="$(cat <<EOF
+          Thank you — genuinely. **This is now [an issue](${url}), crediting you by name**, and your branch is untouched.
+
+          This project asks for issues rather than pull requests, and the honest reason is where the cost sits: the Colony's own coding agents run the implementation loop, so a diff is not the scarce input. **Noticing** is. What you saw is the part we could not have produced from inside, and it is now in the place where it gets acted on.
+
+          The whole policy, including how to argue against it: [\`CONTRIBUTING.md\`](https://github.com/${REPO}/blob/main/CONTRIBUTING.md).
+          EOF
+          )"
+
+          gh api -X PATCH "repos/${REPO}/pulls/${NUMBER}" -f state=closed >/dev/null
+          echo "closed #${NUMBER}"
