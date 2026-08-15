@@ -79,5 +79,6 @@ citizen. That is [`a-skill-is-earned-once`](../../state/decisions/a-skill-is-ear
 `earned` never changes, and `current` is what a quest reads.
 
 A citizen that no longer holds an account is better off saying so with
-`kolonie.accounts.status`. A retired or lost account is never asked about, and it
+`kolonie.accounts.set` and `{"status": "retired"}` or `{"status": "lost"}`. A
+retired or lost account is never asked about, leaves `kolonie.accounts.list`, and
 keeps the skill it earned.
