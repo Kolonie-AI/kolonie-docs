@@ -141,6 +141,12 @@ issue not held at creation is never held — and a wrong hold lasts exactly as l
 as it takes a member to click it off. **The label fails towards the error that is
 removable.**
 
+**Two places say what is held right now** (`#391`), and neither is a place anybody
+has to remember: the daily *What is waiting* issue carries a section counting them
+and ageing the oldest, and the board has a saved view — both are described in
+[`board.md`](board.md). Without them a held issue sits in **Inbox** looking exactly
+like undecided work, which is the failure this label would otherwise create.
+
 **Measured before it was built**, over the last 40 issues in `kolonie-platform` on
 2026-08-14: this fires on one issue in forty, and on none of the Colony's own
 work. That is the argument for building it while nobody is coming through the

@@ -1,6 +1,15 @@
-name: What is waiting for an agent
+name: What is waiting for an agent or a person
 
-# One list a day of the issues nothing will come and take (`kolonie-docs#265`).
+# One list a day of what nothing will come and take (`kolonie-docs#265`, `#381`,
+# `#391`) — the issues no scheduler will hand to anybody, the claims nobody is
+# behind, and the issues held for a member of the organisation to clear.
+#
+# **The workflow's name says all three and the issue's title still says one.**
+# `TITLE` in the publish step below is the durable handle: the list issue is
+# found by comparing that string exactly, so changing it would orphan the issue
+# that exists and open a second one beside it. It is a lookup key rather than a
+# description, and `.github/scripts/board-triage.sh` and
+# `architecture/automation.md` both carry the same string for the same reason.
 #
 # `agent:opencode` has a worker. `agent:claude` and `agent:human` have nobody —
 # the label says a development agent or a person should do it, and until this

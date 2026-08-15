@@ -1,5 +1,11 @@
 #!/bin/bash
-# What is waiting for an agent that no scheduler will ever hand work to (#265).
+# What is waiting, and what nothing will come and take (#265, #381, #391).
+#
+# Three findings, one list: the issues no scheduler will ever hand to anybody
+# (`#265`), the claims nobody is behind (`#381`), and the issues held for a
+# member to clear (`#391`). They are three questions with three answers, so they
+# are three sections — and one file, because they are read by the same person at
+# the same moment, and a second daily message is a message nobody opens.
 #
 # Usage:
 #   waiting-list.sh entries          # -> one TSV row per waiting issue
@@ -68,6 +74,13 @@ LIST_ISSUE=${LIST_ISSUE:-}
 # it exists so that one TSV can carry two kinds of row without `arrivals` or the
 # workflow having to learn a second shape.
 STUCK_ROUTE=${STUCK_ROUTE:-stuck:in-progress}
+
+# The hold only a member lifts (`kolonie-docs#389`), and the sentinel route a
+# held row carries (`#391`). Same trick as `STUCK_ROUTE` above and for the same
+# reason: one TSV, three kinds of row, and neither `arrivals` nor the workflow
+# has to learn a second shape to carry the third one.
+CLEARANCE_LABEL=${CLEARANCE_LABEL:-needs-clearance}
+CLEARANCE_ROUTE=${CLEARANCE_ROUTE:-held:needs-clearance}
 
 die() {
   echo "$1" >&2
@@ -147,6 +160,111 @@ stuck() {
   done <<<"$found"
 }
 
+# Whole days since an ISO timestamp, floored. A timestamp that cannot be parsed
+# is 0 rather than an error: the row is worth having without its age, and the
+# sentence beside it says which age it is measuring.
+days_since() {
+  local began now
+  began=$(date -u -d "$1" +%s 2>/dev/null) || { echo 0; return 0; }
+  now=$(date -u +%s)
+  echo $(( (now - began) / 86400 ))
+}
+
+# A number of days as somebody reads it.
+spell_days() {
+  case "$1" in
+    0) echo "less than a day" ;;
+    1) echo "1 day" ;;
+    *) echo "$1 days" ;;
+  esac
+}
+
+# When the hold went on, or nothing at all when the timeline cannot be read.
+#
+# **`last`, not `first`.** A label taken off and put back on is held from the
+# second time — reporting the first would age a fresh hold by however long the
+# earlier one lasted, which is the one number on this section somebody acts on.
+held_since() {
+  gh api "repos/$1/issues/$2/timeline" --paginate \
+    --jq "[.[] | select(.event == \"labeled\" and .label.name == \"$CLEARANCE_LABEL\")
+           | .created_at] | last // empty" 2>/dev/null | tail -1
+}
+
+# What is waiting for a person to clear, in the same eight columns (`#391`).
+#
+# ## Why it is on this list rather than in a workflow of its own
+#
+# `#389` puts `needs-clearance` on an issue from outside the organisation and
+# `#390` keeps a held issue out of Ready. Both are machinery, and neither tells
+# anybody the hold is there — so a held issue does not merely sit, it sits
+# **invisibly**, because Inbox is also where undecided work lives. This workflow
+# already answers that question one door along, in the shape the answer needs:
+# one issue rewritten in place, and a comment only when the set changed.
+#
+# ## Why the age is looked up per issue
+#
+# *2 waiting for your clearance, oldest 6 days* gets somebody out of their chair
+# and *2 waiting* does not, so the age is the half that does the work. A search
+# cannot say when a label went on, so the timeline is read once per held issue —
+# one call each, on a set that is small by construction, once a day.
+#
+# **A timeline that cannot be read does not lose the row.** The entry falls back
+# to how long the issue has been *open* and says so in as many words, because an
+# age that is quietly the wrong age is worse than one that names what it measured.
+clearance() {
+  local found rows repo number author created title since age measured
+
+  found=$(gh search issues --owner "$ORG" --state open --label "$CLEARANCE_LABEL" \
+    --limit "$SEARCH_LIMIT" --json repository,number,title,createdAt,author) ||
+    die "the held issues could not be searched, so the list would understate what waits for a person"
+  [ -n "$found" ] || return 0
+
+  rows=$(jq -r --arg list "$LIST_ISSUE" '
+    [ .[]
+      | { repo: .repository.nameWithOwner, number: .number, title: .title,
+          createdAt: .createdAt, author: (.author.login // "somebody") }
+      | select("\(.repo)#\(.number)" != $list) ]
+    | .[]
+    | [.repo, (.number|tostring), .author, .createdAt, .title]
+    | @tsv
+  ' <<<"$found") || die "the held issues could not be read"
+
+  [ -n "$rows" ] || return 0
+
+  {
+    while IFS=$'\t' read -r repo number author created title; do
+      [ -n "${repo:-}" ] || continue
+      since=$(held_since "$repo" "$number")
+      if [ -n "$since" ]; then
+        age=$(days_since "$since")
+        measured="held for $(spell_days "$age")"
+      else
+        since=$created
+        age=$(days_since "$since")
+        measured="open for $(spell_days "$age"), and when the hold went on could not be read"
+      fi
+      # **Column four carries the age in days and not a rank.** A held row is
+      # never sorted against the labelled ones, and the heading needs one number
+      # a reader of the file can take without parsing an English sentence.
+      #
+      # **The author in a code span and never as `@name`.** This line is written
+      # into an issue body once a day, and a plain mention would notify whoever
+      # opened the issue every single time the list is rewritten.
+      printf '%s\t%s\t%s\t%s\t%s\t\topened by `%s`, %s\t%s\n' \
+        "$repo" "$number" "$CLEARANCE_ROUTE" "$age" "$since" \
+        "$author" "$measured" "$title"
+    done <<<"$rows"
+  } | sort -t$'\t' -k4,4nr
+}
+
+# The two findings that are not labelled work, in one call because every way out
+# of `entries` needs both of them (`#381`, `#391`). A section reachable only when
+# something else happened to be waiting is a section nobody can rely on.
+extras() {
+  clearance
+  stuck "$1"
+}
+
 # One row per waiting issue: repo, number, route, rank, created, blockers (space
 # separated, `owner/repo#n`), why, title.
 entries() {
@@ -175,7 +293,7 @@ entries() {
   # report *the board could not be read* about a failure that is really the
   # search, and the message a red run leaves is most of what it is worth.
   if [ -z "$issues" ] || [ "$(jq 'length' <<<"$issues")" -eq 0 ]; then
-    stuck ""
+    extras ""
     return 0
   fi
 
@@ -224,7 +342,7 @@ entries() {
   ' <<<"$issues") || die "the labelled issues could not be read"
 
   if [ -z "$rows" ]; then
-    stuck "$board"
+    extras "$board"
     return 0
   fi
 
@@ -246,9 +364,10 @@ entries() {
   done <<<"$rows"
 
   # **After the labelled rows and never mixed into them.** A stuck card is not
-  # waiting to be started — somebody started it — so it is a different question
-  # with a different answer, and `body` gives it its own section.
-  stuck "$board"
+  # waiting to be started — somebody started it — and a held one may not be
+  # started at all: three different questions with three different answers, and
+  # `body` gives each of them its own section.
+  extras "$board"
 }
 
 # The markdown, with a package as one entry (`#265`).
@@ -265,11 +384,14 @@ body() {
   if [ ! -s "$file" ]; then
     printf '%s\n' "Nothing is waiting for a Claude agent or for a person right now." \
       "" \
+      "**Nothing is waiting for your clearance either.** No open issue carries \`$CLEARANCE_LABEL\` (\`kolonie-docs#391\`)." \
+      "" \
       "This issue is rewritten once a day by \`.github/workflows/waiting-for-an-agent.yml\` (\`kolonie-docs#265\`). It comments only when the list changes, so an unread notification here always means something arrived."
     return 0
   fi
 
-  awk -F'\t' -v stuck_route="$STUCK_ROUTE" '
+  awk -F'\t' -v stuck_route="$STUCK_ROUTE" -v held_route="$CLEARANCE_ROUTE" \
+      -v clearance_label="$CLEARANCE_LABEL" '
     # **The stuck rows are taken out first and counted separately** (`#381`).
     # They are not waiting to be started, so folding them into the headline would
     # make the one number on this list mean two things — and folding them into
@@ -281,6 +403,17 @@ body() {
       stuck_why[stuck_count] = $7; stuck_title[stuck_count] = $8
       next
     }
+    # **And the held rows are taken out for the same reason** (`#391`). A held
+    # issue is not waiting to be started by anybody — it may not be started at
+    # all until a member lifts the label — so counting it in the headline would
+    # make the one number on this list mean a third thing.
+    $3 == held_route {
+      held_repo[++held_count] = $1; held_number[held_count] = $2
+      held_age[held_count] = $4 + 0
+      held_why[held_count] = $7; held_title[held_count] = $8
+      if ($4 + 0 > held_oldest) held_oldest = $4 + 0
+      next
+    }
     {
       key = $1 "#" $2
       order[++count] = key
@@ -289,6 +422,7 @@ body() {
       # Every issue starts in a package of its own; a link merges two.
       root[key] = key
     }
+    function spell(d) { return d == 0 ? "less than a day" : (d == 1 ? "1 day" : d " days") }
     function find(k) { while (root[k] != k) { root[k] = root[root[k]]; k = root[k] } return k }
     function union(a, b,  ra, rb) { ra = find(a); rb = find(b); if (ra != rb) root[rb] = ra }
     END {
@@ -332,6 +466,33 @@ body() {
           printf "   - `%s` — %s\n", route[m], why[m]
           if (waits[m] != "") printf "   - waits for %s\n", waits[m]
         }
+        print ""
+      }
+
+      # **The section a person is the only one who can end** (`#391`). While
+      # `needs-clearance` is on an issue it goes nowhere — both workers take work
+      # from Ready and a held issue is never moved there (`#390`) — and it goes
+      # nowhere in **Inbox**, which is also where undecided work lives. So it is
+      # not visibly waiting for anything, and this line is the whole of what
+      # tells anybody it is there.
+      #
+      # **It is printed on a day when nothing is held too**, as a sentence. An
+      # empty heading reads as a section that broke; a sentence reads as an
+      # answer, and this file already draws that distinction for the list itself.
+      print "---"
+      print ""
+      if (held_count > 0) {
+        printf "## %d waiting for your clearance, oldest %s\n\n", held_count, spell(held_oldest)
+        print "These carry `" clearance_label "`, and **only a member of the organisation takes that off** (`kolonie-docs#389`). While it is on, the card is held out of **Ready** and neither worker will pick the issue up (`kolonie-docs#390`) — so nothing here is queued behind anything except a person looking at it. Taking the label off leaves nothing behind: the next triage pass treats the issue exactly as it would any other."
+        print ""
+        for (i = 1; i <= held_count; i++) {
+          printf "- [`%s#%s`](https://github.com/%s/issues/%s) — %s\n", \
+            held_repo[i], held_number[i], held_repo[i], held_number[i], held_title[i]
+          printf "   - %s\n", held_why[i]
+        }
+        print ""
+      } else {
+        print "**Nothing is waiting for your clearance.** No open issue carries `" clearance_label "` right now, so there is nothing here for a member to lift (`kolonie-docs#391`)."
         print ""
       }
 
