@@ -337,7 +337,35 @@ jobs:
           # something is — it is work on something already decided.
           issue=$(grep -oiE '\b(fixes|closes|resolves) +#[0-9]+' <<< "${BODY:-}" | head -n1 | grep -oE '[0-9]+' || true)
 
+          # The issue the **title** names, which is a different claim from the one
+          # above and the whole of `#387`. House style ends a title `(#n)`, and a
+          # squash merge carries that subject onto `main` — where it closes
+          # nothing, because `Closes #n` in the body is what does. `board-self-check.sh`
+          # already says that in as many words; what it cannot see is the result,
+          # because an open issue whose card is still in Ready is what an
+          # untouched issue looks like. So it is caught here, while somebody is
+          # looking at the pull request, or not at all.
+          titled=$(grep -oE '\(#[0-9]+\) *$' <<< "$TITLE" | grep -oE '[0-9]+' || true)
+          # GitHub's own squash subject is `… (#<this pull request>)`. A title
+          # naming itself is that, and not a reference to anything.
+          [ "$titled" = "$NUMBER" ] && titled=""
+          # And it has to be an issue that exists. `gh issue view` answers for a
+          # pull request too, so the kind is checked rather than assumed —
+          # otherwise a title ending in some other pull request's number produces
+          # a confident sentence about an issue nobody filed.
+          if [ -n "$titled" ] \
+             && ! gh issue view "$titled" --repo "$REPO" --json id >/dev/null 2>&1; then
+            titled=""
+          fi
+
           notes=""
+          # Kept apart from `notes` on purpose. `notes` is introduced as a list
+          # that fails nothing and needs no action, which is exactly right for a
+          # branch name — and is why the generic version of the warning below was
+          # skipped on `#384` by the person who had just written the pull request
+          # (`#387`). A thing worth doing before merge cannot be filed under a
+          # heading that says nothing here is worth doing.
+          flags=""
           if [ -n "$issue" ]; then
             inherited=$(gh issue view "$issue" --repo "$REPO" --json labels \
               --jq '[.labels[].name | select(startswith("area:") or . == "p1" or . == "p2")] | join(",")' 2>/dev/null || true)
@@ -347,6 +375,24 @@ jobs:
             else
               add "area:${AREA}"
             fi
+          elif [ -n "$titled" ]; then
+            # The title named it, so it is as good a source of `area:` and
+            # priority as a closing keyword would have been — same argument as
+            # above, that a pull request does not re-decide what something is.
+            inherited=$(gh issue view "$titled" --repo "$REPO" --json labels \
+              --jq '[.labels[].name | select(startswith("area:") or . == "p1" or . == "p2")] | join(",")' 2>/dev/null || true)
+            if [ -n "$inherited" ]; then
+              add "$inherited"
+              echo "inherited from the title's #$titled: $inherited"
+            else
+              add "area:${AREA}"
+            fi
+            # `$'\n'` rather than a literal line break, exactly as the notes
+            # below are written. A continuation line starts at column 1 and a
+            # line at column 1 ends the `run: |` block scalar, so the workflow
+            # stops being parseable YAML — which `rehearse-triage.sh` says in
+            # those words rather than by failing a case.
+            flags="${flags}"$'\n'"- **The title says this is \`#${titled}\`, and the body closes nothing.** A subject ending \`(#n)\` closes no issue — only \`Closes #${titled}\` in the body does. Merge it as it stands and the work lands while [\`#${titled}\`](https://github.com/${REPO}/issues/${titled}) stays open on its board column, where \`pick\` can hand it to the next agent as unstarted work. Add the line, or say in the body why this only partly answers it — a pull request that deliberately leaves an issue open is a real thing and \`kolonie-platform#899\` is one."
           else
             add "area:${AREA}"
             notes="${notes}"$'\n- **No issue is referenced.** A pull request that closes no issue is not automatically wrong, but it should say so deliberately — add `Fixes #<n>`, or a line explaining why there is none. Without it nothing links the work to the decision behind it.'
@@ -356,7 +402,19 @@ jobs:
           # Messages. A comment, never a failed check: a title is renamed in
           # three seconds and a red X on someone's first contribution is a
           # disproportionate way to ask for it.
-          if ! grep -qE '^(feat|fix|docs|test|chore|refactor|perf|build|ci|style|revert)(\([^)]+\))?!?: .+' <<< "$TITLE"; then
+          #
+          # **Skipped for an author with push access, exactly as the branch-name
+          # note below already is, and for the same reason** (`#387`). That guide
+          # is written for contributions from a fork — *"create a branch from
+          # `main` in your fork"* — and the house style inside the organisation is
+          # a prose subject ending `(#n)`. So this note fired on essentially every
+          # internal pull request, which made the whole comment boilerplate: a
+          # block whose first line promises nothing in it needs fixing and whose
+          # contents are reliably not worth reading is a block readers learn to
+          # skip, and then the one line that did matter is skipped with it. That
+          # is not hypothetical — it is what happened on `#384`.
+          if [ "$has_push" = false ] \
+             && ! grep -qE '^(feat|fix|docs|test|chore|refactor|perf|build|ci|style|revert)(\([^)]+\))?!?: .+' <<< "$TITLE"; then
             notes="${notes}"$'\n- **The title is not a conventional commit.** `feat: …`, `fix: …`, `docs: …`, `test: …` — see [contributor-guide.md](https://github.com/Kolonie-AI/kolonie-docs/blob/main/onboarding/contributor-guide.md#commit-messages). Nothing is blocked by this.'
           fi
 
@@ -371,10 +429,23 @@ jobs:
           gh pr edit "$NUMBER" --repo "$REPO" --add-label "$labels"
           echo "applied: $labels"
 
-          if [ -n "$notes" ]; then
+          if [ -n "$notes" ] || [ -n "$flags" ]; then
             comment=$'Thanks for the pull request — it is labelled and on the board.\n\n'
-            comment+=$'A few conventions, none of which fail anything and none of which need fixing before review:\n'
-            comment+="$notes"
+            # Flags first, under their own heading, and the heading does not
+            # promise that nothing here matters. **Still nothing is failed and
+            # nothing is blocked** — `#387` is explicit that a partial answer to
+            # an issue stays legitimate, and turning `main` red over a missing
+            # keyword would be worse than the thing it catches.
+            if [ -n "$flags" ]; then
+              comment+=$'**Worth a look before this merges.** Nothing here fails a check or blocks the merge:\n'
+              comment+="$flags"
+              comment+=$'\n'
+              [ -n "$notes" ] && comment+=$'\n'
+            fi
+            if [ -n "$notes" ]; then
+              comment+=$'A few conventions, none of which fail anything and none of which need fixing before review:\n'
+              comment+="$notes"
+            fi
             comment+=$'\n\nThe Reviewer Agent reads this once CI has passed, and a maintainer reads the review ([`kolonie-docs#42`](https://github.com/Kolonie-AI/kolonie-docs/issues/42)). It never approves a red build and never approves a change to the ledger, the verifiers or governance. If you are an agent, **check back on this pull request yourself** — neither the review nor the merge will reach you any other way ([`kolonie-docs#43`](https://github.com/Kolonie-AI/kolonie-docs/issues/43)).'
             gh pr comment "$NUMBER" --repo "$REPO" --body "$comment"
           fi
