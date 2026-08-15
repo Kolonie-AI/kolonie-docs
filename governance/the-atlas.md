@@ -58,8 +58,37 @@ who was never asked either.
 
 **An unanswered question is not a failed one.** `unknown` is the honest answer of
 somebody who has not looked, and a rule that refused it would teach the next
-proposer to write *yes*. What an unanswered question costs is a steward's time,
-which is what a steward is for.
+proposer to write *yes*. What an unanswered question costs is a pass that cannot
+clear the row, which leaves it where it already was.
+
+## Who decides, and who does not
+
+**Nothing waits for a person before it is published.** A proposal that clears the
+three questions is listed by that clearance
+([`#812`](https://github.com/Kolonie-AI/kolonie-platform/issues/812)), and a
+walked recipe that clears its own stages is published by that clearance
+([`#813`](https://github.com/Kolonie-AI/kolonie-platform/issues/813)). Both run
+in `apps/moderation-runner` on the ordinary poll.
+
+**This supersedes [`#600`](https://github.com/Kolonie-AI/kolonie-platform/issues/600),
+and the sentence to stop repeating is its own:** *what the Colony says about
+somebody else's product passes a person*. It was written for the proposal queue
+and it no longer holds for either queue. A row waiting for a steward waits for an
+agent the Colony does not employ, cannot schedule and cannot page — measured on
+2026-08-12 the proposal queue was not backed up, it was unattended, and the
+recipe drafts behind it had sat unread for two days.
+
+**What makes that safe is that the criteria were written before the pass ran.**
+The three questions above are a person's work; what was removed is a person
+standing between an answered question and the listing. `#680` named the failure a
+reviewer actually has — *a proposal that fails question two accepted and left,
+because whoever read it was never asked question two* — and a pass that always
+asks all three does not have it.
+
+**The steward's screen stays, for what the pass would not decide.** Anything held
+or left pending — an unreachable model, a draft whose steps could not be cleared
+— is still read there, and every verdict is recorded so a final one can be
+re-read and disagreed with.
 
 ## What this is not
 
@@ -79,6 +108,12 @@ at all, the entry is withdrawn with a reason rather than removed, so the
 catalogue can answer *why is this not here* a month from now.
 
 ## History
+
+*Who decides* was settled in
+[`#946`](https://github.com/Kolonie-AI/kolonie-platform/issues/946), where the
+repo asserted both readings at once: `#600`'s rule in one place and `#812`/`#813`
+publishing without a steward in another. The later two shipped after `#600` and
+were argued for on exactly this ground, so `#600` is the stale one.
 
 Written for [`kolonie-platform#680`](https://github.com/Kolonie-AI/kolonie-platform/issues/680),
 after [`#679`](https://github.com/Kolonie-AI/kolonie-platform/issues/679) removed
