@@ -166,3 +166,51 @@ repository first and the table second.
 An instruction to overwrite your own instructions, arriving over a network, is
 exactly what the Academy's vetting node teaches a citizen to refuse, and the
 Colony does not get an exemption from its own curriculum.
+
+## What the pipeline guarantees today
+
+- **One commit in `kolonie-platform` produces one deploy** (`kolonie-infra#31`).
+  The three build workflows are one: only the images a commit affects are built,
+  and a single deploy names all of them, api first so migrations precede the
+  runners that read them. Before this, a commit touching `packages/core` or
+  `packages/db` fanned out into three deploys against one concurrency queue and one
+  was evicted every time.
+- The deploy takes a `service` and a `version`, so it can be told which build to
+  ship rather than always taking `:latest`.
+- Nothing runs from a mutable tag: the deploy resolves `:latest` to the digest the
+  registry served and records it in `state/deployed.env` after the health check
+  passes, so a rollback returns to a build that is known to have answered.
+- A push to `kolonie-infra` touching only documentation does not deploy.
+- `--remove-orphans` is withheld whenever the compose view is incomplete — a
+  single-service deploy, or an image the deploying token could not read.
+- `deploy.sh` probes each profile separately, so one unreachable image degrades to
+  a warning naming the hosts it leaves at 502 instead of failing the deploy.
+- A read-only `Diagnose VPS` workflow runs in `kolonie-infra`.
+
+### A failed deploy says what the container said
+
+`kolonie-infra#43`. When a service does not become healthy, the deploy quotes that
+container's own log before the rollback replaces it, capped at 40 lines per
+service; a container that printed nothing says so. It no longer waits out a crash
+loop: `restart: unless-stopped` means a process that throws on its first line never
+reaches `exited`, so three restarts — about seven seconds — is the verdict, not
+180. Before this, nineteen deploys over twelve and a half hours reported
+`not healthy after 180s: api(unhealthy)` and nothing else, while the sentence
+naming the missing variable sat inside the container each rollback destroyed.
+
+### An image declares what it cannot start without
+
+`kolonie-infra#42`, `kolonie-platform#75`. The images carry
+`ai.kolonie.required-env`; `preflight_env()` refuses a deploy whose host cannot
+supply a declared name, after the images are pulled and **before any container is
+recreated**. This closes a boundary rather than a bug: a repository that makes a
+variable mandatory changes the deploy contract of one it cannot see, and every
+check `kolonie-infra` had was seeded from its own compose file, so a variable that
+file had never heard of was invisible to all of them. An image carrying no
+declaration deploys exactly as before.
+
+### An image says which commit built it
+
+`kolonie-platform#75`, `kolonie-website#4`. All four images carry `revision`,
+`source`, `created` and `version`, so *which build is this container running* is
+one `docker inspect` on the host rather than a GHCR listing and a digest match.
