@@ -100,6 +100,26 @@ FAILED_LABEL=${FAILED_LABEL:-opencode:failed}
 # nothing may prioritise an issue that arrived from outside the Colony.
 OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external needs-triage}
 
+# ## The hold a person has to lift (`#390`)
+#
+# `inbound-triage.yml` puts `needs-clearance` on an issue whose author is not an
+# organisation member (`#389`), and anybody may put it on by hand. While it is
+# there, this pass moves the card nowhere: both workers take work from **Ready**,
+# so keeping a held issue out of that column is the whole of the hold.
+#
+# **It is a column guard and not a route guard**, which is why the routing table
+# below is untouched. Triage may read a held issue, decide it, label it
+# `agent:opencode` and say so — it still goes nowhere, because it is not in
+# Ready. One mechanism rather than two, and the half of this file the maintainer
+# is satisfied with keeps working exactly as it did.
+#
+# **It is not `OUTSIDE_PROVENANCE` and must not be folded into it.** That
+# constant answers *did this arrive from outside*, which is a fact about
+# provenance and stays true for ever; this one answers *has anybody inside looked
+# at it yet*, which a member ends with one click. `#389` says in as many words
+# that merging the two is a separate decision.
+CLEARANCE_LABEL=${CLEARANCE_LABEL:-needs-clearance}
+
 # ## Every label this pass writes, and where a repository gets it (`#333`)
 #
 # **The vocabulary is per-repository and nothing kept the copies together.**
@@ -934,8 +954,18 @@ apply_one() {
   # things that are either true or not; *not specified well enough to act on* is a
   # judgement, and two passes judged `kolonie-platform#702` differently within an
   # hour — so it went to Ready, then back to Inbox, and would have kept going.
+  #
+  # **The hold is first because it is the one a person ends** (`#390`). An issue
+  # can be held *and* blocked, and of the two reasons the label is the one a
+  # member can take off this afternoon — naming a blocker instead would send
+  # somebody to close an issue that was never what was in the way. It counts as a
+  # fact for the same reason `blocked:human` does: it is true or it is not, and
+  # nothing here is judging it.
   local why_not="" fact=""
-  if [ -n "$blockers" ]; then
+  if has_any "$labels" "$CLEARANCE_LABEL"; then
+    why_not="it carries \`$CLEARANCE_LABEL\` — nobody inside the organisation has cleared it yet, and only a member takes that off (\`kolonie-docs#389\`)"
+    fact=yes
+  elif [ -n "$blockers" ]; then
     why_not="it waits for $(echo "$blockers" | sed 's/ *$//')"
     fact=yes
   elif has_any "$labels" "blocked:human"; then
@@ -1062,15 +1092,27 @@ sweep_one() {
   open=$(awk '$1 == "open" { printf "%s ", $2 }' <<<"$dependencies")
   closed=$(awk '$1 != "open" && NF { print }' <<<"$dependencies")
 
+  # The hold comes before the blockers for the reason `apply_one` gives: of the
+  # things that can be in the way, this is the one a member ends with one click.
   local why=""
-  if [ -n "$open" ]; then
+  if has_any "$labels" "$CLEARANCE_LABEL"; then
+    why="it carries \`$CLEARANCE_LABEL\` — nobody inside the organisation has cleared it yet, and only a member takes that off (\`kolonie-docs#389\`)"
+  elif [ -n "$open" ]; then
     why="it waits for $(echo "$open" | sed 's/ *$//')"
   elif has_any "$labels" "blocked:human"; then
     why="it is \`blocked:human\`, which is a person's decision and not a queue position"
   fi
 
   if [ -n "$why" ]; then
-    [ "$status" = "Ready" ] || return 1
+    # **Held in Inbox is said and not done**, and a stop that leaves no trace is
+    # the *silent skip mistaken for a bug* `#390` asks against: nothing moves, so
+    # nothing is commented on, and the pass's own log is the only place the hold
+    # can be read. The card already being where it belongs is not news to the
+    # issue and is news to whoever is reading the run.
+    if [ "$status" != "Ready" ]; then
+      note "$repo#$number: held in Inbox, $why"
+      return 1
+    fi
     if move_card "$repo" "$number" Inbox >/dev/null 2>&1; then
       sweep_comment "$repo" "$number" "**Out of the queue**: $why."
       echo "$repo#$number: taken out of Ready, $why"
