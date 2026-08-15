@@ -92,6 +92,18 @@ case "$1 $2" in
         *)       echo "HTTP/2.0 404 Not Found"  ; exit 1 ;;
       esac ;;
   "issue view")
+      # Two different questions arrive here and they need different answers
+      # (`#387`). `--json labels` asks what the linked issue carries. `--json id`
+      # asks only whether the number in the title is an issue at all — and
+      # because `gh issue view` answers for a pull request too, a stub that says
+      # yes to everything would let the workflow write a confident sentence
+      # about an issue nobody filed.
+      case "$*" in
+        *"--json id"*)
+            [ "${TITLED_EXISTS:-yes}" = yes ] || exit 1
+            echo '{"id":"I_stub"}'
+            exit 0 ;;
+      esac
       # The labels on the issue a pull request says it closes.
       echo "${ISSUE_LABELS:-}"
       exit 0 ;;
@@ -279,6 +291,44 @@ contains "$log" "--add-label from:external,area:platform" "fell back to the call
 contains "$log" "pr comment" "commented"
 contains "$log" "No issue is referenced" "and the comment says which convention was missed"
 
+echo "== 8b. a title that names an issue the body does not close is flagged (#387)"
+# The case `#387` is about, and the one the generic §8 note was too vague to
+# carry. House style ends a subject `(#n)`; a squash merge puts that subject on
+# `main`, where it closes nothing. The issue then sits open in Ready with its
+# work already merged — which is what an untouched issue looks like, so no board
+# check can see it. Measured on `kolonie-docs#383`.
+out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs,p1' \
+  TITLE='Clone the whole history, because a check compares against it (#383)' \
+  BRANCH='work/x' BODY='No closing keyword anywhere in this body.')
+log=$(cat "$WORK/gh.log")
+contains "$log" "pr comment" "commented"
+contains "$log" "Worth a look before this merges" "under a heading that does not say it can be ignored"
+contains "$log" 'The title says this is `#383`' "and names the issue from the title"
+contains "$log" "--add-label area:docs,p1" "inherited from the issue the title named"
+absent "$log" "area:platform" "rather than falling back to the caller's area"
+absent "$log" "No issue is referenced" "and did not also claim no issue was referenced"
+
+echo "== 8c. …and is not flagged when the body does close it"
+out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs' \
+  TITLE='Clone the whole history (#383)' BRANCH='work/x' BODY='Closes #383')
+absent "$(cat "$WORK/gh.log")" "pr comment" "nothing to say"
+
+echo "== 8d. a title naming its own number is GitHub's squash subject, not a reference"
+# `gh pr merge --squash` writes `<title> (#<pull request>)`. A title that has
+# already been through that, or one written to match it, refers to nothing.
+out=$(run_pr env PERMISSION=write TITLE='Some change (#456)' BRANCH='work/x' BODY='No keyword.')
+log=$(cat "$WORK/gh.log")
+absent "$log" "The title says this is" "not treated as naming an issue"
+contains "$log" "No issue is referenced" "falls through to the generic note instead"
+contains "$log" "--add-label area:platform" "and to the caller's area"
+
+echo "== 8e. a number in the title that is not an issue is not asserted to be one"
+out=$(run_pr env PERMISSION=write TITLED_EXISTS=no TITLE='Some change (#99999)' \
+  BRANCH='work/x' BODY='No keyword.')
+log=$(cat "$WORK/gh.log")
+absent "$log" "The title says this is" "said nothing about a number it could not resolve"
+contains "$log" "No issue is referenced" "and fell through to the generic note"
+
 echo "== 9. conventions are commented on, never failed"
 # The rejection case that matters most here is that there is no rejection: a red
 # X on a first contribution over a title format is disproportionate, and the
@@ -294,11 +344,32 @@ echo "== 10. a maintainer's own branch name is not policed"
 out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs' TITLE='fix: a thing' BRANCH='quick-fix' BODY='Fixes #12')
 absent "$(cat "$WORK/gh.log")" "pr comment" "nothing to say about it"
 
+echo "== 10b. a maintainer's prose title is not policed either (#387)"
+# The sibling of §10, and the same argument: `onboarding/contributor-guide.md`
+# is written for a contribution from a fork, and the house style inside the
+# organisation is a prose subject. Before `#387` this note fired on essentially
+# every internal pull request, which turned the whole comment into boilerplate —
+# and a block whose first line promises nothing in it needs fixing, and whose
+# contents are reliably not worth reading, is a block readers learn to skip.
+# That is how the §8 note was skipped on the pull request that prompted `#387`.
+out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs' \
+  TITLE='Say what the changelog split does and does not buy' BRANCH='work/x' BODY='Closes #12')
+absent "$(cat "$WORK/gh.log")" "pr comment" "a prose title from a maintainer is left alone"
+
 echo "== 11. Conventional Commits: the shapes the guide documents are accepted"
+# No `PERMISSION`, so `has_push` is false and the note is actually reachable.
+# With `PERMISSION=write` this loop asserted only that a skipped check stays
+# skipped, which it would have kept reporting green for any regex at all.
 for title in 'feat: add x' 'fix(ledger): resolve y' 'docs: update z' 'test: add cases' 'feat!: breaking'; do
-  out=$(run_pr env PERMISSION=write ISSUE_LABELS='area:docs' TITLE="$title" BRANCH='fix/x-1' BODY='Fixes #12')
+  out=$(run_pr env ISSUE_LABELS='area:docs' TITLE="$title" BRANCH='fix/x-1' BODY='Fixes #12')
   absent "$(cat "$WORK/gh.log")" "pr comment" "accepted: $title"
 done
+
+echo "== 11b. …and a prose title from outside still gets the note"
+# The other half of §11: a loop that only ever asserts *no comment* passes just
+# as well when nothing is being checked. This is the case that proves it is.
+out=$(run_pr env ISSUE_LABELS='area:docs' TITLE='made some changes' BRANCH='fix/x-1' BODY='Fixes #12')
+contains "$(cat "$WORK/gh.log")" "is not a conventional commit" "the note is still reachable from outside"
 
 echo "== 12. every variable the workflow hands the script is exercised by a case"
 # The half of `#192` that the defaults do not cover. Defaulting a new variable to
