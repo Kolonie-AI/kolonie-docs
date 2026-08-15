@@ -36,6 +36,9 @@ contains() { # <what> <needle> <haystack>
 absent() { # <what> <needle> <haystack>
   if grep -qF -- "$2" <<<"$3"; then fail "$1 (should not have found: $2)"; else pass "$1"; fi
 }
+empty() { # <what> <output>
+  if [ -z "$2" ]; then pass "$1"; else fail "$1 (expected nothing, got: $2)"; fi
+}
 
 # --- the fixture repository ------------------------------------------------
 #
@@ -163,6 +166,32 @@ out=$(bash "$BRIEF" --issue Kolonie-AI/kolonie-platform 1 --path AGENTS.md)
 contains "* matches inside one segment" "UNIQUE-DOCS-STRING" "$out"
 out=$(bash "$BRIEF" --issue Kolonie-AI/kolonie-platform 1 --path onboarding/arrival.md)
 absent   "* does not cross a directory" "UNIQUE-DOCS-STRING" "$out"
+
+echo
+echo "--for-path: what one write routes to"
+
+# The routing question the third loading trigger asks. It answers with module
+# table rows and loads nothing, so a caller decides for itself.
+
+out=$(bash "$BRIEF" --for-path .github/workflows/ci.yml --repo kolonie-platform)
+contains "a path a module claims names that module" "board" "$out"
+absent   "and loads nothing"                        "UNIQUE-BOARD-STRING" "$out"
+
+out=$(bash "$BRIEF" --for-path src/nothing/claims/this.rs --repo kolonie-platform)
+empty "a path no module claims answers with nothing" "$out"
+
+# Unlike `--issue`, this narrows by `repos:` rather than treating it as another
+# alternative: a write carries one fact, and a module scoped to one repository
+# has said nothing about a path in a different one.
+out=$(bash "$BRIEF" --for-path AGENTS.md --repo kolonie-docs)
+contains "a scoped module claims the path in the repository it names" "docs-repo" "$out"
+out=$(bash "$BRIEF" --for-path AGENTS.md --repo kolonie-platform)
+absent   "and not in one it does not name" "docs-repo" "$out"
+
+# `roles:` and `labels:` are not consulted at all: `board` has both, and neither
+# is what a write knows.
+out=$(bash "$BRIEF" --for-path README.md --repo kolonie-platform --role orchestrator)
+empty "a role does not pull a module in on a write" "$out"
 
 echo
 echo "nothing is lost"

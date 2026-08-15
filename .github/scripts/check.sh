@@ -75,6 +75,7 @@ step "the checks are tested before they are trusted" bash -c '
   bash .github/tests/check-brief-coverage.test.sh
   bash .github/tests/check-caps.test.sh
   bash .github/tests/session-context.test.sh
+  bash .github/tests/path-context.test.sh
 '
 
 # `#365`. 216 lines on 2026-07-27, 2.021 on 2026-08-14 — every one of them a

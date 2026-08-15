@@ -62,6 +62,7 @@ than on a machine:
 bash .github/scripts/brief.sh --manifest          # what a session starts with
 bash .github/scripts/brief.sh --module <name>     # one module, in full
 bash .github/scripts/brief.sh --issue <owner/repo> <n>   # what one issue asks for
+bash .github/scripts/brief.sh --for-path <path>   # what one write routes to
 bash .github/scripts/session.sh take <issue>      # claims the checkout and prints that brief
 ```
 

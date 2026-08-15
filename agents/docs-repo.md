@@ -171,6 +171,43 @@ catches a chronicle pretending to be a reference; it does not catch an honestly
 maintained reference that simply covers more every week. The whole argument is in
 [`state/decisions/status-md-grew-because-both-rules-bound-shape-and-neither-bound-count.md`](../state/decisions/status-md-grew-because-both-rules-bound-shape-and-neither-bound-count.md).
 
+### The three moments a module can arrive
+
+Routing decides *what* accompanies a piece of work. These decide *when*, and
+they are three because there are three moments at which the Colony learns
+something new about what the work is:
+
+| Trigger | What it knows | What runs |
+|---|---|---|
+| A session starts | nothing yet, so: the red lines and a directory | `session-context.sh` |
+| An agent takes an issue | its labels, its repository, a role | `session.sh take <issue>` |
+| A session first writes a path | one path, in one repository | `path-context.sh` |
+
+The third is the only one that fires on *evidence* rather than on a plan
+(`#371`). A brief is assembled from what an issue says the work will be; a write
+is the first thing that says what it actually is, and it is the moment a module
+about that area stops being a guess. It emits **once per session per module**,
+before the write lands, and nothing at all for a path no module claims.
+
+**The write trigger asks a narrower routing question than an issue does.** An
+issue carries a role *and* labels *and* a repository, so `applies-to:` keys are
+alternatives and any of them may pull a module in. A write carries one fact, so
+`paths:` decides and `repos:` narrows it: a module claiming `.github/**` *in
+kolonie-docs* has said nothing about `.github/` in a repository it does not
+name. Nothing extra is maintained for this — it is the same front matter, read
+for the question actually being asked.
+
+**Whatever is machine-local is a shim, and the policy is here.** A hook on a
+laptop is unreviewed, untested and invisible to everybody else; three of them
+drift into three different colonies. What genuinely belongs to the machine is
+where this clone is, which is one variable — so `~/.claude/hooks/*` calls one of
+the scripts above and holds no rules of its own. It also means the write trigger
+works in **every** repository an agent touches, not only in this one: the path
+is resolved against its own worktree, the repository is the one that worktree's
+`origin` names — not its directory, which is `kolonie-platform-colette` under
+the per-session worktree `agents/session.md` asks for — and this clone is only
+where the modules are read from.
+
 ### Where a new issue belongs
 
 | Kind of work | Repository |

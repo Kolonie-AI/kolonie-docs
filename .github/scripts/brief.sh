@@ -6,11 +6,13 @@
 #   brief.sh --manifest                     # what a session starts with: red lines, the loop, a directory
 #   brief.sh --module <name>[,<name>...]    # one named module, or several, in full
 #   brief.sh --issue <owner/repo> <number>  # the modules that issue's labels and repository ask for
+#   brief.sh --for-path <path>              # the modules that claim a path being written
 #   brief.sh --modules                      # the module table, one row per module, for a script
 #   brief.sh --index                        # every Markdown file in the repository, by name
 #
 # Options: --role <role> (default `worker`), --path <path> (repeatable),
-#          --max-tokens <n>, --no-content (name what would be loaded, load nothing).
+#          --repo <name> (what --for-path is asked about), --max-tokens <n>,
+#          --no-content (name what would be loaded, load nothing).
 #
 # ## Why this exists
 #
@@ -106,6 +108,11 @@ MAX_TOKENS=${BRIEF_MAX_TOKENS:-6000}
 ROLE=worker
 PATHS=()
 WITH_CONTENT=yes
+
+# Which repository `--for-path` is asking about. Empty means *do not narrow*: a
+# module naming `repos:` claims the path anyway, which is what a caller who
+# cannot say where it is gets.
+REPO_NAME=''
 
 die() { echo "brief.sh: $1" >&2; exit "${2:-1}"; }
 
@@ -224,6 +231,21 @@ path_of_module() { # <name>
   modules | awk -F'\t' -v n="$1" '$1==n {print $2; exit}'
 }
 
+# One `paths:` glob against one repository-relative path. `**` crosses
+# directories and `*` does not, which is what the front matter means by them.
+# `**/` also matches *no* directory at all, so `**/*.md` claims `AGENTS.md` as
+# well as `agents/board.md` — a pattern that claimed every Markdown file except
+# the ones at the root would be a trap, and every module writing it means all of
+# them. `extglob` is off, so this is done by hand.
+glob_matches() { # <pattern> <path>
+  local regex=${1//\*\*\//$'\x01'}
+  regex=${regex//\*\*/$'\x02'}
+  regex=${regex//\*/[^\/]*}
+  regex=${regex//$'\x01'/(.*\/)?}
+  regex=${regex//$'\x02'/.*}
+  [[ "$2" =~ ^${regex}$ ]]
+}
+
 # Does this module apply, given a role, a set of labels, a repository and the
 # paths being touched? Prints the reason it matched, or nothing.
 module_matches() { # <path> <labels-csv> <repo>
@@ -252,12 +274,7 @@ module_matches() { # <path> <labels-csv> <repo>
   while IFS= read -r pattern; do
     [ -n "$pattern" ] || continue
     for p in ${PATHS+"${PATHS[@]}"}; do
-      # `**` crosses directories and `*` does not, which is what the patterns in
-      # the front matter mean by them. `extglob` off, so this is done by hand.
-      local regex=${pattern//\*\*/$'\x01'}
-      regex=${regex//\*/[^\/]*}
-      regex=${regex//$'\x01'/.*}
-      [[ "$p" =~ ^${regex}$ ]] && { echo "path $pattern"; return 0; }
+      glob_matches "$pattern" "$p" && { echo "path $pattern"; return 0; }
     done
   done < <(fm_applies "$fm" paths)
 
@@ -384,21 +401,6 @@ cmd_index() {
   done < <(cd "$ROOT" && git ls-files '*.md' | sort)
 }
 
-# The same rows in reading order: the binding core, then what it routes to, then
-# the documents. `modules` stays sorted by path because a script wants a stable
-# order; a person wants the contract first.
-modules_for_reading() {
-  modules | awk -F'\t' '
-    $2 == "AGENTS.md"        { core = $0; next }
-    $2 ~ /^agents\//         { routed[++r] = $0; next }
-                             { rest[++t] = $0 }
-    END {
-      if (core) print core
-      for (i = 1; i <= r; i++) print routed[i]
-      for (i = 1; i <= t; i++) print rest[i]
-    }'
-}
-
 # ---------------------------------------------------------------------------
 # --modules — the table, for a script
 # ---------------------------------------------------------------------------
@@ -510,6 +512,42 @@ WHY
 }
 
 # ---------------------------------------------------------------------------
+# --for-path — which modules claim a path that is about to be written
+# ---------------------------------------------------------------------------
+#
+# The routing question behind the third loading trigger. It prints the module
+# table's own rows — name, path, summary — and nothing else, so a caller decides
+# for itself whether to load them; `--module` is what loads.
+#
+# **`paths:` decides, narrowed by `repos:` where a module names one, and no
+# other key is consulted.** This is the one place the `applies-to:` keys are not
+# alternatives, and the reason is what the caller knows. An issue carries a
+# role *and* labels *and* a repository, so any of them may pull a module in. A
+# write carries one fact — this path, in this repository — and a module claiming
+# `.github/**` *in kolonie-docs* has not said anything about `.github/` in a
+# repository it does not name. Nothing new is maintained either way: the same
+# front matter, read for the question actually being asked.
+cmd_for_path() { # <path>
+  local target=$1 name path summary fm pattern repos
+  while IFS=$'\t' read -r name path summary; do
+    fm=$(front_matter_of "$ROOT/$path")
+
+    repos=$(fm_applies "$fm" repos)
+    if [ -n "$repos" ] && [ -n "$REPO_NAME" ] && ! grep -qxF "$REPO_NAME" <<<"$repos"; then
+      continue
+    fi
+
+    while IFS= read -r pattern; do
+      [ -n "$pattern" ] || continue
+      if glob_matches "$pattern" "$target"; then
+        printf '%s\t%s\t%s\n' "$name" "$path" "$summary"
+        break
+      fi
+    done < <(fm_applies "$fm" paths)
+  done < <(modules_for_reading)
+}
+
+# ---------------------------------------------------------------------------
 
 mode=''
 mode_arg=''
@@ -519,11 +557,13 @@ while [ $# -gt 0 ]; do
     --manifest|--index|--modules) mode=${1#--} ;;
     --module)   mode=module; mode_arg=${2:?--module needs a name}; shift ;;
     --issue)    mode=issue ;;
+    --for-path) mode=for-path; mode_arg=${2:?--for-path needs a path}; shift ;;
     --role)     ROLE=${2:?--role needs a role}; shift ;;
     --path)     PATHS+=("${2:?--path needs a path}"); shift ;;
+    --repo)     REPO_NAME=${2:?--repo needs a name}; shift ;;
     --max-tokens) MAX_TOKENS=${2:?--max-tokens needs a number}; shift ;;
     --no-content) WITH_CONTENT=no ;;
-    -h|--help)  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)         die "unknown option $1" 2 ;;
     *)          args+=("$1") ;;
   esac
@@ -538,5 +578,6 @@ case $mode in
   modules)  cmd_modules ;;
   module)   cmd_module "$mode_arg" ;;
   issue)    cmd_issue "${args[0]:?--issue needs <owner/repo> <number>}" "${args[1]:?--issue needs <owner/repo> <number>}" ;;
-  *)        die "one of --manifest, --module <name>, --issue <owner/repo> <n>, --modules, --index" 2 ;;
+  for-path) cmd_for_path "$mode_arg" ;;
+  *)        die "one of --manifest, --module <name>, --issue <owner/repo> <n>, --for-path <path>, --modules, --index" 2 ;;
 esac
