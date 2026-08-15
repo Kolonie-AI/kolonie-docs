@@ -121,6 +121,19 @@ issue, the pass finds a self-contained change with a decisive check and answers
   only reason this asymmetry is worth relying on — a rule a script enforces is a
   rule a script can be talked out of.
 
+**While it is on, nothing reaches Ready** (`#390`). Both workers take work from
+that column, so `board-triage.sh` holds the card there and nowhere else: an issue
+carrying the label is never moved from Inbox to Ready, by either half of the pass,
+and one already in Ready is moved back once with a comment naming the label. Held
+in Inbox it is left alone and the run says so in its own log, because a stop that
+leaves no trace reads as a bug.
+
+**The hold is on the column and not on the route**, which is what keeps it to one
+mechanism. A held issue may be triaged, may be labelled `agent:opencode`, may be
+commented on and linked and argued about — it still goes nowhere. Taking the label
+off leaves nothing behind: the next sweep treats the issue exactly as it would any
+other, with no second approval and no residue.
+
 **It is not `needs-triage` and does not replace it.** The two overlap in trigger
 and not in effect: `needs-triage` is load-bearing inside `board-triage.sh`'s
 `OUTSIDE_PROVENANCE`, which drives the priority guard and the `agent:claude`

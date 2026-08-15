@@ -1145,6 +1145,78 @@ absent "an issue that never had a blocker is left where a person put it" \
   "single-select-option-id" "$log"
 absent "and is not commented on" "issue comment" "$log"
 
+echo
+echo "a held issue does not reach Ready, whatever its route says (#390)"
+
+# The hold `#389` puts on an issue nobody inside the organisation has looked at,
+# enforced where both workers actually pick work up. The route is untouched — this
+# issue is `agent:opencode` and stays `agent:opencode`; what it does not get is a
+# queue position.
+case_setup
+searched "$(issue 900 'from a stranger, routed, and waiting to be cleared' 'agent:opencode needs-clearance')"
+boarded "900|Ready|agent:opencode needs-clearance"
+out=$(run_sweep)
+log=$(cat "$GH_LOG")
+contains "needs-clearance takes a decided issue out of Ready" \
+  "single-select-option-id 78639a6d" "$log"
+contains "and the comment names the label" "needs-clearance" "$log"
+contains "and says who takes it off" "only a member takes that off" "$log"
+absent "and the route is not touched — the hold is on the column" \
+  "issue edit" "$log"
+contains "and the run counts the move" "the sweep moved 1 card(s)" "$out"
+
+# The way back is the same guard read from the other side. An issue held in Inbox
+# whose blockers have all closed would otherwise come back to Ready on the next
+# pass, which is the hole this closes: nothing else stands between a held issue
+# and the worker.
+case_setup
+searched "$(issue 900 'held, and its blocker has closed' 'agent:claude needs-clearance')"
+boarded "900|Inbox|agent:claude needs-clearance"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "closed"}]
+JSON
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+absent "a held issue in Inbox does not come back to Ready" \
+  "single-select-option-id 0ce10d81" "$log"
+# `#390`: a stop that leaves no trace is a silent skip, and a silent skip is read
+# as a bug. Nothing moved, so nothing is commented on — the run's own log is where
+# the hold is legible.
+absent "and it is not commented on, because nothing moved" "issue comment" "$log"
+contains "and the run says it held the issue and why" \
+  "held in Inbox" "$(cat "$WORK/stderr")"
+
+# The rejection case. Removing the label leaves nothing behind: the next pass
+# treats the issue as it would any other, with no second approval and no residue.
+case_setup
+searched "$(issue 900 'cleared by a member, and its blocker has closed' 'agent:claude')"
+boarded "900|Inbox|agent:claude"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "closed"}]
+JSON
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+contains "the same issue without the label goes to Ready as any other would" \
+  "single-select-option-id 0ce10d81" "$log"
+absent "and nothing about the hold is left behind" "needs-clearance" "$log"
+
+# The model's half makes the same move at the end of its own decision, so the
+# guard has to be in both or an undecided held issue walks straight past it.
+case_setup
+searched "$(issue 900 'nobody has cleared this, and nobody has routed it' 'needs-clearance')"
+boarded "900|Inbox|needs-clearance"
+run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a held issue the pass has just decided is not moved to Ready either" \
+  "single-select-option-id 0ce10d81" "$log"
+# `#390` in as many words: *triage may decide the issue and may even label it
+# `agent:opencode` — it still goes nowhere, because it is not in Ready.* The
+# unattended route is written here and the card does not move, which is the whole
+# argument for holding the column rather than the route.
+contains "the route is written all the same, unattended and all" \
+  "--add-label agent:opencode" "$log"
+contains "and the comment says what is holding it" "needs-clearance" "$log"
+
 # The two halves partition the two columns: the sweep walks the decided ones and
 # `apply_one` makes the same move at the end of its own decision. An undecided
 # issue swept as well would be moved twice and commented on twice about one move.
