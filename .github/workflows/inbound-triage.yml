@@ -244,6 +244,34 @@ jobs:
             echo "provenance is not answerable with this token: left to board-triage.sh"
           fi
 
+          # **The hold a person has to lift** (`#389`). `needs-clearance` says
+          # nobody inside the organisation has looked at this yet; GitHub refuses
+          # a label change from anyone without push access, so the asymmetry is
+          # the platform's rather than a script's, and that is the only reason it
+          # is worth relying on.
+          #
+          # **It is not `needs-triage` and does not replace it.** That label is
+          # load-bearing inside `board-triage.sh`'s `OUTSIDE_PROVENANCE`, which
+          # drives the priority guard and the `agent:claude` route cap. Merging
+          # the two is a separate decision and `#389` says in as many words that
+          # it must not be taken as a tidy-up while implementing this.
+          #
+          # **`unknown` is held and `from:external` still is not, and the
+          # difference is what each label claims.** `from:external` is a *fact*
+          # about where an issue came from: guessing it onto a colleague writes a
+          # permanent falsehood that `board-triage.sh` will never correct, because
+          # it only fills a `from:` in where none is present. `needs-clearance` is
+          # a *state* — whether anybody has looked — and it is wrong in one
+          # direction only for as long as it takes a member to click it off. No
+          # sweep applies this label later, so an issue held here on an
+          # inconclusive answer is held, and one not held here is never held at
+          # all. Failing towards the removable error is the whole design.
+          if [ "$membership" != member ]; then
+            ensure_label needs-clearance B60205 \
+              "Not cleared yet. Only an organisation member takes this off."
+            labels="${labels},needs-clearance"
+          fi
+
           gh issue edit "$NUMBER" --repo "$REPO" --add-label "$labels"
           echo "applied: $labels"
 

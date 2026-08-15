@@ -162,9 +162,15 @@ echo "== 1. an issue from outside the organisation gets all three labels"
 # question, asked in §1b and §1c.
 out=$(run_issue env EXISTING='[]' BODY='Something is broken.')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage,from:external" "labelled area, needs-triage and from:external"
+contains "$log" "--add-label area:platform,needs-triage,from:external,needs-clearance" "labelled area, needs-triage, from:external and needs-clearance"
 contains "$log" "issue comment 123" "commented"
 absent "$log" "from:citizen" "never from:citizen — nothing here came through a support ticket"
+# `#285` again, for the label `#389` adds: `gh issue edit` applies its labels in
+# one call, so a `needs-clearance` missing from a repository would cost that
+# issue its `area:`, its route cap and its reply as well — silently, from where
+# the contributor is standing. Created by the workflow that applies it, never by
+# hand in each repository.
+contains "$log" "label create needs-clearance" "created the label in a repository that lacks it"
 
 echo "== 1b. an organisation member without push access is not called external (#335)"
 # The half of `#335` that no live issue had yet hit and that would have been
@@ -175,6 +181,7 @@ out=$(run_issue env MEMBERSHIP=member EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform,needs-triage" "still labelled, because they still could not have"
 absent "$log" "from:" "and carries no provenance label at all"
+absent "$log" "needs-clearance" "and is not held: a member has, by definition, been inside the organisation"
 
 echo "== 1c. a token that cannot answer applies nothing and says so (#335)"
 # `GITHUB_TOKEN` acts as the repository rather than as a member, so it can get a
@@ -187,6 +194,11 @@ log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform,needs-triage" "labelled and routed as usual"
 absent "$log" "from:" "no provenance guessed"
 contains "$out" "left to board-triage.sh" "and the deferral is in the log"
+# The half of `#389` that the provenance label deliberately does not do. No sweep
+# applies `needs-clearance` later, so an issue not held here is never held — and
+# unlike a wrong `from:external`, a wrong hold costs one click from any member.
+# `from:` defers and this does not, on purpose.
+contains "$log" "needs-clearance" "and is held anyway, because nothing else ever will"
 
 echo "== 2. …even when they somehow arrive with labels already on"
 # Not a hypothetical: an issue can be labelled by an automation before this runs.
@@ -206,6 +218,7 @@ out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform,needs-triage" "labelled"
 absent "$log" "from:" "no provenance label"
+absent "$log" "needs-clearance" "and no hold — this is the rejection case `#389` names by handle"
 absent "$log" "api orgs" "and membership was not even asked — push access settles it"
 
 echo "== 5. the comment asks for acceptance criteria only when there are none"
@@ -238,6 +251,7 @@ log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform" "area: applied, because it is the one label that is always true"
 absent "$log" "from:" "no provenance label — the Colony's own runner is not a contributor"
 absent "$log" "needs-triage" "not marked needs-triage — the detector already routed it"
+absent "$log" "needs-clearance" "and not held: what `kolonie-triage` files was moderated before it arrived"
 absent "$log" "issue comment" "not thanked"
 
 out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot EXISTING='["area:platform"]' BODY='x')
