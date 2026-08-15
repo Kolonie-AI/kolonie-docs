@@ -3,7 +3,7 @@ module: labels
 summary: Priority, area, type, origin, and blocked:human.
 applies-to:
   roles: [orchestrator]
-  labels: [needs-triage]
+  labels: [needs-triage, needs-clearance]
 ---
 
 # Labels
@@ -71,6 +71,10 @@ other side.
 changes how it is read and what may be done to it — and, for the last two rows of
 the routing table below, what may be done to it *at all*.
 
+**State** — `needs-clearance`, and it is the only one. Whether anybody inside the
+organisation has looked at an issue yet, which is a different question from where
+it came from and is answered in the subsection below.
+
 **A label missing from one repository fails the whole triage of an issue, not
 one field of it** — `gh issue edit` applies its labels in one call, so a missing
 `needs-triage` cost three repositories their `area:` label and their reply too,
@@ -100,6 +104,47 @@ a citizen files a support ticket asking for a feature, the runner files it as an
 issue, the pass finds a self-contained change with a decisive check and answers
 `agent:opencode`, the worker implements it and the sweep arms auto-merge on green.
 **Nobody decided that feature, and it is in `main`.**
+
+### `needs-clearance` — the hold only a member lifts
+
+**Two ways it goes on, one way it comes off** (`#389`).
+
+- **Automatically, at creation**, by `inbound-triage.yml`, when the author is not
+  an organisation member. Same membership test that decides `from:external`, with
+  one deliberate difference: an *inconclusive* answer is held. See below.
+- **By hand, by anyone at all** — a workflow, an agent, a citizen-facing runner —
+  on anything that reaches money, credentials, the ledger, or deletion. An agent
+  that senses an issue needs a person before it is worked should be able to raise
+  the hold and walk away, without arguing the case first.
+- **Off: only an organisation member**, and nothing of ours enforces that. GitHub
+  already refuses a label change from anyone without push access, which is the
+  only reason this asymmetry is worth relying on — a rule a script enforces is a
+  rule a script can be talked out of.
+
+**It is not `needs-triage` and does not replace it.** The two overlap in trigger
+and not in effect: `needs-triage` is load-bearing inside `board-triage.sh`'s
+`OUTSIDE_PROVENANCE`, which drives the priority guard and the `agent:claude`
+route cap, and it is removed by nothing. Merging them is a separate decision and
+is not to be taken as a tidy-up on the way past.
+
+**`from:external` is a fact and this is a state.** The first is permanent and says
+where an issue came from; the second is temporary and says whether anybody has
+looked. One label answering both questions is what left `needs-triage` with no way
+to record that a maintainer had.
+
+That distinction decides the inconclusive case, where the two labels part company.
+`GITHUB_TOKEN` cannot always tell a member from a stranger, and it gets a `302`
+rather than an answer. `from:external` is withheld there, because a wrong fact
+about a colleague is permanent and `board-triage.sh` fills a `from:` in only where
+none is present. `needs-clearance` goes on, because no sweep applies it later — an
+issue not held at creation is never held — and a wrong hold lasts exactly as long
+as it takes a member to click it off. **The label fails towards the error that is
+removable.**
+
+**Measured before it was built**, over the last 40 issues in `kolonie-platform` on
+2026-08-14: this fires on one issue in forty, and on none of the Colony's own
+work. That is the argument for building it while nobody is coming through the
+door, rather than inventing the procedure at the moment it first matters.
 
 ### `from:watcher` — observed by a machine, not judged by a person
 
