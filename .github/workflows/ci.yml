@@ -67,26 +67,16 @@ jobs:
       # suite nobody runs with a shorter fuse. The link check needs it more than
       # most — a parser bug there does not make it red, it makes it find nothing
       # and pass.
+      #
+      # This step and the equivalent one in `check.sh` were two hand-written
+      # lists of the same set. They drifted in both directions, and three
+      # committed test files ended up in neither and ran nowhere at all —
+      # `kolonie-docs#378`. So the list is derived: `run-tests.sh` discovers
+      # `.github/tests/*.test.*`, and CI and the local check read the same
+      # discovery rather than agreeing by hand. A file genuinely not meant to
+      # run carries its reason in itself.
       - name: Test the checks
-        run: |
-          python3 .github/tests/check-links.test.py
-          python3 .github/tests/red-lines.test.py
-          bash .github/tests/find-red-line-copies.test.sh
-          python3 .github/tests/build-skill.test.py
-          python3 .github/tests/build-readme.test.py
-          python3 .github/tests/check-incident-order.test.py
-          python3 .github/tests/check-brand-surfaces.test.py
-          python3 .github/tests/check-skill-description.test.py
-          python3 .github/tests/check-skill-target.test.py
-          bash .github/tests/no-gateway-leak.test.sh
-          bash .github/tests/opencode-worker.test.sh
-          bash .github/tests/board-triage.test.sh
-          bash .github/tests/board-self-check.test.sh
-          python3 .github/tests/board-triage-ask.test.py
-          bash .github/tests/opencode-red.test.sh
-          bash .github/tests/opencode-context.test.sh
-          bash .github/tests/waiting-list.test.sh
-          bash .github/tests/watch-finding.test.sh
+        run: bash .github/scripts/run-tests.sh
 
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .

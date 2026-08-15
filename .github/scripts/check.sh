@@ -53,30 +53,13 @@ step() {
 # a check nobody has verified is a suite nobody runs with a shorter fuse. The
 # link check needs it most — a parser bug there does not turn it red, it makes it
 # find nothing and pass.
-step "the checks are tested before they are trusted" bash -c '
-  set -e
-  python3 .github/tests/check-links.test.py
-  python3 .github/tests/red-lines.test.py
-  bash .github/tests/find-red-line-copies.test.sh
-  python3 .github/tests/build-skill.test.py
-  python3 .github/tests/build-readme.test.py
-  python3 .github/tests/check-incident-order.test.py
-  python3 .github/tests/check-brand-surfaces.test.py
-  python3 .github/tests/check-skill-target.test.py
-  bash .github/tests/no-gateway-leak.test.sh
-  bash .github/tests/opencode-worker.test.sh
-  bash .github/tests/board-triage.test.sh
-  bash .github/tests/board-self-check.test.sh
-  bash .github/tests/opencode-context.test.sh
-  bash .github/tests/waiting-list.test.sh
-  bash .github/tests/watch-finding.test.sh
-  bash .github/tests/session.test.sh
-  bash .github/tests/brief.test.sh
-  bash .github/tests/check-brief-coverage.test.sh
-  bash .github/tests/check-caps.test.sh
-  bash .github/tests/session-context.test.sh
-  bash .github/tests/path-context.test.sh
-'
+# Discovered rather than listed. This step and the one in `ci.yml` were two
+# hand-written lists of the same set; they drifted, and three committed test
+# files ended up in neither and ran nowhere — `kolonie-docs#378`. One record, or
+# none. A test not meant to run says so in its own file; `run-tests.sh` explains
+# how and refuses to pass silently over anything it cannot run.
+step "the checks are tested before they are trusted" \
+  bash .github/scripts/run-tests.sh
 
 # `#365`. 216 lines on 2026-07-27, 2.021 on 2026-08-14 — every one of them a
 # good-faith improvement, which is why a habit was never going to hold this. The
