@@ -102,10 +102,27 @@ A blocker that closed without its pull request merging still unblocks, and that
 is correct: the thing either exists on `main` or it does not, and the target's
 own check is what says which.
 
-**This is not the Blocked column, and both stay.** The column is for waiting on a
-person, a decision or a third party — something no issue on this board will
-close. The relation is for waiting on work that is *on* the board. An issue whose
-only blocker is another issue can sit in Ready: the queue already knows.
+**This is not the Blocked column, and both stay.** The relation is the record of
+*what* an issue waits for; the column is where the board shows *that* it waits.
+Two different facts, and the relation is the one the queue reads — `pick` skips
+on the relation and would skip on it whatever column the card were in.
+
+**The column now follows the relation, in both directions** (`#412`). Until then
+this paragraph ended *an issue whose only blocker is another issue can sit in
+Ready: the queue already knows* — true of the queue and false of every reader,
+because a card sitting in Ready that no worker would ever take is the queue and
+the board disagreeing in public. The triage sweep closes that: a card in Ready
+that acquires an open blocker, `blocked:human` or `needs-clearance` is moved to
+`Blocked` with a comment naming which, and a card in `Blocked` whose recorded
+dependencies have all closed is moved back to Ready. `#289` made the first of
+those moves and parked in `Inbox`, which meant *not yet routed* about a card that
+was routed; `#412` gave it the column named after what it is.
+
+**The way back is narrower than the way out, deliberately.** Out happens on any
+of the three facts. Back happens only where dependencies are *recorded* and every
+one is closed — so a card moved into `Blocked` by hand, with nothing recorded,
+stays there until somebody moves it. There is nothing recorded to have gone away,
+and guessing that a person has changed their mind is not a move a pass may make.
 
 **A package is what falls out of it.** `#259` says a package is what
 `agent:claude` is for, and a set of issues linked by dependency already is one —

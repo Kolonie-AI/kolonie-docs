@@ -3,11 +3,11 @@
 #
 # Usage:
 #   board-triage.sh admit                             # -> puts every open issue in the org on the board (#332)
-#   board-triage.sh candidates                        # -> the issues in Inbox and Ready, as JSON
+#   board-triage.sh candidates                        # -> the issues in Inbox, Ready and Blocked, as JSON
 #   board-triage.sh brief <candidates.json> [offset] [count]  # -> what the model reads
 #   board-triage.sh cases-brief [cases.json]          # -> the same, over the routing cases (#289)
 #   board-triage.sh apply <candidates.json> <decisions.json>  # -> the labels, links and moves
-#   board-triage.sh sweep <candidates.json>           # -> the Ready <-> Inbox moves that need no model (#289)
+#   board-triage.sh sweep <candidates.json>           # -> the Ready <-> Blocked moves that need no model (#289, #412)
 #   board-triage.sh provenance <login>                # -> member | outside
 #   board-triage.sh refusals                          # -> the issues the worker tried and did not finish
 #   board-triage.sh proposal-brief <refusals.json>    # -> what the model reads to propose a rule (#264)
@@ -27,8 +27,10 @@
 # Every rule with a cost attached is enforced here, in code a test can hold to
 # account, and not asked of the model:
 #
-# - a candidate comes from **Inbox or Ready** and nowhere else, so In Progress and
-#   In Review cannot be touched however the model answers
+# - a candidate comes from **Inbox, Ready or Blocked** and nowhere else, so In
+#   Progress and In Review cannot be touched however the model answers. `Blocked`
+#   is read but never emptied: nothing leaves it except by the way back below,
+#   which needs recorded dependencies and all of them closed (`#412`)
 # - a candidate **carries no route**: an issue already labelled `agent:human`,
 #   `agent:claude` or `agent:opencode` has been decided, and re-deciding it is what
 #   `#289` took out. The move it still needs is a fact, and `sweep` makes it
@@ -82,10 +84,24 @@ move_card() {
   fi
 }
 
-# The two columns triage reads. In Progress and In Review belong to whoever holds
-# them and Done is Done — `#262` is explicit, and re-triaging work in flight is
-# how two agents end up holding one issue.
-TRIAGE_STATUSES=${TRIAGE_STATUSES:-Inbox|Ready}
+# The three columns triage reads. In Progress and In Review belong to whoever
+# holds them and Done is Done — `#262` is explicit, and re-triaging work in flight
+# is how two agents end up holding one issue.
+#
+# **`Blocked` was added by `#412`, and it is the column the pass parks its own
+# blocked work in.** Until then the pass parked in `Inbox` and read only those
+# two, so a card in `Blocked` was not read, not commented on and not moved by any
+# pass, ever — nothing on the board ever left it. Measured on the live board on
+# 2026-08-16: 13 cards in `Blocked`, two of them with every recorded blocker
+# closed, which would have returned on the next pass had they been one column
+# over.
+#
+# The two halves of the pass make opposite use of the new column, and the
+# asymmetry is the whole safety property: **anything may be parked in `Blocked`,
+# and only one narrow rule takes anything out of it** — recorded dependencies,
+# every one closed. A sweep that empties `Blocked` because it can is worse than
+# one that never reads it.
+TRIAGE_STATUSES=${TRIAGE_STATUSES:-Inbox|Ready|Blocked}
 
 # The routes, in the order of increasing autonomy. The order is load-bearing: a
 # pass may move an issue *down* it and never up.
@@ -538,9 +554,10 @@ candidates() {
           | select(.labels | any(. as $l | $routes | index($l)) | not)
           | { repo, number, title, status, labels, author, bot, createdAt, url,
               body: (.body[0:$candidate_chars]) } ],
-        # Every issue in Inbox or Ready, routed or not: what the deterministic
-        # Ready ↔ Inbox sweep walks. Only what a fact-based move turns on, since
-        # nothing reads a body here.
+        # Every issue in the triage columns, routed or not: what the deterministic
+        # sweep walks — Ready out to `Blocked`, and `Inbox` or `Blocked` back in
+        # once every recorded dependency is closed (`#412`). Only what a
+        # fact-based move turns on, since nothing reads a body here.
         queue: [ .[]
           | select(.status as $s | $triage | index($s))
           | select(.title as $t | ($notwork | split("|") | index($t)) | not)
@@ -640,7 +657,7 @@ brief() {
   cat <<HEADER
 # The board, as it stands
 
-$(jq -r --argjson n "$(jq "$slice | length" "$file")" '"There are \($n) issue(s) below to decide about, out of \(.candidates | length) in Inbox or Ready, and \(.index | length) open issue(s) in total."' "$file")
+$(jq -r --argjson n "$(jq "$slice | length" "$file")" '"There are \($n) issue(s) below to decide about, out of \(.candidates | length) in Inbox, Ready or Blocked, and \(.index | length) open issue(s) in total."' "$file")
 
 # The routing rule (AGENTS.md §5)
 
@@ -677,7 +694,12 @@ HEADER
 
 # The issues to decide about
 
-Each one is in Inbox or in Ready. Nothing else is yours to touch.
+Each one is in Inbox, in Ready or in Blocked. Nothing else is yours to touch.
+
+A card in Blocked is here to be routed and not to be released: something is
+already recorded as holding it, and deciding it is well specified says nothing
+about whether that has gone away. Route it exactly as you would any other; it
+stays where it is either way.
 
 MIDDLE
 
@@ -1007,7 +1029,7 @@ apply_one() {
     # is different: a blocker that exists means the queue is holding work that
     # cannot be finished from it.
     if [ "$status" = "Ready" ] && [ -n "$fact" ]; then
-      if move_card "$repo" "$number" Inbox >/dev/null 2>&1; then
+      if move_card "$repo" "$number" Blocked >/dev/null 2>&1; then
         said+=("taken out of Ready")
       else
         note "$repo#$number should leave Ready and could not be moved"
@@ -1015,6 +1037,16 @@ apply_one() {
     fi
   elif [ "$status" = "Ready" ]; then
     : # already there, and moving it to where it is is not a change
+  elif [ "$status" = "Blocked" ]; then
+    # **The model half routes a card in `Blocked` and does not empty the column**
+    # (`#412`). Reading `Blocked` is what lets an unrouted card there acquire its
+    # route at all; moving it on from here would be a second, different claim —
+    # *and it is no longer blocked* — which nothing above established. The one way
+    # back out of that column is `sweep_one`'s, and it is narrow on purpose:
+    # recorded dependencies, every one of them closed. An empty `why_not` means
+    # this pass found no fact holding the card, not that the fact somebody else
+    # recorded has gone.
+    :
   elif move_card "$repo" "$number" Ready >/dev/null 2>&1; then
     said+=("moved to Ready")
   else
@@ -1031,26 +1063,33 @@ apply_one() {
     return 1
   fi
 
-  comment "$repo" "$number" "$route" "$reason" "$why_not" "$rule" "$cost" "${said[@]:-}"
+  comment "$repo" "$number" "$route" "$reason" "$why_not" "$rule" "$cost" "$status" "${said[@]:-}"
 }
 
 # ## The queue sweep: the half of the pass that needs no model (`#289`)
 #
-# The Ready ↔ Inbox move was the only reason a decided issue was read again — and
-# reading it again meant briefing it, chunking it and paying for it, forty times
-# an hour, to be told the route it already carries. **The move does not need a
-# judgement.** *Does it have an open blocker?* and *does it carry `blocked:human`?*
-# are facts; they are answered from GitHub and cost nothing.
+# The move in and out of the queue was the only reason a decided issue was read
+# again — and reading it again meant briefing it, chunking it and paying for it,
+# forty times an hour, to be told the route it already carries. **The move does
+# not need a judgement.** *Does it have an open blocker?* and *does it carry
+# `blocked:human`?* are facts; they are answered from GitHub and cost nothing.
 #
-# So this runs over every routed issue in Inbox and Ready, every pass, and the
+# So this runs over every routed issue in the triage columns, every pass, and the
 # model runs over the untriaged only.
 #
-# ## Why it walks the routed ones and not everything in the two columns
+# ## The three columns, and which direction each is on
+#
+# `Ready` is the queue. `Blocked` is where this pass parks what it takes out of
+# it (`#412`), and `Inbox` is where a person parks what they have not routed yet.
+# Out of the queue is one-way to `Blocked`; back in fires from `Inbox` or
+# `Blocked` alike, and only on recorded dependencies with every one closed.
+#
+# ## Why it walks the routed ones and not everything in the columns
 #
 # An issue with no route is the model pass's this same run, and `apply_one` makes
 # the same move at the end of its own decision — sweeping it here as well would
 # move one card twice and comment on it twice about the one move. The two halves
-# partition the two columns between them, which is also what makes each of them
+# partition the columns between them, which is also what makes each of them
 # testable on its own.
 sweep() {
   local candidates=$1
@@ -1104,16 +1143,25 @@ sweep_one() {
   fi
 
   if [ -n "$why" ]; then
-    # **Held in Inbox is said and not done**, and a stop that leaves no trace is
-    # the *silent skip mistaken for a bug* `#390` asks against: nothing moves, so
+    # **Held is said and not done**, and a stop that leaves no trace is the
+    # *silent skip mistaken for a bug* `#390` asks against: nothing moves, so
     # nothing is commented on, and the pass's own log is the only place the hold
     # can be read. The card already being where it belongs is not news to the
     # issue and is news to whoever is reading the run.
+    #
+    # The column is named rather than assumed (`#412`): a card held in `Blocked`
+    # is where the pass would have put it, and a card held in `Inbox` is one a
+    # person parked there — the run log is the only place that difference is
+    # legible, so it says which.
     if [ "$status" != "Ready" ]; then
-      note "$repo#$number: held in Inbox, $why"
+      note "$repo#$number: held in $status, $why"
       return 1
     fi
-    if move_card "$repo" "$number" Inbox >/dev/null 2>&1; then
+    # **Out of the queue is out to `Blocked`, not to `Inbox`** (`#412`). `Inbox`
+    # means *not yet routed* and this card carries a route; parking it there was
+    # what made the column mean two things and what made the hold invisible to
+    # every reader looking for blocked work in the column named after it.
+    if move_card "$repo" "$number" Blocked >/dev/null 2>&1; then
       sweep_comment "$repo" "$number" "**Out of the queue**: $why."
       echo "$repo#$number: taken out of Ready, $why"
       return 0
@@ -1134,7 +1182,15 @@ sweep_one() {
   # recorded and none of them open is one whose stated reason for waiting has gone;
   # an issue with none recorded never had a stated reason, so there is nothing here
   # to undo and the column stands as somebody left it.
-  [ "$status" = "Inbox" ] || return 1
+  #
+  # **`Blocked` returns on exactly the same rule as `Inbox`, and on no wider one**
+  # (`#412`). It would be tempting to let a card the pass parked itself come back
+  # more easily than one a person parked — the pass knows why it moved it. It
+  # does not: the reason it recorded is the recorded dependency, and if there is
+  # none there is nothing to have gone away. So the way back stays narrower than
+  # the way out in both columns, and a card in `Blocked` with no recorded
+  # dependency is a hand move by design.
+  case "$status" in Inbox | Blocked) ;; *) return 1 ;; esac
   [ -n "$closed" ] || return 1
 
   if move_card "$repo" "$number" Ready >/dev/null 2>&1; then
@@ -1417,8 +1473,8 @@ link_blocker() {
 
 # One comment, and only when something was written (`#262`).
 comment() {
-  local repo=$1 number=$2 route=$3 reason=$4 why_not=$5 rule=${6:-} cost=${7:-}
-  shift 7
+  local repo=$1 number=$2 route=$3 reason=$4 why_not=$5 rule=${6:-} cost=${7:-} status=${8:-}
+  shift 8
   local -a said=("$@")
   local body
 
@@ -1436,7 +1492,13 @@ comment() {
   if [ -n "$why_not" ]; then
     case " ${said[*]} " in
       *"taken out of Ready"*) body+=$'\n\n'"**Out of the queue**: $why_not." ;;
-      *) body+=$'\n\n'"**Left in Inbox**: $why_not." ;;
+      # **The column is named rather than assumed** (`#412`). This line used to
+      # read *Left in Inbox* whatever column the card was in, which was true of
+      # every card until the pass began reading `Blocked` and false of some of
+      # them afterwards. A comment that names the wrong column is worse than one
+      # that names none, because it is the only record a reader has of where the
+      # pass thought the card was.
+      *) body+=$'\n\n'"**Left in ${status:-Inbox}**: $why_not." ;;
     esac
   fi
   body+=$'\n\n'"<sub>Routed against \`AGENTS.md\` §5 and \`operations/worker-prohibitions.md\` by \`.github/workflows/board-triage.yml\` (\`kolonie-docs#262\`). Wrong route? Change the label and say why — an inherited label is not evidence."

@@ -187,6 +187,15 @@ jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("p1")) an
 jq -r '.items[] | select(.status=="Blocked") | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
+**Since `#412` the triage pass writes this column and reads it back.** A routed
+card in Ready that acquires an open blocker, `blocked:human` or `needs-clearance`
+is moved here — it used to go to `Inbox`, where it read as unrouted — and a card
+here whose *recorded* dependencies have all closed is moved back to Ready by
+itself. So what is left in this column is what no pass can clear: a card with
+nothing recorded, or one still genuinely waiting.
+[`agents/board.md`](board.md#a-dependency-is-a-link-not-a-sentence) has the
+asymmetry and why the way back is the narrow one.
+
 **4. The whole board at a glance:**
 
 ```bash
@@ -227,6 +236,10 @@ project number or a field name changes.
 **6. Decide the next action.** In this order of precedence:
 
 1. A Blocked issue whose blocker has been resolved → move it out of Blocked
+   — where the dependency was *recorded* the triage pass has already done this
+   (`#412`), so what reaches you here is the half it cannot: a card whose reason
+   for waiting was never written down. Record the dependency as you clear it and
+   the next one moves itself
 2. A `p1` issue in Ready → hand it off or take it
 3. A `p1` issue blocked only by a missing spec → write the spec, move to Ready
 4. Nothing on the critical path is actionable → say so plainly rather than
