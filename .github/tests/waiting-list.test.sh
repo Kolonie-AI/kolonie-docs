@@ -320,6 +320,39 @@ check "and nothing has arrived, so nothing is announced" "" \
   "$(bash "$SCRIPT" arrivals /dev/null "$WORK/entries" 2>/dev/null)"
 
 echo
+echo "the body says when it was read (#385)"
+
+# The list is what one search returned at one minute, and it used to call itself
+# *rewritten daily* and nothing else — so on 2026-08-15 it was written at 07:47,
+# four of the twelve issues on it closed during the day, and an agent built a
+# package out of it that evening and found a third of it already done. The run
+# is more frequent now; this is the half that still works when one is missed.
+today=$(date -u '+%Y-%m-%d')
+
+case_setup
+printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+body=$(bash "$SCRIPT" body "$WORK/entries")
+contains "a list that has something on it says when it was read" "Read at $today" "$body"
+contains "and says an entry may have closed since" "may have been closed since" "$body"
+absent "and no longer calls itself daily" "Rewritten daily" "$body"
+
+# The quiet body is the one somebody reads to conclude there is nothing to do,
+# so it is the one where the age matters most — a day-old *nothing is waiting*
+# is not the same claim as a fresh one.
+case_setup
+: > "$WORK/entries"
+body=$(bash "$SCRIPT" body "$WORK/entries")
+contains "and so does a body with nothing on it" "Read at $today" "$body"
+
+# The stamp changes on every run and must not read as a change to the list:
+# `arrivals` compares issues, not bodies, and this is what says so.
+case_setup
+printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+bash "$SCRIPT" body "$WORK/entries" > "$WORK/body"
+check "and a fresh stamp on an unchanged list announces nothing" "" \
+  "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
+
+echo
 echo "only a change is announced"
 
 case_setup

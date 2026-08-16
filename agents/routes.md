@@ -99,11 +99,16 @@ looking like a live part of the process for two months (`kolonie-docs#4`).
 **The other two routes have no worker, and since `#265` they have a list.**
 `agent:claude` and `agent:human` say who should do it and nothing comes to take
 it, so `.github/workflows/waiting-for-an-agent.yml` publishes what is waiting
-once a day on one issue in this repository — rewritten in place, with a comment
+every four hours on one issue here, rewritten in place, with a comment
 only when something new appears. A package (`§4`, issues linked by dependency)
 is one entry, because that is how it will be worked. Applying one of those two
 labels is therefore enough to be heard; it is not enough to be *started*, and
 nothing on that list is assigned to anybody.
+
+**The body says when it was read** (`#385`): it is a reading and not a live
+view, and an issue on it may have been closed since. That is why the run is
+four-hourly rather than daily — it bounds how wrong the page can be, and the
+stamp is what lets a reader see it.
 
 #### What has to be true before you apply it
 
