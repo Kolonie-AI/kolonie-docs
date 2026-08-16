@@ -26,3 +26,18 @@ Open an issue for it before you continue.**
 # rather than through them for exactly that reason.
 `.github/workflows/waiting-for-an-agent.yml`, daily at 07:20 UTC
 once a day on one issue in this repository — rewritten in place, with a comment
+
+# kolonie-docs#412. These four lines drew the line between the Blocked column
+# and the blocked-by relation in one place: the column waits on a person, the
+# relation waits on work that is on the board, and so an issue blocked only by
+# another issue could sit in Ready. The triage sweep now moves that issue into
+# Blocked and back out again when its dependencies close, which makes the
+# division false and the last sentence false outright. It is not a rewording —
+# `agents/board.md` quotes the retired sentence and says what replaced it, so
+# a reader who remembers the old rule is told it changed rather than left to
+# notice. The distinction the first three lines drew is gone with it: the
+# column now says *this is waiting*, whatever it is waiting for.
+**This is not the Blocked column, and both stay.** The column is for waiting on a
+person, a decision or a third party — something no issue on this board will
+close. The relation is for waiting on work that is *on* the board. An issue whose
+only blocker is another issue can sit in Ready: the queue already knows.
