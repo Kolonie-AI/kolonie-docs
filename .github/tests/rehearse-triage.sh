@@ -67,7 +67,38 @@ cat > "$BIN/gh" <<'STUB'
 #!/bin/bash
 echo "gh $*" >> "$GH_LOG"
 
+# Does this repository have the label, at this point in the run? `MISSING_LABELS`
+# is the case's list of names it does not have, and `gh label create` takes one
+# off that list — which is what makes the ordering assertion in `#407` a real
+# one rather than a grep for two lines in any order.
+label_missing() {
+  case ",${MISSING_LABELS:-}," in *",$1,"*) ;; *) return 1 ;; esac
+  grep -qxF -- "$1" "${GH_CREATED:-/dev/null}" 2>/dev/null && return 1
+  return 0
+}
+
 case "$1 $2" in
+  "label create")
+      echo "$3" >> "$GH_CREATED"
+      exit 0 ;;
+  "issue edit"|"pr edit")
+      # **One call, all or nothing** — the behaviour `#285` and `#407` are both
+      # about. The real `gh` refuses the whole call when one name is unknown, so
+      # a missing `area:` costs the contributor every other label in the list and
+      # takes the step down with it under `set -e`. A stub that quietly accepted
+      # anything would let both fixes be reverted with the tests still green.
+      for ((i = 1; i <= $#; i++)); do
+        [ "${!i}" = "--add-label" ] || continue
+        j=$((i + 1))
+        IFS=',' read -ra names <<< "${!j}"
+        for n in "${names[@]}"; do
+          if label_missing "$n"; then
+            echo "failed to update: '$n' not found" >&2
+            exit 1
+          fi
+        done
+      done
+      exit 0 ;;
   "api repos"*)
       # collaborators/<user>/permission — PERMISSION is what the case under test
       # says this author has. Empty means the call 404s, which is what GitHub
@@ -129,18 +160,18 @@ note_set() {
 # The defaults come first and the case's own `env` comes after, so a case always
 # wins over the empty default for a variable it cares about.
 run_issue() {
-  : > "$WORK/gh.log"
+  : > "$WORK/gh.log"; : > "$WORK/created"
   note_set "$@"
-  GH_LOG="$WORK/gh.log" PATH="$BIN:$PATH" \
+  GH_LOG="$WORK/gh.log" GH_CREATED="$WORK/created" PATH="$BIN:$PATH" \
     env "${ISSUE_DEFAULTS[@]}" \
     REPO=Kolonie-AI/kolonie-platform NUMBER=123 AUTHOR=someagent AREA=platform \
     "$@" bash "$WORK/issue.sh" 2>&1
 }
 
 run_pr() {
-  : > "$WORK/gh.log"
+  : > "$WORK/gh.log"; : > "$WORK/created"
   note_set "$@"
-  GH_LOG="$WORK/gh.log" PATH="$BIN:$PATH" \
+  GH_LOG="$WORK/gh.log" GH_CREATED="$WORK/created" PATH="$BIN:$PATH" \
     env "${PR_DEFAULTS[@]}" \
     REPO=Kolonie-AI/kolonie-platform NUMBER=456 AUTHOR=someagent AREA=platform \
     "$@" bash "$WORK/pull_request.sh" 2>&1
@@ -270,6 +301,35 @@ contains "$(cat "$WORK/gh.log")" "from:external" "a Bot that is not one of ours 
 out=$(run_issue env AUTHOR=kolonie-fan AUTHOR_TYPE=User EXISTING='[]' BODY='x')
 contains "$(cat "$WORK/gh.log")" "from:external" "a person whose name starts kolonie- is still a person"
 
+echo "== 5e. a runner's issue in a repository without its area: label (#407)"
+# **The rejection case for `#407`.** The runner branch above applies `area:` and
+# returns, and until `#407` it returned *above* the safety net that creates the
+# label — so the one path that labels without passing through the net was the one
+# path the net could not reach. Latent for as long as the repository missing its
+# `area:` label happened to have had no bot-filed issue: measured 2026-08-15,
+# `kolonie-skill` had no `area:skills`, and its run failed with
+# `'area:skills' not found`.
+#
+# Against the previous file this case fails on the exit status, which is the
+# whole of the defect: the step goes red and the issue keeps no label at all.
+out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot MISSING_LABELS=area:platform \
+  EXISTING='[]' BODY='moderation-runner is erroring.'); rc=$?
+check "the runner branch does not fail the step" "$rc" "0"
+log=$(cat "$WORK/gh.log")
+contains "$log" "label create area:platform" "created the label the repository lacked"
+contains "$log" "--add-label area:platform" "and then applied it"
+
+echo "== 5f. …and the ordinary path is covered by the same net"
+# The path that already had it, asserted so the two cannot drift apart: one
+# function, one colour, one description, and a repository that ends up with two
+# spellings of one label has none of them.
+out=$(run_issue env MISSING_LABELS=area:platform EXISTING='[]' BODY='x'); rc=$?
+check "an outside contributor's issue does not fail either" "$rc" "0"
+log=$(cat "$WORK/gh.log")
+contains "$log" "label create area:platform" "created it"
+contains "$log" "--add-label area:platform,needs-triage" "and the whole list survived the one call"
+contains "$log" "issue comment" "so the reply survived with it"
+
 echo "== 6. priority is never assigned, by any path"
 # p1/p2 encode what the Colony is trying to achieve, which a workflow cannot
 # know. If this assertion ever fails, the workflow has started making a
@@ -342,6 +402,29 @@ out=$(run_pr env PERMISSION=write TITLED_EXISTS=no TITLE='Some change (#99999)' 
 log=$(cat "$WORK/gh.log")
 absent "$log" "The title says this is" "said nothing about a number it could not resolve"
 contains "$log" "No issue is referenced" "and fell through to the generic note"
+
+echo "== 8f. a pull request in a repository that lacks its area: label (#407)"
+# The second half of `#407`. This job applies `area:${AREA}` on four paths and
+# created it on none of them — one caller away from exactly the failure `#285`
+# fixed in the issue job, and with more to lose: `gh pr edit` takes the `from:`
+# label and the conventions comment down with the `area:`.
+out=$(run_pr env MISSING_LABELS=area:platform TITLE='fix: a thing' \
+  BRANCH='fix/a-thing-40' BODY='No issue for this.'); rc=$?
+check "the step does not fail" "$rc" "0"
+log=$(cat "$WORK/gh.log")
+contains "$log" "label create area:platform" "created the label first"
+contains "$log" "--add-label from:external,area:platform" "and applied the whole list in one call"
+contains "$log" "pr comment" "so the conventions comment survived too"
+
+echo "== 8g. …and the inheriting path creates nothing, because it invents nothing"
+# A net that fires whatever the labels turn out to be would create `area:` labels
+# in repositories that never asked for one. The inheriting paths read their
+# labels off an issue in this repository, and a label on an issue exists.
+out=$(run_pr env MISSING_LABELS=area:platform ISSUE_LABELS='area:infra,p1' \
+  TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='Fixes #40')
+log=$(cat "$WORK/gh.log")
+absent "$log" "label create area:platform" "nothing created for an area this pull request never applies"
+contains "$log" "--add-label from:external,area:infra,p1" "and the inherited labels went on unchanged"
 
 echo "== 9. conventions are commented on, never failed"
 # The rejection case that matters most here is that there is no rejection: a red

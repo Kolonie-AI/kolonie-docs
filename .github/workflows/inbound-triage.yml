@@ -126,28 +126,6 @@ jobs:
             exit 0
           fi
 
-          # One of our own runners, which has already routed what it filed: right
-          # repository, its evidence in the body, and — for the log detector —
-          # its own `area:` label. What such an issue needs is a reader, which is
-          # what `Inbox` already means.
-          #
-          # **`area:` is still applied if it is missing, and nothing else is.**
-          # Exiting outright would have trusted every present and future runner
-          # to label itself, which is a second promise this file cannot check;
-          # adding the one label that is always true costs nothing and leaves the
-          # two that were false out. No `from:citizen`, because there is no
-          # citizen. No `needs-triage`, because the routing has happened. And no
-          # comment, because nobody is being thanked for anything.
-          if [ "$ours" = true ]; then
-            if jq -e 'any(startswith("area:"))' <<< "$EXISTING" >/dev/null; then
-              echo "filed by one of the Colony's own runners, already labelled: nothing to do"
-            else
-              gh issue edit "$NUMBER" --repo "$REPO" --add-label "area:${AREA}"
-              echo "filed by one of the Colony's own runners: applied area:${AREA} and nothing else"
-            fi
-            exit 0
-          fi
-
           # **Every label this file applies is created here if the repository
           # does not have it.** Four repositories call this workflow and on
           # 2026-08-12 exactly one of them — `kolonie-platform` — had
@@ -167,6 +145,12 @@ jobs:
           # A label that already exists is left exactly as it is: no `--force`,
           # because a repository's own colour or description is not this file's
           # to overwrite.
+          #
+          # **Defined above the runner branch below and not beneath it** (`#407`).
+          # It used to sit after that branch's `exit 0`, so the one path that
+          # applies a label without passing through the net was the one path the
+          # net could not reach — latent only because the repository missing its
+          # `area:` label had had no bot-filed issue yet.
           ensure_label() {
             gh label create "$1" --repo "$REPO" --color "$2" --description "$3" >/dev/null 2>&1 \
               && echo "created the missing label $1" \
@@ -175,8 +159,37 @@ jobs:
 
           # The area's own description is the calling repository's to write, and
           # every one of them already has its area labels — this is the safety
-          # net rather than the definition, so it says the least it can.
-          ensure_label "area:${AREA}" C5DEF5 "Work in the ${AREA} area"
+          # net rather than the definition, so it says the least it can. In one
+          # function because two callers apply it, and two spellings of one label
+          # is how a repository ends up with two of them.
+          ensure_area_label() {
+            ensure_label "area:${AREA}" C5DEF5 "Work in the ${AREA} area"
+          }
+
+          # One of our own runners, which has already routed what it filed: right
+          # repository, its evidence in the body, and — for the log detector —
+          # its own `area:` label. What such an issue needs is a reader, which is
+          # what `Inbox` already means.
+          #
+          # **`area:` is still applied if it is missing, and nothing else is.**
+          # Exiting outright would have trusted every present and future runner
+          # to label itself, which is a second promise this file cannot check;
+          # adding the one label that is always true costs nothing and leaves the
+          # two that were false out. No `from:citizen`, because there is no
+          # citizen. No `needs-triage`, because the routing has happened. And no
+          # comment, because nobody is being thanked for anything.
+          if [ "$ours" = true ]; then
+            if jq -e 'any(startswith("area:"))' <<< "$EXISTING" >/dev/null; then
+              echo "filed by one of the Colony's own runners, already labelled: nothing to do"
+            else
+              ensure_area_label
+              gh issue edit "$NUMBER" --repo "$REPO" --add-label "area:${AREA}"
+              echo "filed by one of the Colony's own runners: applied area:${AREA} and nothing else"
+            fi
+            exit 0
+          fi
+
+          ensure_area_label
           ensure_label needs-triage ededed "Arrived from outside. A maintainer still has to look."
 
           labels="area:${AREA},needs-triage"
@@ -338,6 +351,24 @@ jobs:
           labels=""
           add() { labels="${labels:+$labels,}$1"; }
 
+          # The issue job's guarantee, made here too (`#407`). Four of the paths
+          # below apply `area:${AREA}` and none of them created it, so this job
+          # was one caller away from the failure `#285` fixed in the other one:
+          # `gh pr edit` applies its labels in one call, and an unknown name
+          # costs the contributor the `area:`, the `from:` and the conventions
+          # comment together. Measured 2026-08-15: `kolonie-skill` had no
+          # `area:skills`, and its run failed with `'area:skills' not found`.
+          #
+          # Same colour and same description as the issue job writes, because
+          # two spellings of one label is how a repository ends up with two of
+          # them. A label that exists is left alone: no `--force`.
+          ensure_area_label() {
+            gh label create "area:${AREA}" --repo "$REPO" --color C5DEF5 \
+              --description "Work in the ${AREA} area" >/dev/null 2>&1 \
+              && echo "created the missing label area:${AREA}" \
+              || true
+          }
+
           # The same correction as the issue job above, and `from:citizen` was
           # even less defensible here: a pull request is not a support ticket by
           # any route at all, so the label could never have been true of one.
@@ -453,6 +484,13 @@ jobs:
              && ! grep -qE '^(feature|fix|docs)/.+-[0-9]+$' <<< "$BRANCH"; then
             notes="${notes}"$'\n- **The branch name is not in the documented shape** — `feature/<slug>-<issue-number>`, `fix/…`, `docs/…`. Also not blocking, and not worth a force-push to correct on an open PR.'
           fi
+
+          # Only when this job is the one deciding the area. The inheriting paths
+          # above take their labels off an issue that already carries them, and
+          # a label read off an issue in this repository exists in it.
+          case ",${labels}," in
+            *",area:${AREA},"*) ensure_area_label ;;
+          esac
 
           gh pr edit "$NUMBER" --repo "$REPO" --add-label "$labels"
           echo "applied: $labels"
