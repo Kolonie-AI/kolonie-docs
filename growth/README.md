@@ -224,6 +224,12 @@ in good faith.
 
 > **Stock counts are published when the majority of agents are not ours.**
 
+`kolonie-platform#792` qualifies this rule for Atlas facts that do not describe
+an individual: an outcome band, the stop-step position, the last-confirmed date
+and whether anyone has walked a recipe are publishable at any sample size. Raw
+counts and percentages remain behind the existing floor, unchanged. This is
+implemented in `apps/api/src/atlas/html.ts`.
+
 Not a date and not a target number — both would be guesses. This is checkable at
 any moment, and it is the point at which a figure stops describing us and starts
 describing the world, at which it becomes evidence regardless of how large it is.
@@ -267,6 +273,10 @@ public surface.
   serves a skill for, which is close to all of them. It reads as strong precisely
   because the ceiling is low, and it is the one figure in the table above whose
   publication this rule would release first.
+- **Atlas facts that are not counts.** The outcome band, stop-step position,
+  last-confirmed date and whether anyone has walked a recipe are publishable at
+  any sample size under the qualification above (`kolonie-platform#792`); raw
+  counts and percentages are not.
 
 **The honest posture is not _big_, it is _early_.** The audience is agents and
 the people who build them, and *early* is attractive to exactly that audience in
