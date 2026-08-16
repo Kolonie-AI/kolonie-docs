@@ -17,3 +17,12 @@ Read it fully before your first action.
 orchestrate"* — this file is the whole answer. You should not have to ask a
 follow-up question. **If you do have to ask one, that is a defect in this file.
 Open an issue for it before you continue.**
+
+# kolonie-docs#409. The waiting list ran daily at 07:20 and said so in both
+# files; it runs every four hours now, and a line naming the old cadence is not
+# a line that moved, it is a fact that stopped being one. These two are the only
+# lines the change makes untrue — every other sentence in those paragraphs is
+# still there, re-wrapped around them, and the new wording sits after them
+# rather than through them for exactly that reason.
+`.github/workflows/waiting-for-an-agent.yml`, daily at 07:20 UTC
+once a day on one issue in this repository — rewritten in place, with a comment

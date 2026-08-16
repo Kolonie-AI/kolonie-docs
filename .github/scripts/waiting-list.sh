@@ -120,7 +120,8 @@ why_waiting() {
 # right place for a run that died — somebody will come back to it. It is the
 # wrong place for a claim nobody is coming back to at all: after a day the issue
 # has five identical comments on it and the one person who could move the card
-# has never been told. This list is read by that person, once a day.
+# has never been told. This list is read by that person, and it is one page
+# however often the run behind it fires.
 #
 # ## Why it is computed from the board and nothing else
 #
@@ -206,7 +207,7 @@ held_since() {
 # *2 waiting for your clearance, oldest 6 days* gets somebody out of their chair
 # and *2 waiting* does not, so the age is the half that does the work. A search
 # cannot say when a label went on, so the timeline is read once per held issue —
-# one call each, on a set that is small by construction, once a day.
+# one call each, on a set that is small by construction, six times a day.
 #
 # **A timeline that cannot be read does not lose the row.** The entry falls back
 # to how long the issue has been *open* and says so in as many words, because an
@@ -347,7 +348,8 @@ entries() {
   fi
 
   # The blockers are asked for one issue at a time, which is one call each and a
-  # list this size is fifteen of them once a day. An issue whose blockers cannot
+  # list this size is fifteen of them per run, six times a day (`#409`) — still
+  # less than the worker spends before lunch. An issue whose blockers cannot
   # be read is still reported — a missing dependency line is worse than nothing
   # only if it is silent, so it says so in the entry.
   local repo number route rank created labels status title waits why
@@ -381,17 +383,25 @@ body() {
   local file=$1
   [ -f "$file" ] || die "body needs the file that \`entries\` wrote, and $file is not one" 1
 
+  # **When this was read, in the body itself** (`#409`). Every entry below was
+  # open at that minute and can be closed at the next one; there is no cheaper
+  # way to know than to ask, and asking is a run. A reader who can see the age
+  # of the list can decide what to do about it, which is the whole of what the
+  # old wording — *rewritten daily*, and nothing about when — took away.
+  local read_at
+  read_at=$(date -u '+%Y-%m-%d %H:%M UTC')
+
   if [ ! -s "$file" ]; then
     printf '%s\n' "Nothing is waiting for a Claude agent or for a person right now." \
       "" \
       "**Nothing is waiting for your clearance either.** No open issue carries \`$CLEARANCE_LABEL\` (\`kolonie-docs#391\`)." \
       "" \
-      "This issue is rewritten once a day by \`.github/workflows/waiting-for-an-agent.yml\` (\`kolonie-docs#265\`). It comments only when the list changes, so an unread notification here always means something arrived."
+      "Read at $read_at and rewritten every four hours by \`.github/workflows/waiting-for-an-agent.yml\` (\`kolonie-docs#265\`, \`#409\`). It comments only when the list changes, so an unread notification here always means something arrived."
     return 0
   fi
 
   awk -F'\t' -v stuck_route="$STUCK_ROUTE" -v held_route="$CLEARANCE_ROUTE" \
-      -v clearance_label="$CLEARANCE_LABEL" '
+      -v clearance_label="$CLEARANCE_LABEL" -v read_at="$read_at" '
     # **The stuck rows are taken out first and counted separately** (`#381`).
     # They are not waiting to be started, so folding them into the headline would
     # make the one number on this list mean two things — and folding them into
@@ -518,7 +528,7 @@ body() {
 
       print "---"
       print ""
-      print "Rewritten daily by `.github/workflows/waiting-for-an-agent.yml` (`kolonie-docs#265`). A comment appears only when this list changes, so a notification here is always something new. A package is a set of issues linked by GitHub'"'"'s dependency relation (`kolonie-docs#261`) — it is one entry because it is one piece of work."
+      print "**Read at " read_at "**, and rewritten every four hours by `.github/workflows/waiting-for-an-agent.yml` (`kolonie-docs#265`, `#409`). This is a reading and not a live view: an issue above may have been closed since, so check the state of one before you build a package around it. A comment appears only when this list changes, so a notification here is always something new. A package is a set of issues linked by GitHub'"'"'s dependency relation (`kolonie-docs#261`) — it is one entry because it is one piece of work."
     }
   ' "$file"
 }

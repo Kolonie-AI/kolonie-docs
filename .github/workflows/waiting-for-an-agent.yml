@@ -25,9 +25,30 @@ name: What is waiting for an agent or a person
 # have meant introducing a credential in an issue that is not about credentials.
 #
 # So: one issue, its body rewritten in place, and **a comment only when the list
-# changed**. The body is the current state and is always right; the comment is
-# the notification, and it fires on arrivals rather than daily, because a message
-# that is usually the same message is one nobody opens.
+# changed**. The comment is the notification, and it fires on arrivals rather
+# than on every run, because a message that is usually the same message is one
+# nobody opens.
+#
+# ## The body is a reading, not a live view (`#409`)
+#
+# It used to say here that the body *is the current state and is always right*.
+# It is not: it is what the search returned at the moment of the run, and every
+# issue on it can close a minute later. The run of 2026-08-15 finished at 07:47
+# and the first of its twelve issues closed at 07:57; by the evening four of the
+# twelve were closed, and a Claude agent reading the list to build a package out
+# of it found a third of what it had picked already done.
+#
+# Two things follow, and neither of them is a live view, because the only way to
+# know an issue is still open is to ask, and asking *is* a run.
+#
+# **It runs every four hours rather than once a day**, which is the worker's own
+# cadence and bounds the error at four hours instead of twenty-four. It costs
+# five extra runs of a job that reads the board once, and it notifies nobody
+# extra: the comment still fires on arrivals only.
+#
+# **The body says when it was read, and says an entry may have closed since.** A
+# reader who can see the age of a list can decide about it; one told the list is
+# always right cannot. This is the half that keeps working when a run is missed.
 #
 # ## What it deliberately is not
 #
@@ -39,10 +60,12 @@ name: What is waiting for an agent or a person
 
 on:
   schedule:
-    # 07:20 UTC. Twenty past, clear of the checks on the hour that share the
-    # GraphQL budget this reads the board with, and early enough that the list is
-    # waiting before the maintainer's day rather than after it.
-    - cron: '20 7 * * *'
+    # Every four hours at twenty past, clear of the checks on the hour that share
+    # the GraphQL budget this reads the board with. 07:20 is kept as one of the
+    # six so the list is still waiting before the maintainer's day rather than
+    # after it; the other five are what stops it being a day old by the evening
+    # (`#409`).
+    - cron: '20 3,7,11,15,19,23 * * *'
   workflow_dispatch:
 
 permissions:
@@ -176,9 +199,11 @@ jobs:
           fi
 
           # **The comment is the message, and it only fires on an arrival.** The
-          # body above is always current, so a day where nothing changed needs no
-          # notification — and a notification that arrives every day whether or
-          # not anything happened is the one `#265` says nobody opens.
+          # body above was just rewritten, so a run where nothing changed needs
+          # no notification — and a notification that arrives on a schedule
+          # whether or not anything happened is the one `#265` says nobody opens.
+          # This is also what makes six runs a day cost no more attention than
+          # one did (`#409`).
           if [ -z "$arrivals" ]; then
             echo "nothing new since the last run; no comment written"
             exit 0
@@ -190,7 +215,7 @@ jobs:
               [ -n "$entry" ] || continue
               printf -- '- `%s`\n' "$entry"
             done <<<"$arrivals"
-            printf '\nThe list above is the current one and is rewritten daily; this comment is only written when something new appears on it. Nothing here is assigned — a Claude agent takes a **package**, and a package is what the list groups by (`kolonie-docs#261`, `#265`). From %s.\n' "$RUN_URL"
+            printf '\nThe list above says when it was read and is rewritten every four hours; this comment is only written when something new appears on it. Nothing here is assigned — a Claude agent takes a **package**, and a package is what the list groups by (`kolonie-docs#261`, `#265`). From %s.\n' "$RUN_URL"
           } > "$RUNNER_TEMP/comment"
 
           gh issue comment "$number" --repo "$GITHUB_REPOSITORY" \

@@ -13,7 +13,7 @@ Part of [`ARCHITECTURE.md`](../ARCHITECTURE.md), routed here rather than carried
 into every session. The headings are the ones it always had.
 ## What is waiting for an agent
 
-`.github/workflows/waiting-for-an-agent.yml`, daily at 07:20 UTC
+`.github/workflows/waiting-for-an-agent.yml`, every four hours at twenty past
 (`kolonie-docs#265`, 2026-08-10). `agent:opencode` has a worker; `agent:claude`
 and `agent:human` have nobody, so a routed issue used to be labelled and then
 never mentioned again — which held while the maintainer agent was in the
@@ -26,6 +26,15 @@ repository sends any, and a mailed list would have meant a credential. Not a
 comment per issue: that is a notification per routing decision. Not a queue:
 nothing is assigned, because a Claude agent takes a *package* and asks questions
 mid-work.
+
+**The body says when it was read, and is a reading rather than a live view**
+(`#409`, 2026-08-16). Every entry on it was open at the minute of the run and
+any of them can be closed at the next one; there is no cheaper way to know than
+to ask, and asking is a run. So the stamp is what lets a reader judge the age of
+the list — the wording before it said the body was always right, which is how a
+package built from a list written that morning turned out to be a third
+finished. The four-hourly cadence above is the other half and came from the same
+issue: it ran daily at 07:20 until then.
 
 A package — issues linked by GitHub's dependency relation (`#261`) — is one
 entry with its parts in order. The clause saying why an issue is not
