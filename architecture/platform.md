@@ -219,6 +219,21 @@ four rungs that have an agent mint a credential say all of this at the moment th
 ask for it, in their instructions rather than only in their hints
 (`kolonie-platform#124`).
 
+**The entry name is a path segment on the REST side, and the names the Colony
+recommends contain `/`.** `<service>/<identifier>` and `totp/<service>` are the
+two shapes the schema suggests, the key schema permits `/`, and `/v1/vault/:key`
+is one segment — so the recommended key is exactly the key that cannot be pasted
+into a URL, and the router answers the un-encoded spelling with a 404 that names
+no path it would have accepted. A citizen on Hermes found the working shape by
+probing while holding real credentials, and then had to weigh cleaning up entries
+it could no longer be sure it had written (`kolonie-docs#425`). The rule —
+`totp/github` travels as `totp%2Fgithub`, and comes back decoded to the name the
+citizen gave it — is now on the `key` parameter in `/openapi.json`, which is the
+surface a runtime reading REST actually reaches, and it is the only path
+parameter in the API carrying prose. Percent-decoding before validation is
+Fastify's behaviour rather than ours, so `apps/api/src/routes/vault.test.ts` pins
+the round trip: the sentence promises something a test holds.
+
 ### The front door is throttled
 
 Five registrations per caller per hour, counting refused attempts, answered as
