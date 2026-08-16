@@ -20,6 +20,13 @@
 #   opencode-worker.sh previous-failures <repo> <number>  # -> how many times the worker has already failed here
 #   opencode-worker.sh unarmed-pull-requests   # -> open pull requests nothing will merge, and the check each waits on
 #   opencode-worker.sh leak-check <file>...    # -> refuses if a secret this run holds is in what is about to be published
+#   opencode-worker.sh board-add <repo> <number>  # -> puts an issue on the board, in Inbox (#332)
+#
+# `<repo>` is either shape: `kolonie-docs` or `Kolonie-AI/kolonie-docs`. A bare
+# name gets the organisation, because `board-item-id.sh` in this same directory
+# takes one and a reader should not have to remember which script wants which
+# (`#422`). Anything that is neither is refused by name at the first line of the
+# subcommand rather than queried for.
 #
 # **All of it is here rather than in the workflow**, for `board-self-check.sh`'s
 # reason: a workflow's `run:` blocks cannot be tested, and the parts of this that
@@ -217,6 +224,53 @@ die() {
   exit "${2:-1}"
 }
 
+# A repository argument in either shape a caller might reasonably have (`#422`).
+#
+# **`board-item-id.sh` sits in this directory and takes a bare name**, because it
+# hard-codes the owner; every subcommand here splits `owner/repo` on the slash. So
+# `board-add kolonie-docs 421` split to `kolonie-docs/kolonie-docs`, asked GitHub
+# for a repository nobody has, and the answer to that was read as an issue id. Two
+# scripts side by side taking different shapes for the same thing is what put the
+# wrong value in, and the cheap fix is to take both.
+#
+# A bare name gets `$ORG`. A qualified one is passed through. Anything else — an
+# empty string, a URL, two slashes — is refused **here**, with the shape named,
+# rather than becoming a query about a repository that does not exist.
+repo_slug() { # <repo>
+  local repo=$1
+  case "$repo" in
+    "")      die "a repository is needed: either 'kolonie-docs' or '$ORG/kolonie-docs'" 1 ;;
+    */*/*)   die "'$repo' is not a repository: give 'kolonie-docs' or '$ORG/kolonie-docs'" 1 ;;
+    */*)     printf '%s\n' "$repo" ;;
+    *:*|*' '*) die "'$repo' is not a repository: give 'kolonie-docs' or '$ORG/kolonie-docs'" 1 ;;
+    *)       printf '%s/%s\n' "$ORG" "$repo" ;;
+  esac
+}
+
+# One GraphQL call whose **exit status is kept**, because `gh` writes the error
+# document to *stdout* (`#422`, reproduced 2026-08-16).
+#
+# `out=$(gh api graphql ... --jq '.data.x.y // empty' 2>/dev/null)` looks like it
+# answers *did we get one?* and does not: when the query itself fails there is no
+# `.data.x.y` to be null, the whole response is an `errors` document, and `--jq`
+# hands back its 200-odd bytes as though they were the value. Every `[ -n "$out" ]`
+# guard downstream then passes on an error blob, and the first thing that notices
+# is whatever tries to *use* it — by which point the script is several confident
+# sentences past the truth.
+#
+# `$(...)` already sets `$?` to the command's status. So the honest guard is the
+# status, and emptiness is a **second and different** question: non-zero means the
+# query did not run, empty means it ran and found nothing. Callers are expected to
+# say those differently, because a reader told *no such issue* when the truth is
+# *the query was malformed* goes looking in the wrong place.
+graphql_value() { # <gh-api-graphql-args...>  → the value on stdout, or nothing
+  local out status
+  out=$(gh api graphql "$@" 2>/dev/null)
+  status=$?
+  [ $status -eq 0 ] || return $status
+  printf '%s' "$out"
+}
+
 # The whole board, as `{"items":[{id, status, content:{number, title,
 # repository}}]}`.
 #
@@ -412,13 +466,26 @@ GRAPHQL
 # repositories whose issue numbers all start at 1, so `#204` is not an
 # identifier — §4 says so, and this is where it is enforced in code.
 board_item_for() {
+  local repo=$1 number=$2 raw
+  raw=$(board_item_raw "$repo" "$number") || return $?
+  jq -r --arg project "$PROJECT_ID" \
+    '[ (.data.repository.issue.projectItems.nodes // [])[]
+       | select(.project.id == $project and .isArchived == false) ]
+     | first | if . == null then empty else .id end' <<<"$raw"
+}
+
+# The response behind both readers, with its **exit status kept** (`#422`).
+#
+# It used to be `gh api graphql ... | jq ... | head -1`, which conflates three
+# outcomes into one empty line: the query failed, the issue is on no board, the
+# card is archived. Worse, `head -1` can close the pipe under `jq` and hand the
+# pipeline a signal status that has nothing to do with GitHub — so neither the
+# output nor the status could be trusted to mean what a caller read into it.
+# Asking once and filtering locally costs nothing and answers both questions.
+board_item_raw() { # <repo> <number>
   local repo=$1 number=$2
-  gh api graphql -f query="$BOARD_ITEM_QUERY" \
-    -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" |
-    jq -r --arg project "$PROJECT_ID" \
-      '(.data.repository.issue.projectItems.nodes // [])[]
-       | select(.project.id == $project and .isArchived == false) | .id' |
-    head -1
+  graphql_value -f query="$BOARD_ITEM_QUERY" \
+    -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number"
 }
 
 # The board item id **and the column it is in**, tab separated, or nothing.
@@ -429,14 +496,13 @@ board_item_for() {
 # this costs nothing over `board_item_for` and replaces it in the one place where
 # the difference matters.
 board_item_status_for() {
-  local repo=$1 number=$2
-  gh api graphql -f query="$BOARD_ITEM_QUERY" \
-    -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" |
-    jq -r --arg project "$PROJECT_ID" \
-      '(.data.repository.issue.projectItems.nodes // [])[]
-       | select(.project.id == $project and .isArchived == false)
-       | "\(.id)\t\(.fieldValueByName.name // "")"' |
-    head -1
+  local repo=$1 number=$2 raw
+  raw=$(board_item_raw "$repo" "$number") || return $?
+  jq -r --arg project "$PROJECT_ID" \
+    '[ (.data.repository.issue.projectItems.nodes // [])[]
+       | select(.project.id == $project and .isArchived == false) ]
+     | first
+     | if . == null then empty else "\(.id)\t\(.fieldValueByName.name // "")" end' <<<"$raw"
 }
 
 # The repository's own check command, read out of its `AGENTS.md`.
@@ -1572,7 +1638,7 @@ case "${1:-}" in
     ;;
 
   claim)
-    repo=${2:?claim needs a repository}
+    repo=$(repo_slug "${2:?claim needs a repository}") || exit $?
     number=${3:?claim needs an issue number}
     read -r item status < <(board_item_status_for "$repo" "$number")
     [ -n "${item:-}" ] || die "$repo#$number is not on the board — refusing to start work on it" 3
@@ -1638,7 +1704,7 @@ case "${1:-}" in
     # An issue that failed and was retried carries an older claim comment. The
     # window keeps that out of the comparison; it is not a timeout on the race,
     # which is seconds wide.
-    repo=${2:?verify-claim needs a repository}
+    repo=$(repo_slug "${2:?verify-claim needs a repository}") || exit $?
     number=${3:?verify-claim needs an issue number}
     mine=${4:-$RUN_URL}
     [ -n "$mine" ] || die "verify-claim needs this run's URL, in \$RUN_URL or as the third argument" 1
@@ -1693,7 +1759,7 @@ case "${1:-}" in
     # The queue reads this itself; it is a subcommand so that a person can ask
     # the same question, and so that the answer is one testable place rather
     # than a `--jq` buried in the selection.
-    repo=${2:?blockers needs a repository}
+    repo=$(repo_slug "${2:?blockers needs a repository}") || exit $?
     number=${3:?blockers needs an issue number}
     blockers_of "$repo" "$number" ||
       die "could not read what $repo#$number is blocked by" 1
@@ -1704,7 +1770,7 @@ case "${1:-}" in
     # The same relation with the closed half kept (`kolonie-docs#289`), so that
     # *waited for something and does not any more* can be told from *never waited
     # for anything*. One endpoint, read one way, whichever question is being asked.
-    repo=${2:?dependencies needs a repository}
+    repo=$(repo_slug "${2:?dependencies needs a repository}") || exit $?
     number=${3:?dependencies needs an issue number}
     dependencies_of "$repo" "$number" ||
       die "could not read what $repo#$number depends on" 1
@@ -1815,7 +1881,7 @@ case "${1:-}" in
   # where that mattered — a failure comment announced a move to Ready that had
   # not happened, and the issue looked attended for a day because of it.
   column)
-    repo=${2:?column needs a repository}
+    repo=$(repo_slug "${2:?column needs a repository}") || exit $?
     number=${3:?column needs an issue number}
     found=$(board_item_status_for "$repo" "$number") ||
       die "could not ask the board where $repo#$number is" 1
@@ -1831,7 +1897,7 @@ case "${1:-}" in
     ;;
 
   review)
-    repo=${2:?review needs a repository}
+    repo=$(repo_slug "${2:?review needs a repository}") || exit $?
     number=${3:?review needs an issue number}
     item=$(board_item_for "$repo" "$number")
     [ -n "$item" ] || die "$repo#$number vanished from the board" 3
@@ -1843,7 +1909,7 @@ case "${1:-}" in
     ;;
 
   release)
-    repo=${2:?release needs a repository}
+    repo=$(repo_slug "${2:?release needs a repository}") || exit $?
     number=${3:?release needs an issue number}
     item=$(board_item_for "$repo" "$number")
     [ -n "$item" ] || die "$repo#$number is not on the board" 3
@@ -1877,7 +1943,7 @@ case "${1:-}" in
   # whoever holds them, and Done is Done. A `move` that could write them would be
   # a triage pass able to take work off an agent that has it.
   move)
-    repo=${2:?move needs a repository}
+    repo=$(repo_slug "${2:?move needs a repository}") || exit $?
     number=${3:?move needs an issue number}
     column=${4:?move needs a column: Ready, Inbox or Blocked}
     case "$column" in
@@ -1944,8 +2010,8 @@ case "${1:-}" in
     ;;
 
   previous-failures)
-    previous_failures "${2:?previous-failures needs a repository}" \
-      "${3:?previous-failures needs an issue number}"
+    repo=$(repo_slug "${2:?previous-failures needs a repository}") || exit $?
+    previous_failures "$repo" "${3:?previous-failures needs an issue number}"
     exit 0
     ;;
 
@@ -1994,25 +2060,48 @@ case "${1:-}" in
   # in no column, and invisible to `TRIAGE_STATUSES` and to every §6 query that
   # reads a column. Inbox is where an arrival with no decision belongs, and the
   # half-hourly pass reads Inbox — which is the whole point of admitting it.
+  # ### The guards, after `#422`
+  #
+  # Each of the three reads below now fails on the **exit status** first and on
+  # emptiness second, and says something different for each. They used to guard
+  # on emptiness alone, and `gh` writes its error document to stdout — so a
+  # mistyped repository produced an error blob that passed the first guard, was
+  # sent to the mutation as a content id, produced a second error blob that
+  # passed the second guard, and ended in the message below announcing the one
+  # state this docblock calls dangerous. Nothing had been added.
   board-add)
-    repo=${2:?board-add needs a repository}
+    repo=$(repo_slug "${2:?board-add needs a repository}") || exit $?
     number=${3:?board-add needs an issue number}
-    content=$(gh api graphql -f query='
+    content=$(graphql_value -f query='
       query($owner:String!,$name:String!,$number:Int!){
         repository(owner:$owner,name:$name){issue(number:$number){id}}}' \
       -f owner="${repo%%/*}" -f name="${repo##*/}" -F number="$number" \
-      --jq '.data.repository.issue.id // empty' 2>/dev/null)
-    [ -n "$content" ] || die "$repo#$number could not be read, so there is nothing to put on the board" 3
+      --jq '.data.repository.issue.id // empty') ||
+      die "the query for $repo#$number did not run, so nothing is known about it and nothing was added" 2
+    [ -n "$content" ] || die "$repo#$number does not exist, so there is nothing to put on the board" 3
 
-    item=$(gh api graphql -f query='
+    item=$(graphql_value -f query='
       mutation($project:ID!,$content:ID!){
         addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}' \
       -f project="$PROJECT_ID" -f content="$content" \
-      --jq '.data.addProjectV2ItemById.item.id // empty' 2>/dev/null)
-    [ -n "$item" ] || die "could not put $repo#$number on the board" 4
+      --jq '.data.addProjectV2ItemById.item.id // empty') ||
+      die "could not put $repo#$number on the board — the mutation was refused" 4
+    [ -n "$item" ] || die "could not put $repo#$number on the board — it answered with no item" 4
 
-    set_status "$item" "$STATUS_INBOX" >/dev/null ||
-      die "$repo#$number was added to the board and its column could not be set — it is on the board and in no column" 5
+    # **The column, and the message only claims what is true.** `#422`: this line
+    # named *on the board and in no column* on a run where nothing had been
+    # added, and sent a reader looking for an item that was not there. The board
+    # is asked where the issue actually is before anything is said about it, on
+    # the same argument as `release` (`#381`) — a message about board state that
+    # nobody read back is a guess.
+    set_status "$item" "$STATUS_INBOX" >/dev/null || {
+      found=$(board_item_status_for "$repo" "$number") ||
+        die "could not set $repo#$number's column, and the board could not be asked where it ended up. Check it by hand before adding it again." 5
+      [ -n "$found" ] ||
+        die "could not set $repo#$number's column, and the board does not show it at all. Nothing to fix there; add it again." 5
+      where=${found#*$'\t'}
+      die "$repo#$number is on the board and its column could not be set — it is in ${where:-no column}, which is invisible to every reader of the board" 5
+    }
     echo "added $repo#$number to the board, in Inbox"
     exit 0
     ;;

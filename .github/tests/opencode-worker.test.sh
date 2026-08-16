@@ -57,20 +57,56 @@ case "$1 $2" in
   # is exercised against the live API in `#269`, not here, and a stub that
   # pretended to paginate would only be testing itself.
   "api graphql")
-    query=""; owner=""; name=""; number=""
+    query=""; owner=""; name=""; number=""; content=""; expression=""
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --jq) expression=$2; shift 2 ;;
         -f|-F)
           case "$2" in
-            query=*)  query=${2#query=} ;;
-            owner=*)  owner=${2#owner=} ;;
-            name=*)   name=${2#name=} ;;
-            number=*) number=${2#number=} ;;
+            query=*)   query=${2#query=} ;;
+            owner=*)   owner=${2#owner=} ;;
+            name=*)    name=${2#name=} ;;
+            number=*)  number=${2#number=} ;;
+            content=*) content=${2#content=} ;;
           esac
           shift 2 ;;
         *) shift ;;
       esac
     done
+    # `--jq` is `gh`'s own flag rather than a pipe the caller adds, so the stub
+    # has to apply it: `board-add` reads both of its answers through one.
+    emit() { if [ -n "$expression" ]; then jq -r "$expression"; else cat; fi; }
+
+    # ## A call that fails writes to stdout (`#422`)
+    #
+    # This is the whole reproduction, and it has to be here rather than in the
+    # script's own error path: `gh api graphql` prints its `errors` envelope on
+    # **stdout** and exits non-zero. A stub that only exited non-zero would let a
+    # guard reading emptiness pass, because there would be nothing to read — and
+    # that guard passing on an error document is the bug `#422` is about.
+    #
+    # `--jq` is not applied, exactly as `gh` does not apply it to an error.
+    if [ -s "$GH_FIXTURES/graphql_fails" ]; then
+      jq -cn '{errors: [{message: "Something went wrong while executing your query."}]}'
+      exit 1
+    fi
+
+    # The two calls `board-add` makes, answered before the board is read for
+    # existence: the mutation is the write under test, and a case asserting about
+    # it is not asserting anything about the board fixture.
+    case "$query" in
+      *addProjectV2ItemById*)
+        jq -cn --arg id "PVTI_added_${content#I_}" \
+          '{data: {addProjectV2ItemById: {item: {id: $id}}}}' | emit
+        exit 0 ;;
+      *"issue(number:\$number){id}"*)
+        if grep -qxF -- "$name#$number" "$GH_FIXTURES/unreadable_issues" 2>/dev/null; then
+          jq -cn '{data: {repository: {issue: null}}}' | emit
+        else
+          jq -cn --arg id "I_${name}${number}" '{data: {repository: {issue: {id: $id}}}}' | emit
+        fi
+        exit 0 ;;
+    esac
 
     # **An empty fixture is an unreadable board, not an empty one** — an empty
     # board is `{"items":[]}` and the cases that mean that write it. `cat` of an
@@ -2399,6 +2435,100 @@ contains "a failed run routes the issue onward rather than orphaning it" \
   "--add-label opencode:failed --add-label agent:claude" "$wf"
 contains "and the conflict sweep does the same" \
   "--add-label opencode:failed --add-label agent:claude \\" "$wf"
+
+echo
+echo "board-add tells a failed call apart from an honest empty answer (#422)"
+
+# ## Why these cases are worth the stub
+#
+# Every assertion below is about a path where GitHub answered and the answer was
+# not a value. `gh api graphql` writes its `errors` document to **stdout** and
+# exits non-zero, so `out=$(gh ... --jq '... // empty' 2>/dev/null)` followed by
+# `[ -n "$out" ]` reads the error blob as a value and carries on with it. That
+# shape is invisible in review — it looks like a guard — and it is green in every
+# run where the API behaves. The stub is the only way to make the API misbehave.
+#
+# The exit codes are asserted rather than only the messages, because `board-add`
+# is called from workflows that branch on them: *did not run* and *does not
+# exist* want different responses from whoever is reading.
+
+case_setup
+printf '%s\n' yes > "$GH_FIXTURES/graphql_fails"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+check "a query that did not run exits 2" "2" "$rc"
+contains "and says so, rather than saying the issue does not exist" \
+  "did not run" "$out"
+absent "and nothing is added on the strength of an error document" \
+  "addProjectV2ItemById" "$(cat "$GH_LOG")"
+
+case_setup
+printf '%s\n' "kolonie-hermes#12" > "$GH_FIXTURES/unreadable_issues"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+check "an issue that really is not there exits 3, which is a different answer" "3" "$rc"
+contains "and names what is missing" "does not exist" "$out"
+absent "and adds nothing, because there is nothing to add" \
+  "addProjectV2ItemById" "$(cat "$GH_LOG")"
+
+# The repository argument, in both shapes. `board-item-id.sh` in the same
+# directory takes a bare name and this took a qualified one, so a reader had to
+# remember which script wanted which. Both now work and both mean the same board.
+case_setup
+jq -cn '{items: []}' > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+check "a bare repository name is accepted" "0" "$rc"
+contains "and is asked about under the organisation" \
+  "-f owner=Kolonie-AI -f name=kolonie-hermes" "$(cat "$GH_LOG")"
+contains "and the issue lands in Inbox rather than in no column" \
+  "in Inbox" "$out"
+
+case_setup
+jq -cn '{items: []}' > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" board-add Kolonie-AI/kolonie-hermes 12 2>&1); rc=$?
+check "the qualified shape still works and means the same thing" "0" "$rc"
+contains "the same issue, the same owner" \
+  "-f owner=Kolonie-AI -f name=kolonie-hermes" "$(cat "$GH_LOG")"
+
+# The rejection case: an argument that is neither shape is refused by name at the
+# first line, rather than queried for and reported as a missing issue.
+case_setup
+out=$(bash "$SCRIPT" board-add Kolonie-AI/kolonie-docs/agents 12 2>&1); rc=$?
+check "an argument that is no repository is refused" "1" "$rc"
+contains "and the refusal shows both shapes it would have taken" \
+  "is not a repository" "$out"
+absent "and nothing is asked of GitHub about it" "api graphql" "$(cat "$GH_LOG")"
+
+# ## The column that could not be set, and what may be said about it
+#
+# `#422` again, on the other side of the same argument as `release` (`#381`): the
+# message used to assert *on the board and in no column* on a run where the add
+# had not happened, and sent a reader looking for a card that was not there. The
+# board is read back before anything is claimed about it — and the read-back can
+# itself fail, which is a third answer and not the second one.
+case_setup
+printf '%s\n' yes > "$GH_FIXTURES/edit_fails"
+jq -cn '{items: [ {id: "PVTI_added_kolonie-hermes12", status: "Ready", labels: [],
+  content: {number: 12, repository: "Kolonie-AI/kolonie-hermes"}} ]}' > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+check "a column that could not be set exits 5" "5" "$rc"
+contains "and names the column the board actually shows" "it is in Ready" "$out"
+
+case_setup
+printf '%s\n' yes > "$GH_FIXTURES/edit_fails"
+jq -cn '{items: []}' > "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+contains "an issue the board does not show is not claimed to be on it" \
+  "does not show it at all" "$out"
+absent "and the old wording, which asserted the opposite, is gone" \
+  "is on the board and its column could not be set" "$out"
+
+# No board fixture at all is a failed read in this stub, which is the third
+# answer: the write failed and the board could not be asked about it either.
+case_setup
+printf '%s\n' yes > "$GH_FIXTURES/edit_fails"
+out=$(bash "$SCRIPT" board-add kolonie-hermes 12 2>&1); rc=$?
+contains "a read-back that fails says the board could not be asked" \
+  "could not be asked where it ended up" "$out"
+absent "and does not report a column it never read" "it is in " "$out"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
