@@ -319,6 +319,7 @@ query($org: String!, $project: Int!, $after: String) {
               title
               url
               state
+              stateReason
               closedAt
               repository { nameWithOwner url }
               labels(first: 20) { nodes { name } }
@@ -344,6 +345,15 @@ GRAPHQL
 # still one paginated read rather than two. What they buy is the only question
 # 5a and 5b between them cannot ask — *is this card in the right column* — which
 # needs the issue's own state next to the card's Status, in the same document.
+#
+# `stateReason` is the third of those, and the one that turns a finding into a
+# repair (`#426`). An open issue whose card says Done arrives two ways that want
+# opposite fixes, and until this field was asked for, 5d could see the symptom
+# and not the cause: it reported both kinds together and suggested nothing. The
+# field separates them — `REOPENED` is an issue that was closed and came back,
+# so the card is stale and belongs in Inbox; `null` is an issue that was never
+# closed at all, where the repair is closing it and moving the card would hide
+# exactly what was found. Free on the same terms as the other two.
 #
 # The item's own `updatedAt` is here on the same terms and answers a question the
 # issue's cannot (`#345`): **how long the card has been where it is.** An issue's
@@ -404,13 +414,22 @@ board_read() {
             title: .content.title,
             labels: [ .content.labels.nodes[].name ],
             repository: .content.repository.url,
-            content: { number: .content.number,
-                       title: .content.title,
-                       repository: .content.repository.nameWithOwner,
-                       url: .content.url,
-                       state: .content.state,
-                       closedAt: .content.closedAt,
-                       type: "Issue" } } ]
+            content: ({ number: .content.number,
+                        title: .content.title,
+                        repository: .content.repository.nameWithOwner,
+                        url: .content.url,
+                        state: .content.state,
+                        closedAt: .content.closedAt,
+                        type: "Issue" }
+                      # **Carried only when the read answered with it**, which
+                      # an object literal cannot express: `stateReason: …` mints
+                      # the key as null when it is absent, and null is a real
+                      # answer here meaning *this issue was never closed*. Every
+                      # other field can be minted, because null is not one of
+                      # their meanings. A caller has to be able to tell *no
+                      # reason* from *did not ask*, or it reads a board that
+                      # cannot say why as a board of never-closed issues.
+                      + (.content | if has("stateReason") then {stateReason} else {} end)) } ]
     ' <<<"$page" >>"$pages" || { rc=1; break; }
     [ "$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$page")" = true ] || break
     after=$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor' <<<"$page")

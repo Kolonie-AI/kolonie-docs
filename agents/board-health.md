@@ -107,6 +107,33 @@ other two: the reopened kind belongs in Inbox and the never-closed kind belongs
 where it is until somebody closes the issue, so suggesting a move would paper
 over the finding.
 
+**For a day the third could see that difference and not report it** (`#426`,
+2026-08-16). It listed both kinds together and, because one of them must not be
+moved, suggested nothing for either — so the reopened item, the one with a
+one-command repair, was reported exactly as bluntly as the item whose repair is
+somebody reading an issue. `stateReason` is what separates them: `REOPENED` for
+an issue closed and brought back, `null` for one never closed. It is a scalar on
+a node the read already fetches, so it costs what the other three cost. 5d now
+prints two lists under two headings — the reopened one carrying the `item-edit`
+that sends the card to Inbox, the never-closed one carrying no destination and
+saying so, because **there** the absence of a move is the finding.
+
+**The split shipped against an empty backlog: zero of either kind on
+2026-08-16**, measured live rather than assumed, six items having been the count
+three days earlier. `#426` named `kolonie-platform#1032` as its example and that
+issue was closed the morning the split was built, which is the shape to expect
+here — the six from 2026-08-13 were worked off by hand once `#345` named them.
+**Nought is the useful number anyway**: it is what says the next non-zero run
+found something new rather than something old, and it is why the count belongs
+in this file with its date on it.
+
+**A board answering without the field falls back to the single list.** Absent and
+`null` are different answers — the first is *this read cannot tell*, the second
+is *never closed* — so `board-read` carries `stateReason` only when the read
+answered with it, rather than minting the key. An object literal cannot express
+that, which is the one thing to know before editing that reduction: every other
+field can be minted, because `null` is not one of their meanings.
+
 **It exists because that class of failure is what the board is producing right
 now.** Measured on 2026-08-13 against 154 items: two issues had no Status at all
 and one closed issue was still In Review two hours after it closed. An item with

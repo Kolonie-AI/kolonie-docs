@@ -59,21 +59,27 @@ case "$1 $2" in
     # the way it always did — including the short one that proves 5b refuses to
     # accuse a hundred issues on a failed read.
     #
-    # **5d needs a line to be able to say more than that** (`#329`), so four
-    # optional `|`-separated fields follow: Status, state, `closedAt`, and the
-    # card's own `updatedAt` (`#345`). A line without them is `Ready` and `OPEN`,
-    # which is what every case written before 5d existed means by it, and an
-    # explicitly empty second field is the item with no Status at all that 5d is
-    # a third about.
+    # **5d needs a line to be able to say more than that** (`#329`), so five
+    # optional `|`-separated fields follow: Status, state, `closedAt`, the
+    # card's own `updatedAt` (`#345`), and `stateReason` (`#426`). A line
+    # without them is `Ready` and `OPEN`, which is what every case written
+    # before 5d existed means by it, and an explicitly empty second field is the
+    # item with no Status at all that 5d is a third about.
     #
     # **A missing card timestamp is a card with none, not a recent one.** 5d
     # reports an item whose `updatedAt` it cannot read rather than skipping it,
     # so the default here has to be the same way round: a case that says nothing
     # about the card's clock is one where the grace window cannot apply.
+    #
+    # `stateReason` defaults to null, which is the state of every issue that was
+    # never closed — the majority, and the kind the cases written before `#426`
+    # all meant. The key is always emitted, because *absent* and *null* are
+    # different answers to 5d and the `no_reason` sentinel below is how the
+    # first one is expressed.
     elif [[ "$*" == *"items(first: 100"* ]]; then
       jq -Rn '[inputs | select(length > 0) | split("|")
         | {status: (.[1] // "Ready"), state: (.[2] // "OPEN"), closedAt: (.[3] // ""),
-           updatedAt: (.[4] // "")}
+           updatedAt: (.[4] // ""), stateReason: (.[5] // "")}
           + (.[0] | capture("(?<repo>.+)#(?<n>[0-9]+)$"))]
         | {data:{organization:{projectV2:{items:{
             pageInfo:{hasNextPage:false,endCursor:null},
@@ -83,6 +89,7 @@ case "$1 $2" in
                  fieldValueByName:(if .status == "" then null else {name:.status} end),
                  content:{number:(.n|tonumber), title:"untitled", url:"",
                           state:.state,
+                          stateReason:(if .stateReason == "" then null else .stateReason end),
                           closedAt:(if .closedAt == "" then null else .closedAt end),
                           repository:{nameWithOwner:.repo, url:""},
                           labels:{nodes:[]}}} ]}}}}}' \
@@ -92,6 +99,12 @@ case "$1 $2" in
             # changed back, or an older board file being replayed. 5d must say
             # so rather than reporting every column clean.
             jq -c '(.data.organization.projectV2.items.nodes[].content) |= del(.state, .closedAt)'
+          elif [ -f "$GH_FIXTURES/no_reason" ]; then
+            # The same failure one field along: a board that still says whether
+            # an issue is open and no longer says why. 5d must fall back to one
+            # undistinguished list rather than calling every one of them
+            # never-closed and being confidently wrong about half.
+            jq -c '(.data.organization.projectV2.items.nodes[].content) |= del(.stateReason)'
           else cat; fi
     else
       cat "$GH_FIXTURES/pruning" 2>/dev/null
@@ -393,10 +406,46 @@ out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "an open item sitting in Done fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
 expect "and names it and how long the card has been there" \
   "$([[ "$out" == *"kolonie-platform#820"* && "$out" == *"in Done since"* ]] && echo yes || echo no)" "$out"
-# The one way this half differs from the other two: the two ways in want
-# opposite repairs, so it prints the item and no destination.
-expect "and suggests no move, because closing the issue may be the repair" \
-  "$([[ "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
+# The never-closed kind is the one half that still prints no destination, and
+# `#426` did not change that: the card is right and the issue is wrong, so a
+# suggested move would paper over what was found.
+expect "and suggests no move, because closing the issue is the repair" \
+  "$([[ "$out" != *"item-edit"* && "$out" == *"never closed"* ]] && echo yes || echo no)" "$out"
+
+# The other way in, which wore the same symptom until `#426` asked for
+# `stateReason`. `kolonie-docs#285`: closed, then reopened by `red-on-main` into
+# the one column the loop's queries do not read.
+setup; echo "Kolonie-AI/kolonie-docs#285|Done|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)|REOPENED" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-docs#285" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a reopened item sitting in Done fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and says it was reopened rather than never closed" \
+  "$([[ "$out" == *"were reopened"* && "$out" != *"never closed"* ]] && echo yes || echo no)" "$out"
+expect "and prints the move to Inbox, which the other kind cannot have" \
+  "$([[ "$out" == *"item-edit --id ITEM_285"* && "$out" == *"78639a6d"* ]] && echo yes || echo no)" "$out"
+
+# Both at once: one symptom, two causes, two repairs — and each item named once,
+# under the heading that matches its own cause.
+setup; echo "Kolonie-AI/kolonie-docs#285|Done|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)|REOPENED" >> "$GH_FIXTURES/board"
+echo "Kolonie-AI/kolonie-platform#820|Done|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "the two kinds are reported apart, under a heading each" \
+  "$([[ "$out" == *"were reopened"* && "$out" == *"never closed"* ]] && echo yes || echo no)" "$out"
+expect "and the never-closed one carries no move of its own" \
+  "$([ "$(grep -c 'item-edit' <<<"$out")" -eq 1 ] && echo yes || echo no)" "$out"
+expect "and each is named once" \
+  "$([ "$(grep -c 'kolonie-platform#820' <<<"$out")" -eq 1 ] && echo yes || echo no)" "$out"
+
+# `stateReason` arrives from the same paginated read as `state`. If it stops
+# arriving, calling every one of these never-closed would be confidently wrong
+# about half of them — so the two halves collapse back into `#345`'s one list.
+setup; : > "$GH_FIXTURES/no_reason"
+echo "Kolonie-AI/kolonie-docs#285|Done|OPEN||$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)" >> "$GH_FIXTURES/board"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a listing carrying no stateReason still reports the item" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-docs#285"* ]] && echo yes || echo no)" "$out"
+expect "and says it cannot tell the two causes apart, rather than guessing one" \
+  "$([[ "$out" == *"cannot say why"* && "$out" != *"never closed,"* && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
 
 # The grace window, and the reason it is the card's clock rather than the
 # issue's: somebody moving a card and closing the issue a moment later is the
@@ -431,7 +480,8 @@ setup; echo "Kolonie-AI/kolonie-docs#1|" > "$GH_FIXTURES/board"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a short listing suppresses all three comparisons" \
   "$([[ "$out" != *"These board items are in no column"* && "$out" != *"are closed and are not in Done"* \
-      && "$out" != *"open and their cards say Done"* && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
+      && "$out" != *"were reopened"* && "$out" != *"were never closed"* && "$out" != *"cannot say why"* \
+      && "$out" != *"item-edit"* ]] && echo yes || echo no)" "$out"
 expect "and says it is unverified rather than staying silent under 5b" \
   "$([[ "$out" == *"None of the three placement comparisons was run"* ]] && echo yes || echo no)" "$out"
 

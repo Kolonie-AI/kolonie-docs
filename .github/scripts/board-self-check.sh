@@ -371,7 +371,8 @@ STATUS_DONE=${STATUS_DONE:-d37dbc2a}
 CLOSED_SETTLE_HOURS=6
 
 check_placement() {
-  local cutoff statusless closed reopened stated
+  local cutoff statusless closed stated
+  local in_done reasoned line reopened unclosed undistinguished
   if ! load_board; then
     # 5b has already printed the number and the likely causes; repeating them
     # would be two paragraphs about one failure. What has to be said here is
@@ -425,46 +426,82 @@ check_placement() {
   # GitHub closes on `Closes #N` or on a pull request merging, and the
   # parenthesised number is a convention inherited from squash-merge titles.
   #
-  # **No destination is printed, deliberately**, which is the one way this half
-  # differs from the other two. The reopened kind belongs in Inbox for triage;
-  # the never-closed kind belongs nowhere in particular, because the repair is
-  # closing the issue rather than moving the card, and a suggested move would
-  # paper over exactly the thing this found. 5a already prints an item and lets a
-  # person choose.
+  # **Those two are now separated rather than reported together** (`#426`).
+  # `#345` printed one list and no destination, because the two ways in want
+  # opposite repairs and the document could not tell them apart. `stateReason`
+  # tells them apart, and it is free: a scalar on a node `board-read` already
+  # fetches. So the reopened kind carries the move that fixes it, and the
+  # never-closed kind still carries none — its repair is closing the issue, and
+  # a suggested move would paper over exactly the thing this found.
   #
   # The window is cut against the **card's** `updatedAt` and not the issue's:
   # the question is how long the card has sat in Done, and an issue's own
   # timestamp moves when somebody comments on it. A card with no timestamp at all
   # is reported rather than skipped — an absent field must not be able to silence
   # a comparison.
-  reopened=$(jq -r --arg c "$cutoff" '
-    .items[]
-    | select(.content.state == "OPEN")
-    | select(.status == "Done")
-    | select((.updatedAt // "") < $c)
-    | "    \(.content.repository)#\(.content.number) — open, and its card has been in Done since \(.updatedAt // "an unrecorded time") — \(.content.url)"
+  in_done=$(jq -c --arg c "$cutoff" '
+    [ .items[]
+      | select(.content.state == "OPEN")
+      | select(.status == "Done")
+      | select((.updatedAt // "") < $c) ]
     ' "$BOARD_JSON" 2>/dev/null)
 
-  [ -z "$statusless" ] && [ -z "$closed" ] && [ -z "$reopened" ] && return 0
+  # **A board answering without `stateReason` must not be read as a board of
+  # never-closed issues.** It is the same rule the `stated` guard above applies
+  # to `state`: absent and null are different answers, and the missing field
+  # means *this checkout cannot tell*, not *none of these was reopened*. When it
+  # is missing the two halves collapse back into `#345`'s single list, which was
+  # right for as long as the cause was unknowable.
+  reasoned=$(jq -r '[.items[] | select(.content | has("stateReason"))] | length' "$BOARD_JSON" 2>/dev/null)
+
+  line='"    \(.content.repository)#\(.content.number) — open, and its card has been in Done since \(.updatedAt // "an unrecorded time") — \(.content.url)"'
+  if [ "${reasoned:-0}" -eq 0 ]; then
+    undistinguished=$(jq -r ".[] | $line" <<<"${in_done:-[]}" 2>/dev/null)
+    reopened="" unclosed=""
+  else
+    undistinguished=""
+    # Closed once and reopened: the card is a leftover from the first time
+    # round, and Inbox is where the loop's queries can see the issue again.
+    reopened=$(jq -r --arg p "$PROJECT_ID" --arg f "$STATUS_FIELD" --arg inbox "$STATUS_INBOX" \
+      ".[] | select(.content.stateReason == \"REOPENED\") | $line"' + " — gh project item-edit --id \(.id) --project-id \($p) --field-id \($f) --single-select-option-id \($inbox)"' \
+      <<<"${in_done:-[]}" 2>/dev/null)
+    unclosed=$(jq -r ".[] | select(.content.stateReason != \"REOPENED\") | $line" <<<"${in_done:-[]}" 2>/dev/null)
+  fi
+
+  [ -z "$statusless" ] && [ -z "$closed" ] && [ -z "$reopened" ] && [ -z "$unclosed" ] &&
+    [ -z "$undistinguished" ] && return 0
 
   if [ -n "$statusless" ]; then
     echo "5d — **These board items are in no column.** They are on the board, so 5b is satisfied and says nothing about them, and nobody working the loop can see them — the queue reads columns. The likeliest cause is that the built-in Status workflows are still disabled (§4); this is the per-item repair, not the repair:"
     echo
     printf '%s\n' "$statusless" | head -20
-    { [ -n "$closed" ] || [ -n "$reopened" ]; } && echo
+    { [ -n "$closed" ] || [ -n "$reopened" ] || [ -n "$unclosed" ] || [ -n "$undistinguished" ]; } && echo
   fi
 
   if [ -n "$closed" ]; then
     echo "5d — **These items are closed and are not in Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not the built-in workflow being slow. A closed item outside Done is never archived either, so it stays on the board and every board read is charged for it — which is 5a's failure arriving by another route:"
     echo
     printf '%s\n' "$closed" | head -20
-    [ -n "$reopened" ] && echo
+    { [ -n "$reopened" ] || [ -n "$unclosed" ] || [ -n "$undistinguished" ]; } && echo
   fi
 
   if [ -n "$reopened" ]; then
-    echo "5d — **These items are open and their cards say Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not somebody mid-way through finishing one. There are two ways in and they want opposite repairs, so no move is suggested: an issue **reopened** by a watcher belongs in Inbox, where the loop's queries can see it, while an issue that was **never closed** belongs where it is until somebody closes it — a commit pushed to \`main\` whose subject ends \`(#n)\` closes nothing, and \`Closes #n\` in the body is what does. Read the issue before moving the card:"
+    echo "5d — **These issues were reopened, and their cards still say Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not somebody mid-way through finishing one. The card is a leftover from the first time round: the issue is live again and sitting in the one column the loop's queries do not read, so nobody will pick it up. Inbox is where a reopened issue is triaged from:"
     echo
     printf '%s\n' "$reopened" | head -20
+    { [ -n "$unclosed" ] || [ -n "$undistinguished" ]; } && echo
+  fi
+
+  if [ -n "$unclosed" ]; then
+    echo "5d — **These issues were never closed, and their cards say Done.** More than $CLOSED_SETTLE_HOURS hours have passed, so this is not somebody mid-way through finishing one. **No move is suggested and that is the finding**: the card is right about the work and the issue is what is wrong, so the repair is closing the issue rather than moving anything. A commit pushed to \`main\` whose subject ends \`(#n)\` closes nothing — \`Closes #n\` in the body is what does. Read the issue before you close it; a card someone parked in Done early is the other way this reads:"
+    echo
+    printf '%s\n' "$unclosed" | head -20
+  fi
+
+  if [ -n "$undistinguished" ]; then
+    echo "5d — **These items are open and their cards say Done, and this checkout cannot say why.** The board listing carries no \`stateReason\`, so \`board-read\` is answering without it and the two causes cannot be separated here — an issue **reopened** by a watcher belongs in Inbox, while an issue that was **never closed** belongs where it is until somebody closes it. Read each issue before moving its card:"
+    echo
+    printf '%s\n' "$undistinguished" | head -20
   fi
   return 1
 }
