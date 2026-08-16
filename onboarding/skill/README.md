@@ -95,6 +95,19 @@ the body has moved. **The pull request is not merged by the job** — a change t
 the Colony-facing text arrives in seven repositories at once, and a human
 deciding that seven times is the check on it.
 
+**The checking job and the opening job run on disjoint events, and that is what
+makes a red run mean something** (`#410`). `check` runs on `pull_request` and on
+`push`; `sync` runs on `schedule` and on `workflow_dispatch`. Until 2026-08-16
+`check` ran on all four, and on `sync`'s two a `SKILL.md` behind the body is
+*the reason the run was asked for* rather than a defect it found — so the run
+went red, `sync` opened the pull request that fixed it, that merged a minute
+later, and the red stayed on `main` after its cause was gone. Measured across
+the seven runtime repositories that morning, 42 failed `Skill` runs on `main`
+were exactly that: 21 on `schedule`, 19 on `workflow_dispatch`, and 2 on a push.
+So: **a red `Skill` run on `main` means a hand edit to a generated file**, which
+is the one thing the check is there to catch and the only thing that reaches
+`main` any more.
+
 ## What is deliberately not generated from this
 
 **The website.** `kolonie.ai`'s fork page and `/skill` are written for a human
