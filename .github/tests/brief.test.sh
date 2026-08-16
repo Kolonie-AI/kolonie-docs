@@ -315,13 +315,26 @@ echo
 echo "against this repository, where the measurements are claims about it"
 
 manifest=$(bash "$ROOT/.github/scripts/brief.sh" --manifest)
-bytes=$(printf '%s' "$manifest" | wc -c)
-tokens=$((bytes / 4))
-if [ "$tokens" -lt 2000 ]; then
-  pass "the start manifest is ~$tokens tokens, under the 2.000 this was built for"
+
+# #362 defined this budget as "200 lines ≈ 3.000 tokens" and then said which
+# half of it refuses: "Tokens are what gets reported; lines are what gets
+# refused. Where the two ever disagree, the line cap wins and the token figure
+# is re-measured." This refused on tokens instead, at a number #362 never named
+# — and it refused on bytes/4 of a manifest whose fourth line names the
+# checkout, so the same commit passed at /home/…/kolonie-docs and failed on a
+# runner four characters deeper. A budget a longer clone path can fail is not
+# measuring the manifest. See #404.
+lines=$(grep -c '' <<<"$manifest")
+if [ "$lines" -le 200 ]; then
+  pass "the start manifest is $lines lines, inside the 200 kolonie-docs#362 refuses past"
 else
-  fail "the start manifest is ~$tokens tokens, over the 2.000 kolonie-docs#362 requires"
+  fail "the start manifest is $lines lines, over the 200 kolonie-docs#362 refuses past"
 fi
+
+# Reported, never refused — with $ROOT folded away first, so the figure is a
+# claim about the manifest and the same one in every checkout.
+bytes=$(printf '%s' "${manifest//$ROOT/<kolonie-docs>}" | wc -c)
+echo "  note the start manifest is ~$((bytes / 4)) tokens, against the ~3.000 #362 estimated"
 
 missing=$(bash "$ROOT/.github/scripts/brief.sh" --modules | awk -F'\t' '$3=="no summary" {print $1}')
 if [ -z "$missing" ]; then
