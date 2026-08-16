@@ -207,6 +207,7 @@ case "$1 $2" in
     case "$option" in
       0ce10d81) status="Ready" ;;
       78639a6d) status="Inbox" ;;
+      9caff3d3) status="Blocked" ;;
       *)        status="" ;;
     esac
     if [ -n "$item" ] && [ -n "$status" ]; then
@@ -878,8 +879,8 @@ cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
 JSON
 run_apply "$(decided 900 "agent:opencode" "" "" "Kolonie-AI/kolonie-docs#800" true)" >/dev/null
 log=$(cat "$GH_LOG")
-contains "an issue in Ready that turns out to be blocked leaves the queue" \
-  "single-select-option-id 78639a6d" "$log"
+contains "an issue in Ready that turns out to be blocked leaves the queue, into Blocked" \
+  "single-select-option-id 9caff3d3" "$log"
 contains "and the comment says it is out of it" "Out of the queue" "$log"
 
 # Two passes judged `kolonie-platform#702` differently within an hour, so it went to
@@ -1092,7 +1093,7 @@ absent "nothing proposed opens nothing" "issue create" "$(cat "$GH_LOG")"
 contains "and says so" "no prohibition was proposed" "$(cat "$WORK/stderr")"
 
 echo
-echo "the half that needs no model: the Ready <-> Inbox sweep (#289)"
+echo "the half that needs no model: the queue sweep (#289, #412)"
 
 # Out of the queue on a fact. The issue is decided — no pass will ever brief it
 # again — so if this did not run, an issue that acquired a blocker would sit in
@@ -1105,7 +1106,9 @@ cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
 JSON
 out=$(run_sweep)
 log=$(cat "$GH_LOG")
-contains "an open blocker takes a decided issue out of Ready" \
+contains "an open blocker takes a decided issue out of Ready, into Blocked" \
+  "single-select-option-id 9caff3d3" "$log"
+absent "and not into Inbox, which means something else (#412)" \
   "single-select-option-id 78639a6d" "$log"
 contains "and the comment says what it waits for" "Kolonie-AI/kolonie-docs#800" "$log"
 contains "and the run counts the move" "the sweep moved 1 card(s)" "$out"
@@ -1117,7 +1120,7 @@ boarded "900|Ready|agent:claude blocked:human"
 run_sweep >/dev/null
 log=$(cat "$GH_LOG")
 contains "blocked:human takes a decided issue out of Ready too" \
-  "single-select-option-id 78639a6d" "$log"
+  "single-select-option-id 9caff3d3" "$log"
 contains "and the comment says whose decision it is" "not a queue position" "$log"
 
 # The way back, and the reason it is narrower: an issue whose recorded blockers
@@ -1146,6 +1149,81 @@ absent "an issue that never had a blocker is left where a person put it" \
 absent "and is not commented on" "issue comment" "$log"
 
 echo
+echo "the Blocked column is read as well as written (#412)"
+
+# The column the pass parks in is one it never looked at again, so nothing ever
+# left it: a card went out of Ready on a blocker and stayed out after the blocker
+# closed. These are the same two rules as above, read from the third column.
+
+# The rejection case, and the one that matters: a card in Blocked that is still
+# blocked is not touched. If this ever moves, the column empties itself.
+case_setup
+searched "$(issue 900 'parked here, and still waiting' 'agent:claude')"
+boarded "900|Blocked|agent:claude"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "open"}]
+JSON
+out=$(run_sweep)
+log=$(cat "$GH_LOG")
+absent "a card in Blocked with an open blocker is not moved" \
+  "single-select-option-id" "$log"
+absent "and is not commented on" "issue comment" "$log"
+contains "and the run says which column it held it in" \
+  "held in Blocked" "$(cat "$WORK/stderr")"
+contains "and the pass counts no move" "the sweep moved 0 card(s)" "$out"
+
+case_setup
+searched "$(issue 900 'parked here, and the blocker has closed' 'agent:claude')"
+boarded "900|Blocked|agent:claude"
+cat > "$GH_FIXTURES/blocked_Kolonie-AI_kolonie-docs_issues_900" <<'JSON'
+[{"repository_url": "https://api.github.com/repos/Kolonie-AI/kolonie-docs", "number": 800, "state": "closed"}]
+JSON
+out=$(run_sweep)
+log=$(cat "$GH_LOG")
+contains "a card in Blocked whose every blocker has closed comes back to Ready" \
+  "single-select-option-id 0ce10d81" "$log"
+check "exactly once" "1" "$(grep -c 'single-select-option-id' <<<"$log")"
+check "with exactly one comment" "1" "$(grep -c 'issue comment' <<<"$log")"
+contains "which names what it was waiting for" "Back in the queue" "$log"
+contains "and the pass counts the move" "the sweep moved 1 card(s)" "$out"
+
+# The second pass, over the board the first one left. The way back has already
+# fired; nothing here has changed, so nothing may be written again.
+: > "$GH_LOG"
+out=$(run_sweep)
+log=$(cat "$GH_LOG")
+absent "and a second pass over the unchanged board writes nothing" \
+  "single-select-option-id" "$log"
+absent "and comments nothing" "issue comment" "$log"
+contains "and says so" "the sweep moved 0 card(s)" "$out"
+
+# The asymmetry, stated as a test: the way out is wider than the way back. A card
+# a person moved into Blocked by hand, with no dependency recorded, has no
+# recorded reason to have stopped waiting — so nothing here guesses that it has.
+case_setup
+searched "$(issue 900 'moved here by hand, nothing recorded' 'agent:claude')"
+boarded "900|Blocked|agent:claude"
+run_sweep >/dev/null
+log=$(cat "$GH_LOG")
+absent "a card in Blocked with no recorded dependency is left alone" \
+  "single-select-option-id" "$log"
+absent "and is not commented on" "issue comment" "$log"
+
+# `candidates` is the shared query, so the model half sees the third column too.
+# It may route what it finds there; what it may not do is release it.
+case_setup
+searched "$(issue 900 'blocked and unrouted' '')"
+boarded "900|Blocked|"
+found=$(bash "$SCRIPT" candidates 2>/dev/null)
+contains "an unrouted card in Blocked is a candidate for the model half" \
+  '"number":900' "$(jq -c '.candidates' <<<"$found")"
+run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+contains "which writes it a route" "--add-label agent:claude" "$log"
+absent "and does not move it to Ready — only the sweep's narrow way back empties Blocked" \
+  "single-select-option-id 0ce10d81" "$log"
+
+echo
 echo "a held issue does not reach Ready, whatever its route says (#390)"
 
 # The hold `#389` puts on an issue nobody inside the organisation has looked at,
@@ -1158,7 +1236,7 @@ boarded "900|Ready|agent:opencode needs-clearance"
 out=$(run_sweep)
 log=$(cat "$GH_LOG")
 contains "needs-clearance takes a decided issue out of Ready" \
-  "single-select-option-id 78639a6d" "$log"
+  "single-select-option-id 9caff3d3" "$log"
 contains "and the comment names the label" "needs-clearance" "$log"
 contains "and says who takes it off" "only a member takes that off" "$log"
 absent "and the route is not touched — the hold is on the column" \

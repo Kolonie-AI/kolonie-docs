@@ -9,7 +9,7 @@
 #   opencode-worker.sh dependencies <repo> <number>  # -> every blocked-by relation as `<state> <repo>#<n>`
 #   opencode-worker.sh forgotten-claims        # -> In Progress items nothing has touched for hours
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
-#   opencode-worker.sh move <repo> <number> Ready|Inbox  # -> the only board write triage may make (#262)
+#   opencode-worker.sh move <repo> <number> Ready|Inbox|Blocked  # -> the only board writes triage may make (#262, #412)
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
 #   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
@@ -116,6 +116,10 @@ STATUS_READY=${STATUS_READY:-0ce10d81}
 STATUS_INBOX=${STATUS_INBOX:-78639a6d}
 STATUS_IN_PROGRESS=${STATUS_IN_PROGRESS:-604be33b}
 STATUS_IN_REVIEW=${STATUS_IN_REVIEW:-bd543ca4}
+# `#412`: the column the triage pass parks blocked work in. It is a third
+# writable target and not a third holder — nobody claims a card in Blocked, which
+# is what keeps it on the same side of the line as Ready and Inbox.
+STATUS_BLOCKED=${STATUS_BLOCKED:-9caff3d3}
 
 ORG=${ORG:-Kolonie-AI}
 QUEUE_LABEL=${QUEUE_LABEL:-agent:opencode}
@@ -1875,11 +1879,12 @@ case "${1:-}" in
   move)
     repo=${2:?move needs a repository}
     number=${3:?move needs an issue number}
-    column=${4:?move needs a column: Ready or Inbox}
+    column=${4:?move needs a column: Ready, Inbox or Blocked}
     case "$column" in
       Ready) option=$STATUS_READY ;;
       Inbox) option=$STATUS_INBOX ;;
-      *) die "move writes Ready or Inbox and nothing else: $column is not one of them. In Progress, In Review and Done belong to whoever holds them." 1 ;;
+      Blocked) option=$STATUS_BLOCKED ;;
+      *) die "move writes Ready, Inbox or Blocked and nothing else: $column is not one of them. In Progress, In Review and Done belong to whoever holds them." 1 ;;
     esac
     item=$(board_item_for "$repo" "$number")
     [ -n "$item" ] || die "$repo#$number is not on the board" 3
@@ -2022,6 +2027,6 @@ case "${1:-}" in
     ;;
 
   *)
-    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | column <repo> <n> | move <repo> <n> Ready|Inbox | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims [--escalated] | board-read | board-add <repo> <n> | leak-check <file>..."
+    die "usage: opencode-worker.sh pick | claim <repo> <n> | verify-claim <repo> <n> | blockers <repo> <n> | dependencies <repo> <n> | review <repo> <n> | release <repo> <n> | column <repo> <n> | move <repo> <n> Ready|Inbox|Blocked | check-command <path> | check-prerequisite <path> | prohibited-paths [file] | exports <file> | failed-step | excerpt <file> | failure-digest <file> | redact <file> | worker-rule-refusal <file> | previous-failures <repo> <n> | stale-pull-requests | unreported-completions | unarmed-pull-requests | forgotten-claims [--escalated] | board-read | board-add <repo> <n> | leak-check <file>..."
     ;;
 esac

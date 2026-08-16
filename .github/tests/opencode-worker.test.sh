@@ -141,6 +141,7 @@ case "$1 $2" in
       0ce10d81) status="Ready" ;;
       604be33b) status="In Progress" ;;
       bd543ca4) status="In Review" ;;
+      9caff3d3) status="Blocked" ;;
       *)        status="" ;;
     esac
     if [ -n "$item" ] && [ -n "$status" ] && [ -s "$GH_FIXTURES/board" ]; then
@@ -1543,14 +1544,24 @@ echo
 echo "the board write triage is allowed to make (#262)"
 
 # `move` exists so that the triage pass does not carry a second copy of the
-# mutation. What makes it safe is that it writes two columns and refuses the rest:
-# In Progress and In Review belong to whoever holds them, and a triage pass that
-# could write them could take work off an agent that has it.
+# mutation. What makes it safe is that it writes three columns and refuses the
+# rest: In Progress and In Review belong to whoever holds them, and a triage pass
+# that could write them could take work off an agent that has it.
 case_setup
 boarded "77:Inbox"
 check "an issue in Inbox can be moved to Ready" "moved Kolonie-AI/kolonie-docs#77 to Ready" \
   "$(bash "$SCRIPT" move Kolonie-AI/kolonie-docs 77 Ready 2>/dev/null)"
 check "and the board says so" "Ready" \
+  "$(jq -r '.items[0].status' "$GH_FIXTURES/board")"
+
+# `#412`: the third writable column. It is on the same side of the line as the
+# other two because nobody *holds* a card in Blocked — moving one takes no work
+# off anybody, which is the property that decides what triage may write.
+case_setup
+boarded "77:Ready"
+check "and an issue in Ready can be moved to Blocked" "moved Kolonie-AI/kolonie-docs#77 to Blocked" \
+  "$(bash "$SCRIPT" move Kolonie-AI/kolonie-docs 77 Blocked 2>/dev/null)"
+check "and the board says so" "Blocked" \
   "$(jq -r '.items[0].status' "$GH_FIXTURES/board")"
 
 case_setup
