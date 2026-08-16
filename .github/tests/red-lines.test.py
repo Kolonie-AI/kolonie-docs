@@ -594,6 +594,98 @@ with tempfile.TemporaryDirectory() as directory:
         red_lines.MINIMUM_COPIES = original
 
 
+# --------------------------------------------------------------------------
+print("\na bullet wrapped across two lines (#402)")
+# --------------------------------------------------------------------------
+#
+# The reader used to accept a block only when every line of it began with `- `,
+# so one wrapped bullet failed that test and took the entire block with it —
+# silently. The count then came out short and the finding named the copy rather
+# than the wrap, which is `#78`/`#79`'s failure mode again: a rule written in a
+# shape the reader does not recognise stops being watched and says nothing.
+#
+# Both sides are covered, because either can wrap and they fail differently. A
+# wrap in a copy costs that copy its rules; a wrap in the source costs every
+# copy at once, and reads as though all ten had drifted on the same day.
+
+WRAPPED_SKILL = SKILL.replace(
+    "- No bypassing other platforms' protections as an end in itself",
+    "- No bypassing other platforms' protections as an end\n  in itself",
+)
+
+wrapped_rules = red_lines.rules_from_markdown(
+    WRAPPED_SKILL, "Red lines", named_paragraphs=False
+)
+check(
+    "a wrapped bullet is one rule, not a dropped block",
+    len(wrapped_rules) == 3,
+    f"got {len(wrapped_rules)}: {wrapped_rules}",
+)
+check(
+    "and it carries the words from both of its lines",
+    any(
+        red_lines.normalise(rule)
+        == red_lines.normalise("No bypassing other platforms' protections as an end in itself")
+        for rule in wrapped_rules
+    ),
+    str(wrapped_rules),
+)
+check(
+    "its neighbours in the block survive with it",
+    any("steal data" in rule for rule in wrapped_rules)
+    and any("claiming to be human" in rule.lower() for rule in wrapped_rules),
+    str(wrapped_rules),
+)
+
+# The acceptance criterion `#402` was filed with: wrapped here, on one line
+# there, and the two compare equal.
+code, output = run(SOURCE, {"skill.md": WRAPPED_SKILL, "about.ts": ABOUT})
+check("a copy that wraps a bullet still passes", code == 0, output)
+
+WRAPPED_SOURCE = SOURCE.replace(
+    "- Bypassing other platforms' protections as an end in itself",
+    "- Bypassing other platforms' protections as an end\n  in itself",
+)
+source_wrapped = red_lines.rules_from_markdown(
+    WRAPPED_SOURCE, "Forbidden", named_paragraphs=True
+)
+check(
+    "the source may wrap a bullet too, without losing the list around it",
+    len(source_wrapped) == 3,
+    f"got {len(source_wrapped)}: {source_wrapped}",
+)
+check(
+    "and the named paragraph beside it is still read as one rule",
+    any(rule.startswith("**Claiming to be human.**") for rule in source_wrapped),
+    str(source_wrapped),
+)
+
+code, output = run(WRAPPED_SOURCE, {"skill.md": SKILL, "about.ts": ABOUT})
+check("a source that wraps a bullet does not turn every copy red", code == 0, output)
+
+# What must not follow from folding continuations: the prose introducing a list
+# is not swallowed into the bullet under it, and a rewording still fails.
+check(
+    "the sentence introducing the list is still not a rule",
+    not any("prose introducing" in rule.lower() for rule in wrapped_rules),
+    str(wrapped_rules),
+)
+code, output = run(
+    SOURCE,
+    {
+        "skill.md": WRAPPED_SKILL.replace(
+            "protections as an end\n  in itself", "protections as an end\n  in themselves"
+        ),
+        "about.ts": ABOUT,
+    },
+)
+check(
+    "a rewording inside the wrapped half is still caught",
+    code == 1 and "rule 2 differs" in output,
+    output,
+)
+
+
 print()
 if failures:
     print(f"{len(failures)} failing: {', '.join(failures)}")

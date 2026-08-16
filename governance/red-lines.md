@@ -44,6 +44,12 @@ here, including the two above, is commentary and is not carried into the copies.
 A rule written in any third shape is one the check will stop comparing without
 saying so, which is how the impersonation rule went unwatched once already.
 
+**Neither shape has to fit on one line.** A line under a bullet that does not
+open a bullet of its own belongs to the bullet above it, exactly as a named
+paragraph's later lines belong to the paragraph — so wrap where you like. Until
+`#402` that was not true of bullets, and a single wrapped line quietly took its
+whole list out of the comparison.
+
 Comparison is on the words, not the characters: punctuation and case are folded
 away, so a copy may write `—` where this file writes `,`. Adding, removing or
 rewording a rule here will turn the check red until every copy follows.

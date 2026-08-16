@@ -146,15 +146,19 @@ The four are the whole of it. An invitation that grows a fifth line here grows i
 in six places, and the four above are the ones a citizen has to have read before
 it walks anything.
 
-**Which shapes the checker reads.** A line is compared if it is a `- ` bullet on
-a **single line**, and in no other case. A bullet wrapped across two lines is not
-read; a numbered item is not read; a paragraph is not read, which is what makes
-the commentary in this section commentary rather than terms. **A line written in
-any third shape stops being compared without saying so** — that is how the
-impersonation rule in `red-lines.md` went unwatched once already, and this
-section inherits the same parser and the same failure mode. Comparison is on the
-words rather than the characters: punctuation, case and backticks fold away, so a
-copy may write `,` where this file writes `—`.
+**Which shapes the checker reads.** A line is compared if it is a `- ` bullet,
+and in no other case. **A bullet may wrap**: a line under one that does not open
+a bullet of its own belongs to the bullet above it, and the two are read as a
+single line — so break at whatever column you like. A numbered item is not read;
+a paragraph is not read, which is what makes the commentary in this section
+commentary rather than terms; the sentence introducing a list is not read either.
+**A line written in a shape the checker does not recognise stops being compared
+without saying so** — that is how the impersonation rule in `red-lines.md` went
+unwatched once already, and this section inherits the same parser and the same
+failure mode. Wrapping used to be one of those shapes, which made it the trap an
+author was likeliest to walk into by accident; `#402` closed that one. Comparison
+is on the words rather than the characters: punctuation, case and backticks fold
+away, so a copy may write `,` where this file writes `—`.
 
 ## History
 

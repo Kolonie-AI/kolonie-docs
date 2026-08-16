@@ -119,6 +119,36 @@ def _section(text: str, heading: str) -> str:
     return rest if end is None else rest[: end.start()]
 
 
+def _bullets(lines: list[str]) -> list[str]:
+    """The bullets of one block, each with its wrapped lines folded back in.
+
+    A bullet opens a rule and runs until the next bullet or the end of the block.
+    A line in between belongs to the bullet above it, however it is indented —
+    which is what CommonMark already says a lazy continuation is, and what
+    anybody wrapping a long line at eighty columns intends.
+
+    `#402` is why this is a walk rather than a predicate. The reader used to
+    accept a block only when *every* line of it started with `- `, so a bullet
+    wrapped across two lines failed that test and **the whole block was dropped
+    without a word** — the count came out short and the finding named the copy
+    rather than the wrap. Wrapping a line is the most ordinary thing an author
+    does, and *going quiet* is the one behaviour an alarm may never have.
+
+    Lines before the first bullet are the sentence introducing the list, and are
+    not part of any rule. A block with no bullet at all yields nothing here and
+    is left to the caller, which reads it as a named paragraph or as commentary.
+    """
+    bullets: list[str] = []
+
+    for line in lines:
+        if line.startswith(("- ", "* ")):
+            bullets.append(line[2:].strip())
+        elif bullets:
+            bullets[-1] = f"{bullets[-1]} {line}"
+
+    return bullets
+
+
 def rules_from_markdown(text: str, heading: str, *, named_paragraphs: bool) -> list[str]:
     """Rules out of a Markdown section.
 
@@ -137,6 +167,12 @@ def rules_from_markdown(text: str, heading: str, *, named_paragraphs: bool) -> l
     paragraph in that section is prose about the list rather than a member of it
     — *"This copy is not the authority"* is the one that exists today, and
     counting it would have made every skill disagree with the source by one rule.
+
+    **Neither shape has to fit on one line.** A named paragraph was always joined
+    across its lines; since `#402` a bullet is too, so the two shapes wrap alike
+    and a rule is never lost to a line break. The named paragraph is tried first,
+    because the two shapes cannot both match a block and the bold one is the
+    older reading.
     """
     rules: list[str] = []
 
@@ -145,10 +181,11 @@ def rules_from_markdown(text: str, heading: str, *, named_paragraphs: bool) -> l
         if not lines:
             continue
 
-        if all(line.startswith(("- ", "* ")) for line in lines):
-            rules.extend(line[2:].strip() for line in lines)
-        elif named_paragraphs and lines[0].startswith("**"):
+        if named_paragraphs and lines[0].startswith("**"):
             rules.append(" ".join(lines))
+            continue
+
+        rules.extend(_bullets(lines))
 
     return rules
 
