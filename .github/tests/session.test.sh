@@ -18,6 +18,11 @@
 #   expired               the claim is older than its ttl
 #   agreed                all three agree, and a commit goes through
 #
+# The `pr` cases at the foot are `kolonie-docs#421` and the same argument: a body
+# built by `gh pr create --fill` closes nothing on a branch with two commits, and
+# nothing anywhere goes red about it. They assert on the body rather than on the
+# exit status, and on the refusal when no issue can be named at all.
+#
 # Every case runs against a **real, disposable git repository** rather than a
 # stub. The hooks are the deliverable here — a test that called `session.sh check`
 # directly and never let `git commit` invoke it would pass with the hooks
@@ -196,6 +201,69 @@ out=$(bash "$GUARD" install-hooks 2>&1)
 if grep -q "leaving it alone" <<<"$out" && ! grep -q "session.sh" "$HOOKS/pre-commit"; then pass; else
   fail "a hook that was not ours was overwritten or not reported"
 fi
+
+say "pr writes the closing keyword, or refuses to open a body without one"
+# `kolonie-docs#421`. `gh pr create --fill` builds the body out of the commit
+# subjects, so a branch with two commits closes nothing — silently, on the path
+# the loop printed. Every case below is about the body, and the refusals matter
+# more than the pass for the same reason they do at the top of this file: the
+# thing that failed was green.
+refuses_with "pr on the default branch" "A pull request needs a branch of its own" \
+  env KOLONIE_AGENT=erin bash "$GUARD" pr --print
+
+git switch -qc claude/421-pr-body
+KOLONIE_AGENT=erin bash "$GUARD" take --branch claude/421-pr-body --force >/dev/null
+refuses_with "pr with nothing committed" "has nothing that" \
+  env KOLONIE_AGENT=erin bash "$GUARD" pr --print
+
+echo five > file.txt && git add -A && git commit -qm "feat: the first half (#421)"
+echo six > file.txt && git add -A && git commit -qm "test: the second half"
+
+out=$(KOLONIE_AGENT=erin bash "$GUARD" pr --print 2>&1)
+# Nothing named the issue: the branch is the last thing that knows the number,
+# and `claude/421-...` is the convention every worker branch here follows.
+if grep -qF "Closes #421" <<<"$out"; then pass; else
+  fail "a two-commit branch on claude/421-... produced no closing keyword"
+  printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+# The subjects are still worth carrying — `--fill`'s one virtue, kept.
+if grep -qF "test: the second half" <<<"$out"; then pass; else
+  fail "the multi-commit body dropped the subjects"
+fi
+
+# `#421`'s second done-when: a branch answering two issues names both, and one of
+# them lives in another repository.
+out=$(KOLONIE_AGENT=erin bash "$GUARD" pr 421 kolonie-platform#1065 --print 2>&1)
+if grep -qF "Closes #421" <<<"$out" &&
+   grep -qF "Closes Kolonie-AI/kolonie-platform#1065" <<<"$out"; then pass; else
+  fail "two issues named, both not closed"
+  printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+
+refuses_with "a gh flag on this side of --" "is gh's flag, not this one's" \
+  env KOLONIE_AGENT=erin bash "$GUARD" pr --draft
+refuses_with "an argument that is not an issue" "is not an issue reference" \
+  env KOLONIE_AGENT=erin bash "$GUARD" pr banana
+
+say "take writes the issue down, so pr does not depend on anybody remembering"
+KOLONIE_AGENT=erin bash "$GUARD" take 999 --branch claude/421-pr-body --force >/dev/null
+if grep -q '^issue=999$' "$CLAIMFILE"; then pass; else
+  fail "take <issue> did not record the issue in the claim"
+fi
+out=$(KOLONIE_AGENT=erin bash "$GUARD" pr --print 2>&1)
+# The claim outranks the branch name: the branch says 421 and the session was
+# told 999.
+if grep -qF "Closes #999" <<<"$out"; then pass; else
+  fail "pr ignored the issue the claim was given"
+  printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+
+say "a branch nothing can name refuses rather than closing nothing"
+git switch -qc no-number-here
+KOLONIE_AGENT=erin bash "$GUARD" take --branch no-number-here --force >/dev/null
+refuses_with "nothing names an issue" "Nothing here says which issue this closes" \
+  env KOLONIE_AGENT=erin bash "$GUARD" pr --print
+git switch -q main
 
 say "release lets the next session start clean"
 allows "release" bash "$GUARD" release

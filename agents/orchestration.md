@@ -302,7 +302,7 @@ in full, and why there is no fourth column between Ready and In Progress, are in
 An abandoned claim is worse than no claim: it is a stop sign in front of work that
 nobody is doing.
 
-**If the work goes through a pull request, three rules, each measured here rather
+**If the work goes through a pull request, four rules, each measured here rather
 than preferred:** finish the branch *then* open it, because an open pull request
 is not a draft that waits for you and a sweep may merge it within the minute;
 after a multi-commit pull request merges, check your last commit is on `main`
@@ -311,6 +311,17 @@ merged badge; and **one issue per pull request** wherever the issues can be
 separated, because a pull request carrying two is merged, or *partly* merged, and
 the second has no badge for it. What each cost is in
 [`history/2026-07-31-claiming-and-landing.md`](history/2026-07-31-claiming-and-landing.md).
+
+The fourth: **the body names what it closes, and `gh pr create --fill` does not
+do that for you.** `--fill` builds the body from the commit subjects, so a branch
+with one commit usually closes its issue by accident and a branch with two closes
+nothing at all — silently, on the path the loop used to print, and the more work
+the branch carries the likelier it is. In `kolonie-docs`, `bash
+.github/scripts/session.sh pr` writes the keyword from the number `take` was
+already given; anywhere else, `gh pr create --title '<subject>' --body 'Closes
+#<n>'`. A branch that answers two issues names both, in two lines. The four hours
+`kolonie-platform#1065` spent Open and In Progress with its code on `main` are in
+[`history/2026-08-16-a-pull-request-body-that-closed-nothing.md`](history/2026-08-16-a-pull-request-body-that-closed-nothing.md).
 **8. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
 
