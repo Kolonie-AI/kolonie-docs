@@ -428,20 +428,25 @@ searched "$(issue 900 'in inbox' '')" \
   "$(issue 902 'in progress' 'agent:claude')" \
   "$(issue 903 'not on the board' '')" \
   "$(issue 904 'What is waiting for an agent' '')" \
-  "$(issue 905 'Proposed additions to the worker prohibitions' '')"
-boarded "900|Inbox|" "901|Ready|agent:claude p1" "902|In Progress|agent:claude" "904|Inbox|" "905|Inbox|"
+  "$(issue 905 'Proposed additions to the worker prohibitions' '')" \
+  "$(issue 906 'The Colony owes money it has not paid' 'from:watcher' \
+    'kolonie-triage[bot]' '<!-- no-colony-action --> waiting on a citizen')" \
+  "$(issue 907 'a body that says it about itself' '' \
+    'colleague' '<!-- no-colony-action --> and I opened this myself')"
+boarded "900|Inbox|" "901|Ready|agent:claude p1" "902|In Progress|agent:claude" "904|Inbox|" \
+  "905|Inbox|" "906|Blocked|from:watcher" "907|Inbox|"
 found=$(bash "$SCRIPT" candidates 2>/dev/null)
 
-check "the undecided issues in Inbox and Ready are the candidates" "900" \
+check "the undecided issues in Inbox and Ready are the candidates" "900 907" \
   "$(jq -r '[.candidates[].number] | join(" ")' <<<"$found")"
 # `#289` case 7, asserted here rather than against an answer: the point is that
 # no brief is built for a decided issue, so there is nothing for the model to be
 # right or wrong about.
 absent "an issue that already carries a route is not a candidate — it is decided" \
   '"number":901' "$(jq -c '.candidates' <<<"$found")"
-check "but it is in the queue the sweep walks, both columns and routed or not" "900 901" \
+check "but it is in the queue the sweep walks, both columns and routed or not" "900 901 907" \
   "$(jq -r '[.queue[].number] | join(" ")' <<<"$found")"
-check "and every open issue is in the index, so a dependency can be noticed" "6" \
+check "and every open issue is in the index, so a dependency can be noticed" "8" \
   "$(jq '.index | length' <<<"$found")"
 absent "an issue In Progress is not a candidate, whatever the model is asked" \
   '"number":902' "$(jq -c '.candidates' <<<"$found")"
@@ -451,6 +456,20 @@ absent "and the generated waiting list is not work" \
   '"number":904' "$(jq -c '.candidates' <<<"$found")"
 absent "nor is the pass's own collecting issue for proposed prohibitions" \
   '"number":905' "$(jq -c '.candidates' <<<"$found")"
+# `kolonie-platform#919`. The finding is open, it is in a triage column and it
+# carries no route, so every pass routed it — and `agent:claude` is what this
+# pass gives anything it cannot place. `#727` cost seven sessions that way.
+absent "nor is a machine's own finding that says it has no Colony-side action" \
+  '"number":906' "$(jq -c '.candidates' <<<"$found")"
+absent "and the sweep does not walk it either, so no column moves under it" \
+  '"number":906' "$(jq -c '.queue' <<<"$found")"
+contains "it is still in the index, because something may depend on it" \
+  '"number":906' "$(jq -c '.index' <<<"$found")"
+# The marker is a claim about a finding, so it is only read from the author that
+# files findings. Otherwise a body anybody may write takes its own issue out of
+# triage, and the guard becomes a way to go unrouted on purpose.
+contains "but the same marker from a person is just text, and the issue is triaged" \
+  '"number":907' "$(jq -c '.candidates' <<<"$found")"
 
 echo
 echo "the brief carries the rules rather than a copy of them"

@@ -34,7 +34,12 @@
 # - a candidate **carries no route**: an issue already labelled `agent:human`,
 #   `agent:claude` or `agent:opencode` has been decided, and re-deciding it is what
 #   `#289` took out. The move it still needs is a fact, and `sweep` makes it
-# - a route that is missing, unrecognised or uncertain becomes **`agent:claude`**
+# - a route that is missing, unrecognised or uncertain becomes **`agent:claude`**,
+#   which is why the bullet below exists: that default is right for an issue
+#   nobody has placed and wrong for one that says there is nothing to place
+# - a **machine's own finding carrying `<!-- no-colony-action -->`** is not work
+#   and is not routed. It is not briefed, not paid for, not moved and not given
+#   any of the three labels (`kolonie-platform#919`)
 # - `agent:opencode` is refused on anything carrying `blocked:human`,
 #   `opencode:forbidden`, or an open blocker — whatever the model said
 # - a route is never **widened**: an issue already routed to a person or to a
@@ -257,6 +262,37 @@ REFUSAL_CHARS=${REFUSAL_CHARS:-1200}
 # of something GitHub holds. Pipe separated, because an array cannot arrive from the
 # environment.
 NOT_WORK_TITLES=${NOT_WORK_TITLES:-What is waiting for an agent|Proposed additions to the worker prohibitions}
+
+# Neither is a machine's own finding that says there is nothing here to do.
+#
+# **A watcher files one issue per standing condition and keeps its body current.**
+# Some of those conditions are waiting on somebody outside the Colony — a citizen
+# that has not verified a wallet, a price below the chain floor — and while that
+# holds, no commit in any repository closes them. The finding says so in its own
+# words, and it is still an open issue in a triage column, so it was still a
+# candidate, so it was routed; and *a route this pass cannot place is
+# `agent:claude`*, which is the right default for an undecided issue and the wrong
+# one for an issue that is not work. `kolonie-platform#727` collected seven
+# sessions over four days, each one reading the body and concluding there was
+# nothing to do. On 2026-08-16 a person removed the label at 15:06 quoting that
+# body, and the next pass restored it at 15:15.
+#
+# `kolonie-platform#919` named the remedy — *a finding with no Colony-side action
+# carries no agent label* — and was closed with it unshipped, because it was
+# written against the watcher and the watcher never applied the label. Routing is
+# this file's, so the rule is this file's.
+#
+# **The marker is a fact and the decision is still ours**, which is the division
+# in the header: the watcher states that nothing on its finding is the Colony's to
+# act on, and what that means for a route is settled here. And it is read **only
+# on an issue GitHub says was opened by a machine** (`bot`, from `author.type`,
+# below) — so a comment string in a body anybody may write cannot take its own
+# issue out of triage.
+#
+# The marker goes when the condition does. It is rewritten on every pass of the
+# watcher from the same number as the prose, so a debt the Colony *can* discharge
+# arriving behind these makes the finding ordinary work again on that pass.
+NO_COLONY_ACTION_MARKER=${NO_COLONY_ACTION_MARKER:-<!-- no-colony-action -->}
 
 # How much of a body the model is given. A candidate is read; everything else is
 # an index entry, there so a dependency can be noticed. Both are bounded because
@@ -516,6 +552,7 @@ candidates() {
   jq -c --slurpfile board "$board" \
     --arg statuses "$TRIAGE_STATUSES" \
     --arg notwork "$NOT_WORK_TITLES" \
+    --arg nocolony "$NO_COLONY_ACTION_MARKER" \
     --arg routelist "$ROUTES" \
     --argjson candidate_chars "$CANDIDATE_BODY_CHARS" \
     --argjson index_chars "$INDEX_BODY_CHARS" '
@@ -541,9 +578,17 @@ candidates() {
                      and .content.repository == $issue.repo)
             | .status) // "not on the board") as $status
         | $issue + { status: $status } ]
-    | { candidates: [ .[]
+    # A machine saying its own finding has no Colony-side action, which is not
+    # work and is therefore not a candidate and not in the queue either — it is
+    # the same exclusion as `NOT_WORK_TITLES` for the same reason, keyed on a
+    # marker rather than a title because there is one finding per condition and
+    # the titles are not known here. `bot` is required: the claim is only read
+    # from an author GitHub says is a machine.
+    | (def not_work: select((.bot and (.body | contains($nocolony))) | not);
+       { candidates: [ .[]
           | select(.status as $s | $triage | index($s))
           | select(.title as $t | ($notwork | split("|") | index($t)) | not)
+          | not_work
           # **A pass may only route an issue that has no route** (`#289`). An
           # issue already carrying one of `ROUTES` has been decided — by an
           # earlier pass, or by a person overruling one — and re-deciding it is
@@ -561,10 +606,14 @@ candidates() {
         queue: [ .[]
           | select(.status as $s | $triage | index($s))
           | select(.title as $t | ($notwork | split("|") | index($t)) | not)
+          | not_work
           | { repo, number, title, status, labels } ],
+        # Everything, including what the two lists above left out: the index is
+        # what lets a dependency be noticed, and an issue nobody may route is
+        # still an issue another one can be waiting on.
         index: [ .[]
           | { repo, number, title, status, labels, createdAt,
-              body: (.body[0:$index_chars]) } ] }
+              body: (.body[0:$index_chars]) } ] })
   ' <<<"$issues"
   local rc=$?
   rm -f "$board"

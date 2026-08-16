@@ -33,6 +33,44 @@ were the five sitting in Inbox plus `kolonie-email#1`, which is Blocked. So the
 unrouted set and the undecided set were the same set, which is the property this
 rule is here to keep.
 
+#### The one issue that carries none of the three, and why it is not a hole
+
+**A watcher's own finding, while it says nothing on it is the Colony's to act
+on.** A watcher files one issue per standing condition and keeps its body
+current; some of those conditions are waiting on somebody outside the Colony —
+a citizen that has not verified a wallet, a price below the chain floor — and
+while that holds, no commit in any repository closes them. It is an open issue
+in a triage column and it is not work, and the two are not the same thing.
+
+The rule above treats *no route* as *nobody has decided yet*, and the triage
+pass acts on exactly that reading: anything it cannot place becomes
+`agent:claude`. Measured on
+[`kolonie-platform#727`](https://github.com/Kolonie-AI/kolonie-platform/issues/727):
+**seven sessions over four days**, each picking the issue up, reading the body,
+and concluding there was nothing to do. On 2026-08-16 a person removed the label
+at 15:06 quoting the body, and the next pass restored it at 15:15.
+
+So the finding says so in a form a script can read — `<!-- no-colony-action -->`,
+written by the watcher on every pass while the condition holds — and
+`board-triage.sh` treats it as it treats its own generated paperwork: **not a
+candidate, not in the sweep's queue, not routed, not moved.** It stays in the
+index, because something may still depend on it.
+
+Three things keep this narrow:
+
+- **It is read only from an author GitHub reports as a machine.** A marker in a
+  body anybody may write would be a way for an issue to take itself out of
+  triage.
+- **It is a fact, not an instruction.** The watcher states that nothing on its
+  finding is the Colony's; what that means for a route stays this pass's
+  decision, the same division as everywhere else in `board-triage.sh`.
+- **It goes when the condition goes.** The marker is written from the same
+  number as the prose beside it, so a debt the Colony *can* discharge arriving
+  behind these makes the finding ordinary work again on that same pass.
+
+**An issue that a person or a model left unrouted is unchanged by any of this**,
+and still means what the paragraph above says it means.
+
 #### Why the last row has two clauses
 
 **The first is obvious and covers the expensive mistakes.** It is the seven classes
