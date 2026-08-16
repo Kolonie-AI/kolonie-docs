@@ -5,6 +5,8 @@
 #   session.sh take [<agent>] [<issue>] [--branch <name>] [--force]
 #                                                           # claim this checkout,
 #                                                           # and print that issue's brief
+#   session.sh pr [<issue>...] [--print] [-- <gh args>]     # open it, closing what
+#                                                           # take was told (`#421`)
 #   session.sh check                                        # what the hooks run
 #   session.sh status                                       # who holds it, on what
 #   session.sh release                                      # give it back
@@ -118,8 +120,13 @@ default_branch() {
 
 # Every reader of the claim gets the same four variables or none of them, so a
 # half-written file reads as no claim rather than as a claim with empty fields.
+#
+# `issue` is the fifth and it is deliberately *not* one of the three that make a
+# claim valid: a session that took the checkout without naming an issue is an
+# ordinary session, and `#421` would have made it an invalid one. It is written
+# so that `pr` can close what `take` was told about — see `cmd_pr`.
 read_claim() {
-  CLAIM_AGENT= CLAIM_BRANCH= CLAIM_TAKEN= CLAIM_PID=
+  CLAIM_AGENT= CLAIM_BRANCH= CLAIM_TAKEN= CLAIM_PID= CLAIM_ISSUE=
   [ -f "$CLAIM" ] || return 1
   local key value
   while IFS='=' read -r key value; do
@@ -128,6 +135,7 @@ read_claim() {
       branch) CLAIM_BRANCH=$value ;;
       taken) CLAIM_TAKEN=$value ;;
       pid) CLAIM_PID=$value ;;
+      issue) CLAIM_ISSUE=$value ;;
     esac
   done < "$CLAIM"
   [ -n "$CLAIM_AGENT" ] && [ -n "$CLAIM_BRANCH" ] && [ -n "$CLAIM_TAKEN" ]
@@ -265,7 +273,7 @@ cmd_take() {
       # A bare argument is the agent, unless it is shaped like an issue —
       # `412`, `#412`, `kolonie-platform#412`, `Kolonie-AI/kolonie-platform#412`.
       # No agent name is a number, so the two cannot collide (`#362`).
-      *) if [[ $1 =~ ^([A-Za-z0-9_.-]+/)?([A-Za-z0-9_.-]+)?#?[0-9]+$ ]]; then issue=$1; else agent=$1; fi; shift ;;
+      *) if is_issue_ref "$1"; then issue=$1; else agent=$1; fi; shift ;;
     esac
   done
   [ -n "$agent" ] || agent=${KOLONIE_AGENT:-}
@@ -318,6 +326,10 @@ cmd_take() {
     echo "branch=$branch"
     echo "taken=$(now)"
     echo "pid=$$"
+    # `#421`: the session was told the issue here and nowhere else. Written down,
+    # `pr` can close it two hours later; not written down, the closing keyword
+    # depends on the agent remembering, which is the thing that failed.
+    [ -z "$issue" ] || echo "issue=$issue"
   } > "$CLAIM"
 
   # `#230` over `#318`: a local identity that already exists is the agent's real
@@ -358,6 +370,19 @@ cmd_take() {
     echo "    export KOLONIE_AGENT=$agent"
   }
 
+  # `#421`. The closing keyword is decided at `take` time and needed two hours
+  # later, so the command that carries it is printed here, already holding the
+  # number, and again by `status`. Only when there is a number to hold: a line
+  # that would refuse if run teaches the agent to stop reading these.
+  local -a for_pr=()
+  mapfile -t for_pr < <(issues_for_pr)
+  [ ${#for_pr[@]} -eq 0 ] || {
+    echo
+    echo "  → when the branch is finished, open the pull request with:"
+    echo "      bash .github/scripts/session.sh pr"
+    echo "    its body will carry: $(closing_clause "${for_pr[0]}")"
+  }
+
   [ -n "$issue" ] && print_brief "$issue"
   return 0
 }
@@ -392,6 +417,137 @@ print_brief() { # <issue>, in any of the four shapes take accepts
   }
 }
 
+# The four shapes `take` accepts, in one place because `pr` accepts them too.
+is_issue_ref() {
+  [[ $1 =~ ^([A-Za-z0-9_.-]+/)?([A-Za-z0-9_.-]+)?#?[0-9]+$ ]]
+}
+
+# What GitHub acts on, from any of the four. A bare number closes an issue in
+# this repository; anything carrying a repository closes it there, and is
+# qualified with the organisation because `Closes kolonie-platform#412` is not a
+# reference GitHub resolves.
+closing_clause() { # <ref>
+  # One assignment per statement: `local a=$1 b=${a}` expands every word before
+  # it assigns any of them, so `b` would read an unset `a`.
+  local ref=$1 org=${ORG:-Kolonie-AI} number where
+  number=${ref##*#}
+  where=${ref%#*}
+  [ "$where" != "$ref" ] || where=""      # a bare number carries no repository
+  case "$where" in
+    "")    echo "Closes #$number" ;;
+    */*)   echo "Closes $where#$number" ;;
+    *)     echo "Closes $org/$where#$number" ;;
+  esac
+}
+
+# What this branch closes, and the order is what makes `pr` safe to run without
+# arguments: what `take` was told, else what the branch name says. `#421` is the
+# case where neither was consulted and the body closed nothing.
+issues_for_pr() {
+  local branch
+  if read_claim && [ -n "$CLAIM_ISSUE" ]; then
+    echo "$CLAIM_ISSUE"
+    return 0
+  fi
+  branch=$(current_branch)
+  # `claude/421-...`, `fix/318-...` — the convention every worker branch here
+  # follows. A branch that does not is not guessed at.
+  [[ $branch =~ ^[^/]+/([0-9]+)- ]] && echo "${BASH_REMATCH[1]}"
+  return 0
+}
+
+# `session.sh pr` — open the pull request with a body that closes the issue.
+#
+# ## Why this is a command rather than a line in the loop
+#
+# `kolonie-docs#421`: the loop printed `gh pr create --fill`, which builds the
+# body out of the commits. On a single-commit branch the subject usually carries
+# the number in a form that closes it, so it worked; on a **multi-commit** branch
+# the body is two bullets and closes nothing. `kolonie-platform#1065` sat Open,
+# In Progress on the board for four hours with its code on `main`, and no check
+# had anything to say about it — the failure is silent, it is the documented
+# path, and it is exactly proportional to how much work went into the branch.
+#
+# The fix the issue asks for is *without the agent having to remember to add it*,
+# so remembering is the one thing this must not require. The number was given to
+# `take`, `take` wrote it down, and this reads it back.
+#
+# **Several issues are named as arguments**, which is the other half of `#421`:
+# a branch carrying two closes both or the second has no badge for it.
+cmd_pr() {
+  local print_only=no
+  local -a issues=() gh_args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --) shift; gh_args+=("$@"); break ;;
+      --print) print_only=yes; shift ;;
+      -*) refuse "session.sh pr: '$1' is gh's flag, not this one's." \
+            "Everything after -- is handed to gh untouched:" \
+            "" \
+            "    bash .github/scripts/session.sh pr -- $1 ..." ;;
+      *) is_issue_ref "$1" || refuse "'$1' is not an issue reference." \
+           "Any of: 421   #421   kolonie-platform#421   Kolonie-AI/kolonie-platform#421"
+         issues+=("$1"); shift ;;
+    esac
+  done
+
+  local branch default base
+  branch=$(current_branch)
+  default=$(default_branch)
+  [ "$branch" != "$default" ] || refuse "HEAD is on '$default'." \
+    "A pull request needs a branch of its own. There is nothing to open."
+
+  if [ ${#issues[@]} -eq 0 ]; then
+    mapfile -t issues < <(issues_for_pr)
+  fi
+  # The refusal `#421` is really about: a body with no closing keyword leaves the
+  # issue Open and In Progress, which reads to the next session as *somebody has
+  # this*. Refusing here costs one argument; not refusing costs a column.
+  [ ${#issues[@]} -gt 0 ] || refuse "Nothing here says which issue this closes." \
+    "The claim on this checkout names none, and '$branch' is not <what>/<n>-<...>." \
+    "Name it, and the body will carry the closing keyword:" \
+    "" \
+    "    bash .github/scripts/session.sh pr 421" \
+    "" \
+    "kolonie-docs#421 — a body that closes nothing leaves the issue In Progress" \
+    "with its code on main, and no check says so."
+
+  base=origin/$default
+  git rev-parse --verify -q "$base" >/dev/null || base=$default
+
+  local -a subjects=()
+  mapfile -t subjects < <(git log --reverse --format='%s' "$base..HEAD" 2>/dev/null)
+  [ ${#subjects[@]} -gt 0 ] || refuse "'$branch' has nothing that '$base' does not." \
+    "Commit the work first — a pull request is not a draft that waits for you."
+
+  local body ref
+  body=""
+  # More than one and the subjects are what `--fill` would have given; one and
+  # the title already says it, so a bullet repeating it is noise.
+  if [ ${#subjects[@]} -gt 1 ]; then
+    for ref in "${subjects[@]}"; do body+="- $ref"$'\n'; done
+    body+=$'\n'
+  fi
+  for ref in "${issues[@]}"; do body+="$(closing_clause "$ref")"$'\n'; done
+
+  local -a create=(gh pr create --body "$body")
+  # A title given after `--` is the agent's, and two --title flags is an error
+  # from gh rather than a choice.
+  if [[ " ${gh_args[*]-} " != *" --title "* && " ${gh_args[*]-} " != *" -t "* ]]; then
+    create+=(--title "${subjects[0]}")
+  fi
+  create+=(${gh_args[@]+"${gh_args[@]}"})
+
+  echo "  the body this opens with:"
+  printf '%s' "$body" | sed 's/^/    | /'
+
+  if [ "$print_only" = yes ]; then
+    echo "  --print, so nothing was opened."
+    return 0
+  fi
+  "${create[@]}"
+}
+
 cmd_status() {
   local branch
   branch=$(current_branch)
@@ -402,6 +558,7 @@ cmd_status() {
   fi
   echo "held by  : $CLAIM_AGENT"
   echo "on branch: $CLAIM_BRANCH"
+  echo "issue    : ${CLAIM_ISSUE:-(none named — session.sh pr will ask for one)}"
   echo "taken    : $(claim_age_hours)h ago$(claim_is_stale && echo "  — EXPIRED (ttl ${TTL_HOURS}h)")"
   echo "HEAD is  : $branch"
   echo "KOLONIE_AGENT=${KOLONIE_AGENT:-(unset)}"
@@ -419,12 +576,13 @@ cmd_release() {
 
 case "${1:-status}" in
   take) shift; cmd_take "$@" ;;
+  pr) shift; cmd_pr "$@" ;;
   check) cmd_check ;;
   status) cmd_status ;;
   release) cmd_release ;;
   install-hooks) install_hooks; echo "  ✓ pre-commit and pre-push installed." ;;
   -h|--help|help)
-    sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     ;;
   *) echo "session.sh: unknown command '$1' — try --help" >&2; exit 2 ;;
 esac

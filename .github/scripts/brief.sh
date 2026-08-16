@@ -340,7 +340,11 @@ HEADER
   bash .github/scripts/session.sh take <issue>   # claims the checkout, prints its brief
   gh api -X POST repos/$ORG/<repo>/issues/<n>/comments -f body='...'   # say you took it
   bash .github/scripts/check.sh                  # the verdict is in the log, not the exit code
-  gh pr create --fill                            # finish the branch first; it merges on green
+  bash .github/scripts/session.sh pr             # finish the branch first; it merges on green
+
+  Elsewhere, where session.sh is not: gh pr create --title '<subject>' --body 'Closes #<n>'
+  Never bare --fill — it builds the body from the commits, so a branch with two
+  of them closes nothing and the issue stays In Progress with its code on main.
 
   The board query that says what can be started, and the order to decide in:
   bash .github/scripts/brief.sh --module orchestration
