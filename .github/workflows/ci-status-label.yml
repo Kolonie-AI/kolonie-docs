@@ -223,5 +223,15 @@ jobs:
             # not automatically wrong but should say so deliberately; this is the
             # cost of not having done that, and the log is where somebody
             # wondering why the board never moved will look.
-            [ "$found" = false ] && echo "PR #${pr} closes no issue — nothing to reflect"
+            #
+            # `if` rather than `[ … ] && echo`, and the shape is the whole point
+            # (#406). This is the last statement of the loop and the loop is the
+            # last command of the block, so an AND-list whose test is false hands
+            # the step its own 1 — and the test is false exactly when the pull
+            # request *did* close an issue, which is every run this workflow
+            # exists for. The step went red on every run that had work and green
+            # on the runs that had none.
+            if [ "$found" = false ]; then
+              echo "PR #${pr} closes no issue — nothing to reflect"
+            fi
           done
