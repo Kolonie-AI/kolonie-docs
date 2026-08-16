@@ -917,6 +917,28 @@ jobs:
           # object `WORKER_REPO_TOKEN` cannot. The reasoning is at the check
           # itself, where somebody debugging a red run will be looking.
           CHECK_GH_TOKEN: ${{ github.token }}
+          # ## Who this run is, for the hooks `session.sh` installs (`#318`)
+          #
+          # `#318` put a `pre-commit` and `pre-push` hook in every checkout that
+          # runs `session.sh check`, and that check refuses when `KOLONIE_AGENT`
+          # is unset. The model follows `AGENTS.md`, exports a name and runs
+          # `session.sh take` — so the claim exists and the hooks are installed
+          # **inside the model's own shell**. The `git push` at the bottom of
+          # this step is a different shell, and it inherited nothing.
+          #
+          # So the guard fired on the one shell it was not aimed at: the run did
+          # the whole job — check green, leak-check green, nothing to rebase —
+          # and was refused at the push, having recorded no reason. Nothing has
+          # left this repository by worker since 2026-08-12, the day `#318`
+          # landed; `kolonie-docs#415` and `#416` are the two that made it
+          # visible.
+          #
+          # Setting it here rather than inside the prompt is what makes the two
+          # shells agree by construction: the model's `session.sh take` inherits
+          # this value, writes it into the claim, and the push then matches the
+          # claim it is checked against. A name in a prompt is a name the next
+          # model may not type.
+          KOLONIE_AGENT: opencode
           ISSUE: ${{ steps.queue.outputs.issue }}
           TARGET_REPO: ${{ steps.queue.outputs.repo }}
           CHECK_COMMAND: ${{ steps.check.outputs.command }}
