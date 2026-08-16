@@ -320,7 +320,7 @@ check "and nothing has arrived, so nothing is announced" "" \
   "$(bash "$SCRIPT" arrivals /dev/null "$WORK/entries" 2>/dev/null)"
 
 echo
-echo "the body says when it was read (#385)"
+echo "the body says when it was read (#409)"
 
 # The list is what one search returned at one minute, and it used to call itself
 # *rewritten daily* and nothing else — so on 2026-08-15 it was written at 07:47,

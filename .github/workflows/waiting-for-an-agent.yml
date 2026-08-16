@@ -29,7 +29,7 @@ name: What is waiting for an agent or a person
 # than on every run, because a message that is usually the same message is one
 # nobody opens.
 #
-# ## The body is a reading, not a live view (`#385`)
+# ## The body is a reading, not a live view (`#409`)
 #
 # It used to say here that the body *is the current state and is always right*.
 # It is not: it is what the search returned at the moment of the run, and every
@@ -64,7 +64,7 @@ on:
     # the GraphQL budget this reads the board with. 07:20 is kept as one of the
     # six so the list is still waiting before the maintainer's day rather than
     # after it; the other five are what stops it being a day old by the evening
-    # (`#385`).
+    # (`#409`).
     - cron: '20 3,7,11,15,19,23 * * *'
   workflow_dispatch:
 
@@ -203,7 +203,7 @@ jobs:
           # no notification — and a notification that arrives on a schedule
           # whether or not anything happened is the one `#265` says nobody opens.
           # This is also what makes six runs a day cost no more attention than
-          # one did (`#385`).
+          # one did (`#409`).
           if [ -z "$arrivals" ]; then
             echo "nothing new since the last run; no comment written"
             exit 0

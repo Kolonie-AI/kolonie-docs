@@ -28,7 +28,7 @@ nothing is assigned, because a Claude agent takes a *package* and asks questions
 mid-work.
 
 **The body says when it was read, and is a reading rather than a live view**
-(`#385`, 2026-08-16). Every entry on it was open at the minute of the run and
+(`#409`, 2026-08-16). Every entry on it was open at the minute of the run and
 any of them can be closed at the next one; there is no cheaper way to know than
 to ask, and asking is a run. So the stamp is what lets a reader judge the age of
 the list — the wording before it said the body was always right, which is how a

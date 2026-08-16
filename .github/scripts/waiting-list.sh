@@ -348,7 +348,7 @@ entries() {
   fi
 
   # The blockers are asked for one issue at a time, which is one call each and a
-  # list this size is fifteen of them per run, six times a day (`#385`) — still
+  # list this size is fifteen of them per run, six times a day (`#409`) — still
   # less than the worker spends before lunch. An issue whose blockers cannot
   # be read is still reported — a missing dependency line is worse than nothing
   # only if it is silent, so it says so in the entry.
@@ -383,7 +383,7 @@ body() {
   local file=$1
   [ -f "$file" ] || die "body needs the file that \`entries\` wrote, and $file is not one" 1
 
-  # **When this was read, in the body itself** (`#385`). Every entry below was
+  # **When this was read, in the body itself** (`#409`). Every entry below was
   # open at that minute and can be closed at the next one; there is no cheaper
   # way to know than to ask, and asking is a run. A reader who can see the age
   # of the list can decide what to do about it, which is the whole of what the
@@ -396,7 +396,7 @@ body() {
       "" \
       "**Nothing is waiting for your clearance either.** No open issue carries \`$CLEARANCE_LABEL\` (\`kolonie-docs#391\`)." \
       "" \
-      "Read at $read_at and rewritten every four hours by \`.github/workflows/waiting-for-an-agent.yml\` (\`kolonie-docs#265\`, \`#385\`). It comments only when the list changes, so an unread notification here always means something arrived."
+      "Read at $read_at and rewritten every four hours by \`.github/workflows/waiting-for-an-agent.yml\` (\`kolonie-docs#265\`, \`#409\`). It comments only when the list changes, so an unread notification here always means something arrived."
     return 0
   fi
 
@@ -528,7 +528,7 @@ body() {
 
       print "---"
       print ""
-      print "**Read at " read_at "**, and rewritten every four hours by `.github/workflows/waiting-for-an-agent.yml` (`kolonie-docs#265`, `#385`). This is a reading and not a live view: an issue above may have been closed since, so check the state of one before you build a package around it. A comment appears only when this list changes, so a notification here is always something new. A package is a set of issues linked by GitHub'"'"'s dependency relation (`kolonie-docs#261`) — it is one entry because it is one piece of work."
+      print "**Read at " read_at "**, and rewritten every four hours by `.github/workflows/waiting-for-an-agent.yml` (`kolonie-docs#265`, `#409`). This is a reading and not a live view: an issue above may have been closed since, so check the state of one before you build a package around it. A comment appears only when this list changes, so a notification here is always something new. A package is a set of issues linked by GitHub'"'"'s dependency relation (`kolonie-docs#261`) — it is one entry because it is one piece of work."
     }
   ' "$file"
 }

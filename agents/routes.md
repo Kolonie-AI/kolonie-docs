@@ -105,7 +105,7 @@ is one entry, because that is how it will be worked. Applying one of those two
 labels is therefore enough to be heard; it is not enough to be *started*, and
 nothing on that list is assigned to anybody.
 
-**The body says when it was read** (`#385`): it is a reading and not a live
+**The body says when it was read** (`#409`): it is a reading and not a live
 view, and an issue on it may have been closed since. That is why the run is
 four-hourly rather than daily — it bounds how wrong the page can be, and the
 stamp is what lets a reader see it.
