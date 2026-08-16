@@ -120,6 +120,17 @@ that cannot be checked by that command does not belong in this list — see
   assumed known, and nothing above rests on it being hard to find: what keeps
   direct traffic out is the edge-only allowlist
 
+### The supply-chain surface
+
+The repositories are public and anybody may open a pull request, so no pull
+request from a fork is ever armed for auto-merge: doing so would turn the
+unattended sweep into a supply chain with a schedule. The rule is enforced by
+the sweep's own filter, reached through `.github/scripts/opencode-worker.sh unarmed-pull-requests`;
+[the automation record](architecture/automation.md#the-opencode-worker) carries
+its full history. The sweep also leaves drafts, pull requests labelled
+`blocked:human`, and pull requests aimed at a non-default base unarmed; those
+filters are the same boundary's other halves.
+
 ### The erasure surface
 
 Account deletion is the one call that destroys a citizen's whole history, so it is
