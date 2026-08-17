@@ -212,14 +212,14 @@ A repository whose issues reach the board needs all five, and it needs them
 **before** the first issue is filed in it, not after the first pass fails:
 
 1. **The eight labels the triage pass writes** — the three `agent:` routes,
-   `from:external`, `decision`, `idea`, `p1` and `p2`, all defined in §5. `bash
+   `from:non-member`, `decision`, `idea`, `p1` and `p2`, all defined in §5. `bash
    .github/scripts/board-triage.sh vocabulary` prints exactly that list, and is
    the copy to trust: `board-triage.sh` now creates a missing one before it
    writes it, so this line is a belt to that brace rather than the only defence.
 2. **`.github/workflows/triage.yml`**, calling
    `Kolonie-AI/kolonie-docs/.github/workflows/inbound-triage.yml@main` with the
    repository's own `area:` label. Without it an issue opened from outside gets
-   no `area:`, no `from:external` and no reply.
+   no `area:`, no `from:outside` and no reply.
 3. **`.github/workflows/review.yml`**, so a pull request opened there is
    reviewed rather than merged unread.
 4. **A board card for every open issue**, which since `#332` the scheduled

@@ -78,8 +78,8 @@ jobs:
           url=$(gh api -X POST "repos/${REPO}/issues" \
             -f title="${TITLE}" \
             -f body="${issue_body}" \
-            -f 'labels[]=from:external' \
-            -f 'labels[]=needs-triage' \
+            -f 'labels[]=from:non-member' \
+            -f 'labels[]=from:outside' \
             --jq .html_url)
 
           echo "opened ${url}"

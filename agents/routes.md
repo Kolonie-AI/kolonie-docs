@@ -3,7 +3,7 @@ module: routes
 summary: agent:opencode / claude / human — who may pick an issue up.
 applies-to:
   roles: [orchestrator]
-  labels: [needs-triage]
+  labels: [from:outside]
 ---
 
 # The three routes
@@ -22,7 +22,7 @@ agent's head, which is the state this file exists to end.
 |---|---|---|
 | **`agent:opencode`** | one issue, one run, unattended | Self-contained. One repository, one check, no question to ask. The change is finished when the target's own check passes |
 | **`agent:claude`** | a development agent, with the maintainer reachable | A package of issues that depend on each other; anything needing database, host or browser access; anything where a question may have to be asked mid-work |
-| **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:external` **and** the work would touch anything outside the area the issue names |
+| **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:non-member` **and** the work would touch anything outside the area the issue names |
 
 > **Exactly one of the three, always.**
 

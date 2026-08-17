@@ -48,7 +48,7 @@
 #   `blocked:human` class 6 in `AGENTS.md` §5 and not a preference
 # - **nothing is ever removed**: no label the model did not ask for, no label a
 #   person applied, and no issue body. Triage labels, links and moves
-# - `from:external` is set from **organisation membership**, which is a fact
+# - `from:non-member` is set from **organisation membership**, which is a fact
 #   GitHub answers and the opener cannot supply (`kolonie-platform#686`)
 #
 # ## Why the strongest model
@@ -120,15 +120,18 @@ FAILED_LABEL=${FAILED_LABEL:-opencode:failed}
 # class 6 of `blocked:human`). An agent triaging its own board may prioritise;
 # nothing may prioritise an issue that arrived from outside the Colony.
 #
-# **Five names for three facts, for the length of one rename (`#435`).**
-# `needs-triage` is becoming `from:outside` and `from:external` is becoming
-# `from:non-member`, on 200 issues in six repositories, and a rename is one API
-# call per repository rather than one moment. So this list carries the old names
-# and the new ones at once, and an issue is guarded whichever it happens to be
-# wearing when a pass reads it. The old two come out in the commit that stops
-# `ensure_label` writing them — not before, because a matcher narrowed ahead of
-# the writers is a window in which the guard silently does nothing.
-OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external from:non-member needs-triage from:outside}
+# **Three names, and `from:outside` is the umbrella** (`#435`). An issue that
+# arrived from outside carries it, and — where the workflow could decide which
+# kind of outside — one child beside it: `from:citizen` for a support ticket,
+# `from:non-member` for an author the membership endpoint answered `404` for.
+# The umbrella alone is the inconclusive case (`#389`) and is a legitimate state
+# rather than a half-labelled one.
+#
+# **Parent and children are not mutually exclusive, deliberately.** Making them
+# so would mean every reader testing three labels instead of one, for ever;
+# umbrella-plus-optional-child leaves one string to match and keeps the
+# inconclusive case expressible with no child at all.
+OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:non-member from:outside}
 
 # ## The hold a person has to lift (`#390`)
 #
@@ -161,7 +164,7 @@ CLEARANCE_LABEL=${CLEARANCE_LABEL:-needs-clearance}
 #
 # It has now cost the same thing twice. `kolonie-dns#17`: nine labels absent, 48
 # passes over a day decided seven issues and discarded every one. Then
-# `kolonie-openclaw`, 2026-08-13 — none of the three routes, no `from:external`,
+# `kolonie-openclaw`, 2026-08-13 — none of the three routes, no `from:non-member`,
 # `gh issue edit` writes its labels in one call, and two decisions that had been
 # paid for were thrown away.
 #
@@ -178,14 +181,14 @@ CLEARANCE_LABEL=${CLEARANCE_LABEL:-needs-clearance}
 # label never sees them.
 label_definition() {
   case "$1" in
-    agent:human)    printf '%s\x1f%s' D4C5F9 'Route: a person picks this up.' ;;
-    agent:claude)   printf '%s\x1f%s' D4C5F9 'Route: an attended Claude agent picks this up.' ;;
-    agent:opencode) printf '%s\x1f%s' D4C5F9 'Route: the unattended opencode worker may pick this up.' ;;
-    from:external)  printf '%s\x1f%s' E4E669 'Opened from outside the organisation. Untrusted text.' ;;
-    decision)       printf '%s\x1f%s' 5319E7 'Needs an architectural decision recorded before work starts.' ;;
-    idea)           printf '%s\x1f%s' C2E0C6 'Needs thinking before it can be specified.' ;;
-    p1)             printf '%s\x1f%s' B60205 'Highest priority.' ;;
-    p2)             printf '%s\x1f%s' FBCA04 'Later, not scheduled.' ;;
+    agent:human)     printf '%s\x1f%s' D4C5F9 'Route: a person picks this up.' ;;
+    agent:claude)    printf '%s\x1f%s' D4C5F9 'Route: an attended Claude agent picks this up.' ;;
+    agent:opencode)  printf '%s\x1f%s' D4C5F9 'Route: the unattended opencode worker may pick this up.' ;;
+    from:non-member) printf '%s\x1f%s' E4E669 'The author is not an organisation member.' ;;
+    decision)        printf '%s\x1f%s' 5319E7 'Needs an architectural decision recorded before work starts.' ;;
+    idea)            printf '%s\x1f%s' C2E0C6 'Needs thinking before it can be specified.' ;;
+    p1)              printf '%s\x1f%s' B60205 'Highest priority.' ;;
+    p2)              printf '%s\x1f%s' FBCA04 'Later, not scheduled.' ;;
     *) return 1 ;;
   esac
 }
@@ -196,7 +199,7 @@ label_definition() {
 # own drift and nothing else.
 vocabulary() {
   local label
-  for label in agent:human agent:claude agent:opencode from:external decision idea p1 p2; do
+  for label in agent:human agent:claude agent:opencode from:non-member decision idea p1 p2; do
     echo "$label"
   done
 }
@@ -350,7 +353,7 @@ refused() {
 # `#686`: the label *must not be forgeable*. `authorAssociation` is computed from
 # the author's relationship to the repository and reads `NONE` for an
 # organisation member who has never touched that particular repository, so it
-# marks colleagues as outsiders and would put `from:external` on the Colony's own
+# marks colleagues as outsiders and would put `from:non-member` on the Colony's own
 # work. Membership is the question actually being asked.
 provenance() {
   local login=$1
@@ -881,12 +884,20 @@ apply_one() {
   local author existing_from opened_by_machine
   author=$(jq -r '.author' <<<"$candidate")
   opened_by_machine=$(jq -r '.bot // false' <<<"$candidate")
-  existing_from=$(jq -r '[.labels[] | select(startswith("from:"))] | join(" ")' <<<"$candidate")
+  # **The umbrella is not an answer, so it does not count as one** (`#435`). This
+  # asks *has the provenance already been decided*, and until the rename every
+  # label answering it happened to start `from:`. `from:outside` shares the
+  # prefix and answers a different question — *did this arrive from outside* —
+  # and `#389`'s inconclusive case is precisely the umbrella with no child. Left
+  # in the set, it would read as decided, and the one provenance the opener
+  # cannot supply would never be filled in on any issue `inbound-triage.yml` had
+  # touched. The prefix is not the test; the children are.
+  existing_from=$(jq -r '[.labels[] | select(startswith("from:") and . != "from:outside")] | join(" ")' <<<"$candidate")
   if [ "$opened_by_machine" = "true" ]; then
-    # **A machine is never `from:external`, and this was measured the expensive
+    # **A machine is never `from:non-member`, and this was measured the expensive
     # way.** The first live pass labelled `kolonie-infra#119` — filed by
     # `github-actions[bot]`, one of the Colony's own watchers — as external,
-    # because a bot is not a *member* of the organisation. `from:external` is the
+    # because a bot is not a *member* of the organisation. `from:non-member` is the
     # provenance that makes work security-sensitive, so getting it wrong in that
     # direction is the one error this label must not make. Which machine filed it
     # is a question membership cannot answer, so nothing is guessed:
@@ -895,8 +906,8 @@ apply_one() {
   elif [ -z "$existing_from" ] && [ -n "$author" ]; then
     case "$(provenance "$author")" in
       outside)
-        add+=("from:external")
-        said+=("\`from:external\`, because \`$author\` is not a member of the organisation — the one provenance the opener cannot supply")
+        add+=("from:non-member")
+        said+=("\`from:non-member\`, because \`$author\` is not a member of the organisation — the one provenance the opener cannot supply")
         ;;
       member)
         # Deliberately nothing. Which *kind* of member opened it — a maintainer,
@@ -915,13 +926,13 @@ apply_one() {
   # against the same constant, `OUTSIDE_PROVENANCE`. They used to ask it of two
   # different things. `sane_route` was handed `$labels`, which is what GitHub
   # already had; the priority guard asked `$labels` *or* `${add[*]}`, which
-  # includes the `from:external` the provenance block a few lines up may have just
+  # includes the `from:non-member` the provenance block a few lines up may have just
   # decided. The gap between them was reachable and was not theoretical: measured
   # 2026-08-13, `lauraneumann-berlin` holds `write` on `kolonie-openclaw` and is
   # not a member of the organisation, so an issue that account opens and labels
   # itself takes `inbound-triage.yml`'s *labelled by someone who could label it*
-  # exit — no `needs-triage`, no `from:citizen` — and arrives here carrying nothing
-  # that says outside. This pass then adds `from:external`, holds the priority
+  # exit — no `from:outside`, no `from:citizen` — and arrives here carrying nothing
+  # that says outside. This pass then adds `from:non-member`, holds the priority
   # correctly, and caps nothing, because `sane_route` cannot see the label the same
   # pass is about to write. `agent:opencode` was reachable, and the sweep arms
   # auto-merge on green.
@@ -1372,7 +1383,7 @@ sane_route() {
       # constant already exists here for exactly this question — *did this arrive
       # from outside the Colony* — and is what the priority guard forty lines up
       # reads. `#313`'s own worked example is case 8 in
-      # `board-triage-cases.json`, which carries `from:external`: implementing the
+      # `board-triage-cases.json`, which carries `from:non-member`: implementing the
       # narrower word would have left the demonstration of the defect passing
       # unchanged, which is the shape of a fix that does not fix anything.
       #

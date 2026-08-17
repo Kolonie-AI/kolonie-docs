@@ -1,6 +1,6 @@
 ---
 module: history-labels
-summary: p3, question/documentation, and needs-triage in one repository — why each was decided that way.
+summary: p3, question/documentation, and from:outside in one repository — why each was decided that way.
 applies-to:
 ---
 
@@ -36,7 +36,7 @@ the more expensive of the two fixes.
 
 ## What a label missing from one repository cost
 
-**`needs-triage` existed in `kolonie-platform` alone until 2026-08-12**, and the
+**`from:outside` existed in `kolonie-platform` alone until 2026-08-12**, and the
 gap was not harmless. `inbound-triage.yml` applies it to every issue from outside
 and is called by four repositories; `gh issue edit` applies its labels in one
 call, so in the other three the whole triage failed and the issue got *no*
@@ -45,3 +45,9 @@ call, so in the other three the whole triage failed and the issue got *no*
 labels that a repository is missing — because the hand fix leaves the next
 repository to call it broken in exactly the same way, and the failure is silent
 from where an outside contributor is standing.
+
+**It was called `needs-triage` while all of that happened**, and `#435` renamed
+it. This sentence is the one place in the repository the old name is still
+written down: a rename preserves the label and every issue carrying it, so the
+new name is the accurate one for the events above — but a chronicle that swaps a
+name silently is one nobody can check against the run logs it describes.

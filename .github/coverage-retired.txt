@@ -41,3 +41,24 @@ once a day on one issue in this repository — rewritten in place, with a commen
 person, a decision or a third party — something no issue on this board will
 close. The relation is for waiting on work that is *on* the board. An issue whose
 only blocker is another issue can sit in Ready: the queue already knows.
+
+# kolonie-docs#435. The provenance labels were renamed — `needs-triage` to
+# `from:outside`, `from:external` to `from:non-member` — because neither old name
+# said what it meant: the first named a state nothing ever recorded, and the
+# second read as *outside the project* on authors holding `write`. These eight
+# lines and the one below are the pre-split sentences that spell the old names
+# out. They are not lost and they did not move: every one of them is still in
+# `agents/labels.md`, `agents/board.md` or `architecture/automation.md`, word for
+# word, with the label name substituted. Retired rather than restored because
+# restoring them would mean writing the old names back into the modules, which is
+# the whole of what #435 removes — and because a rename is exactly the case the
+# header above calls *the split made them untrue*, arriving a second time.
+   `from:external`, `decision`, `idea`, `p1` and `p2`, all defined in §5. `bash
+   no `area:`, no `from:external` and no reply.
+**Origin** — `from:citizen`, `from:external`, `from:maintainer`, `from:agent`,
+`from:watcher`, and `needs-triage` (measured across the five board repositories on
+**`needs-triage` existed in `kolonie-platform` alone until 2026-08-12**, and the
+| 6 | **Priority on an issue that arrived from outside** — `p1` or `p2` on anything carrying `from:citizen` or `needs-triage` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
+`needs-triage` still waits for a human, because that is the case the rule was
+| **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:external` **and** the work would touch anything outside the area the issue names |
+| **`from:external`** | From organisation membership, which the opener cannot supply and the model is not asked about (`kolonie-platform#686`). Membership rather than `authorAssociation`, which reads `NONE` for a colleague who has never touched that repository |

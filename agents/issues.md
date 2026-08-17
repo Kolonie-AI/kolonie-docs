@@ -3,7 +3,7 @@ module: issues
 summary: Writing one an agent that has never seen this project can take.
 applies-to:
   roles: [orchestrator]
-  labels: [from:external, idea, decision]
+  labels: [from:non-member, idea, decision]
 ---
 
 # Writing an issue

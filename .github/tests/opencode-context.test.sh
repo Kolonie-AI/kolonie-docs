@@ -188,9 +188,9 @@ contains "and is marked as arriving from outside" "ARRIVED FROM OUTSIDE THE COLO
 
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "From outside" "Opened on GitHub." "from:external,p2"
+issue Kolonie-AI/kolonie-docs 2 "From outside" "Opened on GitHub." "from:non-member,p2"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
-contains "a from:external item is marked the same way" "ARRIVED FROM OUTSIDE THE COLONY" "$out"
+contains "a from:non-member item is marked the same way" "ARRIVED FROM OUTSIDE THE COLONY" "$out"
 
 # The two cases above both put the provenance label first, and that is exactly
 # why the marking could be broken without either of them noticing: the table
@@ -217,35 +217,35 @@ issue Kolonie-AI/kolonie-docs 2 "From the watcher" "A measurement." "from:watche
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
 contains "a from:watcher item is marked a measurement" "a measurement, not a judgement" "$out"
 
-# `needs-triage` with no `from:` label at all — the state `#389` creates on
+# `from:outside` with no child beside it — the state `#389` creates on
 # purpose when membership cannot be decided, and the one this reader used to
 # announce as *written inside the Colony* (`#434`).
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "Undecided" "Somebody's report." "bug,needs-triage"
+issue Kolonie-AI/kolonie-docs 2 "Undecided" "Somebody's report." "bug,from:outside"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
-contains "a needs-triage item with no from: label is marked as arriving from outside" \
+contains "a from:outside item with no child is marked as arriving from outside" \
   "ARRIVED FROM OUTSIDE THE COLONY" "$out"
 contains "and says which label decided it" "provenance undecided" "$out"
 
-# Precedence, all three ways. `needs-triage` is the umbrella and the specific
+# Precedence, all three ways. `from:outside` is the umbrella and the specific
 # label has to win it, because the ordinary pairing is both at once — so a
 # branch placed before these would rewrite the wording on 79 issues that already
 # say where they came from.
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "From a citizen" "A report." "from:citizen,needs-triage"
+issue Kolonie-AI/kolonie-docs 2 "From a citizen" "A report." "from:citizen,from:outside"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
-contains "from:citizen beside needs-triage keeps the from:citizen wording" \
+contains "from:citizen beside from:outside keeps the from:citizen wording" \
   "(\`from:citizen\`, a support ticket)" "$out"
 absent "and does not fall through to the umbrella" "provenance undecided" "$out"
 
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "From outside" "Opened on GitHub." "from:external,needs-triage"
+issue Kolonie-AI/kolonie-docs 2 "From outside" "Opened on GitHub." "from:non-member,from:outside"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
-contains "from:external beside needs-triage keeps the from:external wording" \
-  "(\`from:external\`, opened on GitHub)" "$out"
+contains "from:non-member beside from:outside keeps the from:non-member wording" \
+  "(\`from:non-member\`, opened on GitHub)" "$out"
 absent "and does not fall through to the umbrella either" "provenance undecided" "$out"
 
 # This one is the reason precedence is not merely cosmetic: the umbrella says
@@ -254,9 +254,9 @@ absent "and does not fall through to the umbrella either" "provenance undecided"
 # instrumentation.
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "From the watcher" "A measurement." "from:watcher,needs-triage"
+issue Kolonie-AI/kolonie-docs 2 "From the watcher" "A measurement." "from:watcher,from:outside"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
-contains "from:watcher beside needs-triage is still a measurement" \
+contains "from:watcher beside from:outside is still a measurement" \
   "a measurement, not a judgement" "$out"
 absent "and is not turned into a report" "read it as a report" "$out"
 
