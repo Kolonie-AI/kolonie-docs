@@ -245,12 +245,49 @@ absent "$log" "issue comment" "no comment posted"
 contains "$out" "nothing to do" "and said why"
 
 echo "== 4. a maintainer's *unlabelled* issue is labelled but not called outside work"
+# `#433`. The early exit above catches the maintainer who labelled their own
+# issue; this is the one who did not, and until `#433` they fell through to
+# `needs-triage` — a label whose description says *arrived from outside*, and
+# which `board-triage.sh` reads twice: the priority guard and the `agent:claude`
+# route cap. 94 issues carried it wrongly on 2026-08-17.
 out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage" "labelled"
+contains "$log" "--add-label area:platform" "labelled with its area"
+absent "$log" "needs-triage" "and not called outside work — push access decides that"
+# Not merely unapplied: not created either, so a repository that has never had
+# an outside contribution does not acquire the vocabulary for one from a
+# maintainer filing their own issue.
+absent "$log" "label create needs-triage" "and the label was not even created"
+# The comment still goes out, and it no longer explains a label that is not
+# there. Both halves matter: silence would read as the issue having been
+# swallowed, and the stale sentence would read as the message describing some
+# other issue than the one it is on.
+contains "$log" "issue comment 123" "still commented on"
+contains "$out" "did not arrive from outside" "and the log says why"
+absent "$log" "still has to look" "and no sentence about a label it did not apply"
 absent "$log" "from:" "no provenance label"
 absent "$log" "needs-clearance" "and no hold — this is the rejection case `#389` names by handle"
 absent "$log" "api orgs" "and membership was not even asked — push access settles it"
+
+echo "== 4b. …and an author without push access keeps every word of it (#433)"
+# The other side of the same condition, asserted here rather than left to §1
+# because §1 would still pass if the label had been made unconditional in the
+# wrong direction. Nothing about `#433` reaches an author who could not have
+# labelled the issue themselves.
+out=$(run_issue env EXISTING='[]' BODY='x')
+log=$(cat "$WORK/gh.log")
+contains "$log" "--add-label area:platform,needs-triage,from:external,needs-clearance" "all four labels"
+contains "$log" "label create needs-triage" "created where the repository lacked it"
+contains "$log" "still has to look" "and told what the label means"
+
+echo "== 4c. the label stops claiming a maintainer still has to look (#433)"
+# `#389` gave that job to `needs-clearance`, and a label asserting two things is
+# one that can be right about only one of them. Read off the creation call
+# rather than off prose, because the description is what a reader hovering over
+# the label in the GitHub UI is shown.
+created=$(grep -o 'label create needs-triage.*' "$WORK/gh.log" || true)
+contains "$created" "Arrived from outside." "says where it came from"
+absent "$created" "A maintainer still has to look" "and stops there"
 
 echo "== 5. the comment asks for acceptance criteria only when there are none"
 out=$(run_issue env EXISTING='[]' BODY='## Goal

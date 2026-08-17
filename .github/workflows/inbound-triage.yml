@@ -190,9 +190,47 @@ jobs:
           fi
 
           ensure_area_label
-          ensure_label needs-triage ededed "Arrived from outside. A maintainer still has to look."
+          labels="area:${AREA}"
 
-          labels="area:${AREA},needs-triage"
+          # **Push access decides the provenance; labels do not** (`#433`).
+          #
+          # The early exit above answers *does this need anything doing*, and
+          # until `#433` it was also, by accident, the only thing standing
+          # between an author with push access and `needs-triage`. An author who
+          # filed without labels fell straight through to a label whose own
+          # description says *arrived from outside*. Measured 2026-08-17: 94 of
+          # the 200 issues carrying it were opened from inside the organisation,
+          # 57 by the maintainer and 37 by the maintainer's agent.
+          #
+          # It is not a cosmetic mislabel. `needs-triage` is a member of
+          # `OUTSIDE_PROVENANCE` in `board-triage.sh`, so it holds the priority
+          # guard (`:976`) and caps the route at `agent:claude` (`:1335`). The
+          # maintainer's own issues could not be prioritised by triage, and
+          # `kolonie-platform#1141`–`#1144` were capped by a provenance rule
+          # rather than by any judgement about the work.
+          #
+          # **The decision is push access and nothing finer.** No
+          # `from:maintainer`, no `from:agent`, no allowlist: `board-triage.sh`
+          # declines that on purpose at `:895` — *which kind of member opened it
+          # is not a question membership answers* — and `#686` owns it. This
+          # removes a label that is wrong; it does not add one that is right.
+          #
+          # **The inconclusive case is untouched**, because it cannot reach here
+          # as `true`: the membership probe below only runs when `has_push` is
+          # false, and a token that cannot decide never answers `true` above
+          # either. An issue whose provenance is unknown keeps `needs-triage`
+          # and fails towards the removable error, exactly as `#389` decided.
+          #
+          # **The description says only what the label knows.** *A maintainer
+          # still has to look* has been `needs-clearance`'s job since `#389`,
+          # and a label that claims two things is one that can be right about
+          # one of them.
+          if [ "$has_push" = false ]; then
+            ensure_label needs-triage ededed "Arrived from outside."
+            labels="${labels},needs-triage"
+          else
+            echo "push access: area only, and no needs-triage — this did not arrive from outside"
+          fi
 
           # **Provenance is membership, and it is never `from:citizen`** (`#335`).
           #
@@ -231,10 +269,12 @@ jobs:
           # none is present. Silence here is a deferral, not a gap.
           #
           # **The route does not depend on any of this.** `OUTSIDE_PROVENANCE` is
-          # `from:citizen from:external needs-triage`, and `needs-triage` is
-          # applied unconditionally two lines above, so the priority is held for a
-          # person and the route is capped at `agent:claude` from the moment the
-          # issue is opened — including in the window before the sweep runs.
+          # `from:citizen from:external needs-triage`, and every author who
+          # reaches this branch has already been given `needs-triage` above — the
+          # condition is the same one, so the two cannot come apart. The priority
+          # is held for a person and the route is capped at `agent:claude` from
+          # the moment the issue is opened, including in the window before the
+          # sweep runs.
           if [ "$has_push" = false ]; then
             case "$(gh api "orgs/${REPO%%/*}/members/${AUTHOR}" -i 2>/dev/null | head -n1)" in
               *' 204'*) membership=member  ;;
@@ -308,7 +348,17 @@ jobs:
             comment+=$'\n'
           fi
 
-          comment+='- **Priority is deliberately not set.** `p1`/`p2` encode what the Colony is trying to achieve right now, which is ours to know. `needs-triage` means a maintainer still has to look — not that anything is wrong with the issue.'
+          # The second sentence names a label, so it is written only where the
+          # label was (`#433`). An author with push access no longer gets
+          # `needs-triage`, and a comment explaining a label that is not on the
+          # issue teaches its reader that this message describes something other
+          # than what it is looking at. The first sentence is the one that has to
+          # be said either way: an issue with no priority is not an issue nobody
+          # read.
+          comment+='- **Priority is deliberately not set.** `p1`/`p2` encode what the Colony is trying to achieve right now, which is ours to know.'
+          if [ "$has_push" = false ]; then
+            comment+=' `needs-triage` means a maintainer still has to look — not that anything is wrong with the issue.'
+          fi
           comment+="$missing"
           comment+=$'\n\nHow work is picked up is in [`AGENTS.md`](https://github.com/Kolonie-AI/kolonie-docs/blob/main/AGENTS.md) §6; the column an issue sits in is its status.'
 
