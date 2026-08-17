@@ -270,7 +270,7 @@ absent "$log" "label create from:outside" "and the label was not even created"
 # other issue than the one it is on.
 contains "$log" "issue comment 123" "still commented on"
 contains "$out" "did not arrive from outside" "and the log says why"
-absent "$log" "still has to look" "and no sentence about a label it did not apply"
+absent "$log" "is why a workflow will not set one here" "and no sentence about a label it did not apply"
 absent "$log" "from:" "no provenance label"
 absent "$log" "needs-clearance" "and no hold — this is the rejection case `#389` names by handle"
 absent "$log" "api orgs" "and membership was not even asked — push access settles it"
@@ -284,7 +284,12 @@ out=$(run_issue env EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform,from:outside,from:non-member,needs-clearance" "all four labels"
 contains "$log" "label create from:outside" "created where the repository lacked it"
-contains "$log" "still has to look" "and told what the label means"
+# Asserted on what the sentence *does* rather than on the words it is written
+# in, because `#435` rewrote it: the old one glossed a name that did not read as
+# anything, and `from:outside` says where the issue came from by itself. What
+# `#433` decided is that this author is told why no priority was set, and that
+# is what is checked here.
+contains "$log" "is why a workflow will not set one here" "and told what the label does"
 
 echo "== 4c. the label stops claiming a maintainer still has to look (#433)"
 # `#389` gave that job to `needs-clearance`, and a label asserting two things is
@@ -292,7 +297,7 @@ echo "== 4c. the label stops claiming a maintainer still has to look (#433)"
 # rather than off prose, because the description is what a reader hovering over
 # the label in the GitHub UI is shown.
 created=$(grep -o 'label create from:outside.*' "$WORK/gh.log" || true)
-contains "$created" "Arrived from outside." "says where it came from"
+contains "$created" "Arrived from outside the organisation." "says where it came from"
 absent "$created" "A maintainer still has to look" "and stops there"
 
 echo "== 5. the comment asks for acceptance criteria only when there are none"
