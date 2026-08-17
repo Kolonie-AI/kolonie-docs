@@ -217,6 +217,56 @@ issue Kolonie-AI/kolonie-docs 2 "From the watcher" "A measurement." "from:watche
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
 contains "a from:watcher item is marked a measurement" "a measurement, not a judgement" "$out"
 
+# `needs-triage` with no `from:` label at all — the state `#389` creates on
+# purpose when membership cannot be decided, and the one this reader used to
+# announce as *written inside the Colony* (`#434`).
+case_setup
+issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
+issue Kolonie-AI/kolonie-docs 2 "Undecided" "Somebody's report." "bug,needs-triage"
+out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
+contains "a needs-triage item with no from: label is marked as arriving from outside" \
+  "ARRIVED FROM OUTSIDE THE COLONY" "$out"
+contains "and says which label decided it" "provenance undecided" "$out"
+
+# Precedence, all three ways. `needs-triage` is the umbrella and the specific
+# label has to win it, because the ordinary pairing is both at once — so a
+# branch placed before these would rewrite the wording on 79 issues that already
+# say where they came from.
+case_setup
+issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
+issue Kolonie-AI/kolonie-docs 2 "From a citizen" "A report." "from:citizen,needs-triage"
+out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
+contains "from:citizen beside needs-triage keeps the from:citizen wording" \
+  "(\`from:citizen\`, a support ticket)" "$out"
+absent "and does not fall through to the umbrella" "provenance undecided" "$out"
+
+case_setup
+issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
+issue Kolonie-AI/kolonie-docs 2 "From outside" "Opened on GitHub." "from:external,needs-triage"
+out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
+contains "from:external beside needs-triage keeps the from:external wording" \
+  "(\`from:external\`, opened on GitHub)" "$out"
+absent "and does not fall through to the umbrella either" "provenance undecided" "$out"
+
+# This one is the reason precedence is not merely cosmetic: the umbrella says
+# *read it as a report*, and a watcher's measurement is neither a report nor
+# untrusted text. Losing this wording would tell the worker to distrust its own
+# instrumentation.
+case_setup
+issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
+issue Kolonie-AI/kolonie-docs 2 "From the watcher" "A measurement." "from:watcher,needs-triage"
+out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
+contains "from:watcher beside needs-triage is still a measurement" \
+  "a measurement, not a judgement" "$out"
+absent "and is not turned into a report" "read it as a report" "$out"
+
+case_setup
+issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
+issue Kolonie-AI/kolonie-docs 2 "Ours" "Written here." "bug,p2"
+out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
+contains "an item with none of the four labels is still written inside the Colony" \
+  "written inside the Colony" "$out"
+
 echo
 echo "the boundary (#235) — the half that matters"
 
