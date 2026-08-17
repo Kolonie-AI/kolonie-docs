@@ -3,39 +3,47 @@
 > These are reference copies for other repositories to adopt. The live
 > templates for this repository are in `.github/ISSUE_TEMPLATE/`, and the
 > standard an issue must meet is defined in [AGENTS.md](../AGENTS.md) §7.
+>
+> **The headings below are that standard.** An issue in **Ready** must be
+> pickup-able by an agent that has never seen the project; one that does not meet
+> the bar stays in Inbox or Blocked, because a badly specified issue costs more
+> than an unwritten one.
 
-## Summary
+## Goal
 
-<!-- Brief description of the feature -->
+<!-- One paragraph: what exists at the end that does not exist now? -->
 
-## Motivation
+## Context
 
-<!-- Why is this feature needed? What problem does it solve? -->
+<!-- WHY, and this is the heading most often written thinly. Name the document
+     and section that decided it, and QUOTE the constraint rather than
+     paraphrasing — a reader who disagrees with a paraphrase cannot check it.
+     Any measurement here carries the date it was measured. -->
 
-## Acceptance Criteria
+## Blocked by
 
-- [ ] Criterion 1
-- [ ] Criterion 2
-- [ ] Criterion 3
+<!-- Issue numbers, or "nothing". -->
 
-## Technical Details
+## Acceptance criteria
 
-<!-- Implementation hints, affected files, architecture considerations -->
+<!-- Checkable, not aspirational: somebody who did not write this must be able to
+     say yes or no to each line without asking you. -->
 
-## Affected Repos
+- [ ]
+- [ ]
 
-<!-- Which repos are involved? -->
+## Definition of done
 
-## Test Requirements
+- [ ] The repository's own check command passes with no warnings
+- [ ] Tests present, including at least one rejection case
+- [ ] No secrets, host names or IP addresses in the diff
 
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Manual verification
+## Out of scope
 
-## Definition of Done
+<!-- Optional, and worth more than it looks: what this issue deliberately does
+     not do, so the next reader does not widen it back out. -->
 
-- [ ] All acceptance criteria met
-- [ ] Tests written and passing
-- [ ] CI green
-- [ ] Code reviewed and approved
-- [ ] Documentation updated (if applicable)
+## Labels
+
+- One of `p1` / `p2`, and an `area:*`
+- Labels never carry status; the board column does.
