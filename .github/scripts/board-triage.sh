@@ -119,7 +119,16 @@ FAILED_LABEL=${FAILED_LABEL:-opencode:failed}
 # The provenances that make a priority somebody else's to set (`AGENTS.md` §5,
 # class 6 of `blocked:human`). An agent triaging its own board may prioritise;
 # nothing may prioritise an issue that arrived from outside the Colony.
-OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external needs-triage}
+#
+# **Five names for three facts, for the length of one rename (`#435`).**
+# `needs-triage` is becoming `from:outside` and `from:external` is becoming
+# `from:non-member`, on 200 issues in six repositories, and a rename is one API
+# call per repository rather than one moment. So this list carries the old names
+# and the new ones at once, and an issue is guarded whichever it happens to be
+# wearing when a pass reads it. The old two come out in the commit that stops
+# `ensure_label` writing them — not before, because a matcher narrowed ahead of
+# the writers is a window in which the guard silently does nothing.
+OUTSIDE_PROVENANCE=${OUTSIDE_PROVENANCE:-from:citizen from:external from:non-member needs-triage from:outside}
 
 # ## The hold a person has to lift (`#390`)
 #
