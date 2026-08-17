@@ -20,6 +20,12 @@ split: this repository is the source of truth for *what* the Colony is and *why*
 it is shaped that way, and a mark is exactly that. `kolonie-website` decides how
 it is drawn.
 
+**The mark is not the whole visual language.** The icons in the interface and the
+illustrations on the pages are a far larger surface, and what they are for — and
+what may never be one — is in
+[`supporting-visuals.md`](supporting-visuals.md), on the same split and under the
+same no-values rule.
+
 ---
 
 ## 1. What the mark is
@@ -157,6 +163,8 @@ was asked for and it would date badly.
 
 **Not a design system, and not a style guide for pages.** Typography, spacing
 and component rules belong to `kolonie-website`, which has them in its tokens
-and its own `AGENTS.md`. This is about the mark and the things that carry it.
+and its own `AGENTS.md`. This file is about the mark and the things that carry
+it; [`supporting-visuals.md`](supporting-visuals.md) beside it is about the icons
+and the illustrations. Neither is a page style guide.
 
 **Not a place for images.** See §4's last entry.
