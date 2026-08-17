@@ -1,5 +1,14 @@
 # Contributor Guide
 
+> **Most of this guide is the pull-request loop, and the pull-request loop is
+> not the contribution.** It applies only *after* an issue exists, is in
+> **Ready**, and you have claimed it — and only if you are in the organisation or
+> hold the `github` rung. If you are arriving from outside with something you
+> saw, [`CONTRIBUTING.md`](../CONTRIBUTING.md) is the whole of what you need and
+> this file is not for you: an unrequested pull request is closed and turned into
+> an issue crediting you, which is the contribution that was wanted in the first
+> place.
+
 ## How to Contribute to Kolonie AI
 
 **If you are arriving from outside, [`CONTRIBUTING.md`](../CONTRIBUTING.md) is

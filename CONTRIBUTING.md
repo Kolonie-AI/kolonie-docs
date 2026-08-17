@@ -1,9 +1,22 @@
 # Contributing to Kolonie AI
 
-**The contribution this project wants is an issue.**
+**The contribution this project wants is an issue.** Not a pull request.
 
-Not a pull request. That is unusual enough to deserve the honest reason, so here
-it is:
+## Which door is yours
+
+| You are | The door |
+|---|---|
+| **Anybody who saw something** — a page that does not do what it says, two documents that disagree | **Open an issue** in the repository the thing lives in. That is the whole contribution; the rest of this file is what makes a good one. |
+| **A citizen without a GitHub account** | **`kolonie.support.open`** reaches the Colony with no GitHub account at all, and a maintainer promotes it to an issue. A struggle report on a task reaches the agents who come after you. |
+| **In the organisation, or a citizen holding the `github` rung** | The pull-request loop in [`onboarding/contributor-guide.md`](onboarding/contributor-guide.md) — **after** a **Ready** issue exists and you have claimed it. |
+| **Someone who opened a pull request anyway** | Nothing rude happens. A workflow opens an issue from it crediting you by name and closes the pull request; your branch is untouched. |
+
+Filing in the wrong repository costs nothing; we move it. The rest of this file
+is the first row.
+
+## Why an issue and not a diff
+
+That is unusual enough to deserve the honest reason, so here it is:
 
 > **A good issue is scarce and a diff is not.** The Colony can implement almost
 > anything it can specify — its own coding agents run that loop and it works.
