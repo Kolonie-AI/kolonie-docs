@@ -26,18 +26,20 @@ name: Triage inbound contributions
 #
 # **It never assigns a priority.** `p1` and `p2` encode what the Colony is
 # currently trying to achieve, which a contributor has no way to know and a
-# workflow has no way to compute. `needs-triage` exists precisely so that the
-# human step is visible rather than skipped.
+# workflow has no way to compute. `from:outside` is what holds the priority for
+# a person to set: the guard reads provenance, and *has anybody inside looked
+# yet* is `needs-clearance`'s question rather than this label's (`#389`).
 #
 # **It does not thank the Colony's own runners for a citizen's report** (`#413`).
 # The Colony now files issues to itself — the log detector and the support
 # triage runner both file as GitHub Apps this organisation runs — and until
-# `#413` those arrived labelled `from:citizen` and `needs-triage`, and were
+# `#413` those arrived labelled `from:citizen` and `from:outside`, and were
 # thanked. Both labels were false: `from:citizen` is a claim about provenance,
 # and it is a number the Colony has an interest in, so an automation that
-# inflates it is worse than one that mislabels something inert. `needs-triage`
-# was false because the detector had already routed the issue — right
-# repository, right `area:` label, with its evidence. What such an issue needs
+# inflates it is worse than one that mislabels something inert. `from:outside`
+# was false because the issue came from inside, and the detector had already
+# routed it: right repository, right `area:` label, with its evidence. What such
+# an issue needs
 # is for somebody to read it, which is what `Inbox` already means.
 #
 # **It does not add anything to the project board.** It does not need to: the
@@ -129,8 +131,8 @@ jobs:
           # **Every label this file applies is created here if the repository
           # does not have it.** Four repositories call this workflow and on
           # 2026-08-12 exactly one of them — `kolonie-platform` — had
-          # `needs-triage`. The run on `kolonie-docs#313` failed with
-          # `'needs-triage' not found`, and because `gh issue edit` applies its
+          # `from:outside`. The run on `kolonie-docs#313` failed with *not found*
+          # on it, and because `gh issue edit` applies its
           # labels in one call, the issue got **no** `area:` and **no** comment
           # either: an outside contributor's first interaction with the Colony
           # was silence, and a red workflow nobody was watching (`#285`).
@@ -176,8 +178,8 @@ jobs:
           # to label itself, which is a second promise this file cannot check;
           # adding the one label that is always true costs nothing and leaves the
           # two that were false out. No `from:citizen`, because there is no
-          # citizen. No `needs-triage`, because the routing has happened. And no
-          # comment, because nobody is being thanked for anything.
+          # citizen. No `from:outside`, because it did not come from outside. And
+          # no comment, because nobody is being thanked for anything.
           if [ "$ours" = true ]; then
             if jq -e 'any(startswith("area:"))' <<< "$EXISTING" >/dev/null; then
               echo "filed by one of the Colony's own runners, already labelled: nothing to do"
@@ -196,13 +198,13 @@ jobs:
           #
           # The early exit above answers *does this need anything doing*, and
           # until `#433` it was also, by accident, the only thing standing
-          # between an author with push access and `needs-triage`. An author who
+          # between an author with push access and `from:outside`. An author who
           # filed without labels fell straight through to a label whose own
           # description says *arrived from outside*. Measured 2026-08-17: 94 of
           # the 200 issues carrying it were opened from inside the organisation,
           # 57 by the maintainer and 37 by the maintainer's agent.
           #
-          # It is not a cosmetic mislabel. `needs-triage` is a member of
+          # It is not a cosmetic mislabel. `from:outside` is a member of
           # `OUTSIDE_PROVENANCE` in `board-triage.sh`, so it holds the priority
           # guard (`:976`) and caps the route at `agent:claude` (`:1335`). The
           # maintainer's own issues could not be prioritised by triage, and
@@ -218,18 +220,20 @@ jobs:
           # **The inconclusive case is untouched**, because it cannot reach here
           # as `true`: the membership probe below only runs when `has_push` is
           # false, and a token that cannot decide never answers `true` above
-          # either. An issue whose provenance is unknown keeps `needs-triage`
+          # either. An issue whose provenance is unknown keeps `from:outside`
           # and fails towards the removable error, exactly as `#389` decided.
           #
           # **The description says only what the label knows.** *A maintainer
           # still has to look* has been `needs-clearance`'s job since `#389`,
           # and a label that claims two things is one that can be right about
-          # one of them.
+          # one of them. Since `#435` the name says it too: `from:outside` is a
+          # provenance and reads as one, where the name it replaced read as a
+          # state that somebody still owed the issue.
           if [ "$has_push" = false ]; then
-            ensure_label needs-triage ededed "Arrived from outside."
-            labels="${labels},needs-triage"
+            ensure_label from:outside ededed "Arrived from outside the organisation."
+            labels="${labels},from:outside"
           else
-            echo "push access: area only, and no needs-triage — this did not arrive from outside"
+            echo "push access: area only, and no from:outside — this did not arrive from outside"
           fi
 
           # **Provenance is membership, and it is never `from:citizen`** (`#335`).
@@ -246,7 +250,7 @@ jobs:
           # `kolonie-platform#866` carries it from `kolonie-triage[bot]`, which is
           # correct, and `#854`–`#861` carry it from this workflow, which is not.
           # Eight issues that `kateryna-sprintcx` filed directly with `gh` were
-          # counted as citizen reports. `from:external` is what they are.
+          # counted as citizen reports. `from:non-member` is what they are.
           #
           # **The wrong test.** Push access answers *could they have labelled it*,
           # which is the question the API keys on and the reason it is still read
@@ -262,15 +266,15 @@ jobs:
           # an outsider *only when the requester is itself an organisation
           # member*. `GITHUB_TOKEN` acts as the repository rather than as a
           # member, so it may get a `302` instead — and a `302` read as "not a
-          # member" would put `from:external` on a colleague, which is the same
+          # member" would put `from:non-member` on a colleague, which is the same
           # class of error in the other direction. So an inconclusive answer
           # applies nothing and leaves it to `board-triage.sh`, which runs within
           # the hour on an App token that can answer and sets the label only when
           # none is present. Silence here is a deferral, not a gap.
           #
           # **The route does not depend on any of this.** `OUTSIDE_PROVENANCE` is
-          # `from:citizen from:external needs-triage`, and every author who
-          # reaches this branch has already been given `needs-triage` above — the
+          # `from:citizen from:non-member from:outside`, and every author who
+          # reaches this branch has already been given `from:outside` above — the
           # condition is the same one, so the two cannot come apart. The priority
           # is held for a person and the route is capped at `agent:claude` from
           # the moment the issue is opened, including in the window before the
@@ -291,8 +295,14 @@ jobs:
             # created on an issue it is not about to be applied to. Colour and
             # description are `board-triage.sh`'s, so the two writers of this
             # label cannot disagree about what it means.
-            ensure_label from:external E4E669 "Opened from outside the organisation. Untrusted text."
-            labels="${labels},from:external"
+            #
+            # **The name is the answer the test gave** (`#435`). This branch is
+            # reached only on a `404` from the membership endpoint, and
+            # *non-member* is the whole of what that answers — it is narrower
+            # than *external*, which reads as *outside the project* and was worn
+            # by authors holding `write` on the repository.
+            ensure_label from:non-member E4E669 "The author is not an organisation member."
+            labels="${labels},from:non-member"
           elif [ "$membership" = unknown ]; then
             echo "provenance is not answerable with this token: left to board-triage.sh"
           fi
@@ -303,17 +313,18 @@ jobs:
           # the platform's rather than a script's, and that is the only reason it
           # is worth relying on.
           #
-          # **It is not `needs-triage` and does not replace it.** That label is
-          # load-bearing inside `board-triage.sh`'s `OUTSIDE_PROVENANCE`, which
-          # drives the priority guard and the `agent:claude` route cap. Merging
-          # the two is a separate decision and `#389` says in as many words that
-          # it must not be taken as a tidy-up while implementing this.
+          # **It is a state and `from:outside` is a fact, and neither replaces
+          # the other.** That one is load-bearing inside `board-triage.sh`'s
+          # `OUTSIDE_PROVENANCE`, which drives the priority guard and the
+          # `agent:claude` route cap, and it is removed by nothing. Merging the
+          # two is a separate decision and `#389` says in as many words that it
+          # must not be taken as a tidy-up while implementing this.
           #
-          # **`unknown` is held and `from:external` still is not, and the
-          # difference is what each label claims.** `from:external` is a *fact*
+          # **`unknown` is held and `from:non-member` still is not, and the
+          # difference is what each label claims.** `from:non-member` is a *fact*
           # about where an issue came from: guessing it onto a colleague writes a
           # permanent falsehood that `board-triage.sh` will never correct, because
-          # it only fills a `from:` in where none is present. `needs-clearance` is
+          # it only fills a child in where none is present. `needs-clearance` is
           # a *state* — whether anybody has looked — and it is wrong in one
           # direction only for as long as it takes a member to click it off. No
           # sweep applies this label later, so an issue held here on an
@@ -350,14 +361,20 @@ jobs:
 
           # The second sentence names a label, so it is written only where the
           # label was (`#433`). An author with push access no longer gets
-          # `needs-triage`, and a comment explaining a label that is not on the
+          # `from:outside`, and a comment explaining a label that is not on the
           # issue teaches its reader that this message describes something other
           # than what it is looking at. The first sentence is the one that has to
           # be said either way: an issue with no priority is not an issue nobody
           # read.
+          #
+          # **It says what the label does, not what it means** (`#435`). The old
+          # sentence here glossed the name, because the name did not read as
+          # anything: *a maintainer still has to look* was a state the label
+          # never recorded. `from:outside` says where the issue came from by
+          # itself, so what is left to say is the consequence.
           comment+='- **Priority is deliberately not set.** `p1`/`p2` encode what the Colony is trying to achieve right now, which is ours to know.'
           if [ "$has_push" = false ]; then
-            comment+=' `needs-triage` means a maintainer still has to look — not that anything is wrong with the issue.'
+            comment+=' `from:outside` is why a workflow will not set one here — it is where the issue came from, and says nothing is wrong with it.'
           fi
           comment+="$missing"
           comment+=$'\n\nHow work is picked up is in [`AGENTS.md`](https://github.com/Kolonie-AI/kolonie-docs/blob/main/AGENTS.md) §6; the column an issue sits in is its status.'
@@ -435,9 +452,9 @@ jobs:
                 # its labels in one call, so one missing label costs the
                 # contributor the `area:` and the comment as well. All four
                 # callers have it today; the fifth is why this is here.
-                gh label create from:external --repo "$REPO" --color E4E669 \
-                  --description "Opened from outside the organisation. Untrusted text." >/dev/null 2>&1 || true
-                add "from:external" ;;
+                gh label create from:non-member --repo "$REPO" --color E4E669 \
+                  --description "The author is not an organisation member." >/dev/null 2>&1 || true
+                add "from:non-member" ;;
             esac
           fi
 

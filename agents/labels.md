@@ -3,7 +3,7 @@ module: labels
 summary: Priority, area, type, origin, and blocked:human.
 applies-to:
   roles: [orchestrator]
-  labels: [needs-triage, needs-clearance]
+  labels: [from:outside, needs-clearance]
 ---
 
 # Labels
@@ -65,11 +65,27 @@ repositories on the same measurement, second only to `bug`. It was in every labe
 set and in no table here, which is the same defect as `question` seen from the
 other side.
 
-**Origin** — `from:citizen`, `from:external`, `from:maintainer`, `from:agent`,
-`from:watcher`, and `needs-triage` (measured across the five board repositories on
+**Origin** — `from:citizen`, `from:non-member`, `from:maintainer`, `from:agent`,
+`from:watcher`, and `from:outside` (measured across the five board repositories on
 2026-08-12; all six now exist in all of them). Where an issue came from, which
 changes how it is read and what may be done to it — and, for the last two rows of
 the routing table below, what may be done to it *at all*.
+
+**`from:outside` is the umbrella and the rest are its children** (`#435`). An
+issue that arrived from outside the organisation carries it, and — where the
+workflow could decide *which kind* of outside — one child beside it:
+`from:citizen` for a support ticket, `from:non-member` for an author the
+membership endpoint answered `404` for. **The umbrella alone is a legitimate
+state, not a half-labelled one**: it is `#389`'s inconclusive case, where the
+token could not settle membership and a wrong permanent fact about a colleague
+would be worse than no fact at all.
+
+**Parent and children are not mutually exclusive, deliberately.** Making them so
+would mean every reader testing three labels instead of one, for ever;
+umbrella-plus-optional-child leaves one string to match and keeps the
+inconclusive case expressible with no child at all. The one place the difference
+bites is `board-triage.sh`'s *has the provenance been decided* test, which asks
+for a child by name rather than for the `from:` prefix the umbrella also wears.
 
 **State** — `needs-clearance`, and it is the only one. Whether anybody inside the
 organisation has looked at an issue yet, which is a different question from where
@@ -77,7 +93,7 @@ it came from and is answered in the subsection below.
 
 **A label missing from one repository fails the whole triage of an issue, not
 one field of it** — `gh issue edit` applies its labels in one call, so a missing
-`needs-triage` cost three repositories their `area:` label and their reply too,
+`from:outside` cost three repositories their `area:` label and their reply too,
 silently, from where an outside contributor was standing. The workflow now
 creates any of its own labels that a repository lacks —
 [`history/2026-08-12-three-labels-that-were-not-there.md`](history/2026-08-12-three-labels-that-were-not-there.md).
@@ -110,8 +126,8 @@ issue, the pass finds a self-contained change with a decisive check and answers
 **Two ways it goes on, one way it comes off** (`#389`).
 
 - **Automatically, at creation**, by `inbound-triage.yml`, when the author is not
-  an organisation member. Same membership test that decides `from:external`, with
-  one deliberate difference: an *inconclusive* answer is held. See below.
+  an organisation member. Same membership test that decides `from:non-member`,
+  with one deliberate difference: an *inconclusive* answer is held. See below.
 - **By hand, by anyone at all** — a workflow, an agent, a citizen-facing runner —
   on anything that reaches money, credentials, the ledger, or deletion. An agent
   that senses an issue needs a person before it is worked should be able to raise
@@ -134,21 +150,15 @@ commented on and linked and argued about — it still goes nowhere. Taking the l
 off leaves nothing behind: the next sweep treats the issue exactly as it would any
 other, with no second approval and no residue.
 
-**It is not `needs-triage` and does not replace it.** The two overlap in trigger
-and not in effect: `needs-triage` is load-bearing inside `board-triage.sh`'s
-`OUTSIDE_PROVENANCE`, which drives the priority guard and the `agent:claude`
-route cap, and it is removed by nothing. Merging them is a separate decision and
-is not to be taken as a tidy-up on the way past.
-
-**`from:external` is a fact and this is a state.** The first is permanent and says
-where an issue came from; the second is temporary and says whether anybody has
-looked. One label answering both questions is what left `needs-triage` with no way
-to record that a maintainer had.
+**`from:outside` is a fact and this is a state**, and since `#435` both names say
+so. The first is permanent and says where an issue came from; the second is
+temporary and says whether anybody inside has looked. One label answering both
+questions is what left the umbrella with no way to record that a maintainer had.
 
 That distinction decides the inconclusive case, where the two labels part company.
 `GITHUB_TOKEN` cannot always tell a member from a stranger, and it gets a `302`
-rather than an answer. `from:external` is withheld there, because a wrong fact
-about a colleague is permanent and `board-triage.sh` fills a `from:` in only where
+rather than an answer. `from:non-member` is withheld there, because a wrong fact
+about a colleague is permanent and `board-triage.sh` fills a child in only where
 none is present. `needs-clearance` goes on, because no sweep applies it later — an
 issue not held at creation is never held — and a wrong hold lasts exactly as long
 as it takes a member to click it off. **The label fails towards the error that is
@@ -218,7 +228,7 @@ while you read an issue.
 | 3 | **Legal form and contracts** — the entity, its jurisdiction, anything signed | `kolonie-platform#222` — the payout leg, which `#129` sequences legal advice under VARA to |
 | 4 | **A new external account or credential** — signing up somewhere, holding a key, choosing a provider | `kolonie-infra#69` — an uptime service off the VPS, which somebody has to open an account with |
 | 5 | **Anything irreversible** — deleting data, force-pushing, an erasure, taking a service down | `kolonie-platform#91` — `eraseAgent`, which burns a balance and deletes a citizen |
-| 6 | **Priority on an issue that arrived from outside** — `p1` or `p2` on anything carrying `from:citizen` or `needs-triage` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
+| 6 | **Priority on an issue that arrived from outside** — `p1` or `p2` on anything carrying `from:citizen` or `from:outside` | `kolonie-docs#139` — opened by a citizen, arrived with no priority and could not be given one by a workflow |
 | 7 | **A step only a web form can take** — the provider exposes no API for it | `kolonie-docs#199` — the organisation avatar, for which GitHub offers neither REST nor GraphQL |
 
 **Class 5 is about *running* it, not about *building* it, and the example is
@@ -238,7 +248,7 @@ describes as *knowing* — so the class covered a case it was never arguing abou
 
 **So: an orchestrating agent sets `p1`/`p2` on issues it opens or triages itself,
 and on nothing that came from outside.** An issue carrying `from:citizen` or
-`needs-triage` still waits for a human, because that is the case the rule was
+`from:outside` still waits for a human, because that is the case the rule was
 written for and nothing about it has changed — the outside contributor cannot
 know the Colony's aims, and an agent reading their issue cannot infer them from
 the text either.

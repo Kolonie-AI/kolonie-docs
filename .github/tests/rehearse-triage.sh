@@ -186,14 +186,14 @@ printf '%s\n' REPO NUMBER AUTHOR AREA > "$WORK/exercised"
 UNEXERCISED_BY_DESIGN="GH_TOKEN"
 
 echo "== 1. an issue from outside the organisation gets all three labels"
-# The case the workflow exists for. `area:` and `needs-triage` are unconditional
+# The case the workflow exists for. `area:` and `from:outside` are unconditional
 # for an author without push access: the API drops labels silently for anyone
 # without it, so "forgot" and "could not" are the same case and there is no way
-# to be in the first one. `from:external` is not — it is the answer to a second
+# to be in the first one. `from:non-member` is not — it is the answer to a second
 # question, asked in §1b and §1c.
 out=$(run_issue env EXISTING='[]' BODY='Something is broken.')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage,from:external,needs-clearance" "labelled area, needs-triage, from:external and needs-clearance"
+contains "$log" "--add-label area:platform,from:outside,from:non-member,needs-clearance" "labelled area, from:outside, from:non-member and needs-clearance"
 contains "$log" "issue comment 123" "commented"
 absent "$log" "from:citizen" "never from:citizen — nothing here came through a support ticket"
 # `#285` again, for the label `#389` adds: `gh issue edit` applies its labels in
@@ -210,24 +210,30 @@ echo "== 1b. an organisation member without push access is not called external (
 # nothing at all about whether they are outside the Colony.
 out=$(run_issue env MEMBERSHIP=member EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage" "still labelled, because they still could not have"
-absent "$log" "from:" "and carries no provenance label at all"
+contains "$log" "--add-label area:platform,from:outside" "still labelled, because they still could not have"
+# The umbrella and no child, which is what `#389`'s inconclusive case looks like
+# since `#435` gave it a name. Asserted as the two children by name rather than
+# as the `from:` prefix: the umbrella wears it too, and a prefix test here would
+# have to pass for the label the line above requires.
+absent "$log" "from:citizen" "and carries no child provenance — not a support ticket"
+absent "$log" "from:non-member" "nor a non-member: membership answered, and answered member"
 absent "$log" "needs-clearance" "and is not held: a member has, by definition, been inside the organisation"
 
 echo "== 1c. a token that cannot answer applies nothing and says so (#335)"
 # `GITHUB_TOKEN` acts as the repository rather than as a member, so it can get a
 # `302` where a member would get `204`/`404`. Guessing either way is a wrong
 # label that `board-triage.sh` will then never correct, because it only fills in
-# a `from:` where none is present. `needs-triage` is already on, so the route
-# stays capped in the meantime — silence here is a deferral, not a gap.
+# a child where none is present. `from:outside` is already on, so the route stays
+# capped in the meantime — silence here is a deferral, not a gap.
 out=$(run_issue env MEMBERSHIP=unknown EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage" "labelled and routed as usual"
-absent "$log" "from:" "no provenance guessed"
+contains "$log" "--add-label area:platform,from:outside" "labelled and routed as usual"
+absent "$log" "from:citizen" "no provenance guessed — not a support ticket"
+absent "$log" "from:non-member" "and not a non-member either: the token could not answer"
 contains "$out" "left to board-triage.sh" "and the deferral is in the log"
 # The half of `#389` that the provenance label deliberately does not do. No sweep
 # applies `needs-clearance` later, so an issue not held here is never held — and
-# unlike a wrong `from:external`, a wrong hold costs one click from any member.
+# unlike a wrong `from:non-member`, a wrong hold costs one click from any member.
 # `from:` defers and this does not, on purpose.
 contains "$log" "needs-clearance" "and is held anyway, because nothing else ever will"
 
@@ -235,7 +241,7 @@ echo "== 2. …even when they somehow arrive with labels already on"
 # Not a hypothetical: an issue can be labelled by an automation before this runs.
 # The author still could not have done it, so the labels still apply.
 out=$(run_issue env EXISTING='["bug"]' BODY='Something is broken.')
-contains "$(cat "$WORK/gh.log")" "from:external" "still marked as an outside contribution"
+contains "$(cat "$WORK/gh.log")" "from:non-member" "still marked as an outside contribution"
 
 echo "== 3. a maintainer's labelled issue is left completely alone"
 out=$(run_issue env PERMISSION=write EXISTING='["p1","area:platform"]' BODY='x')
@@ -247,17 +253,17 @@ contains "$out" "nothing to do" "and said why"
 echo "== 4. a maintainer's *unlabelled* issue is labelled but not called outside work"
 # `#433`. The early exit above catches the maintainer who labelled their own
 # issue; this is the one who did not, and until `#433` they fell through to
-# `needs-triage` — a label whose description says *arrived from outside*, and
+# `from:outside` — a label whose description says *arrived from outside*, and
 # which `board-triage.sh` reads twice: the priority guard and the `agent:claude`
 # route cap. 94 issues carried it wrongly on 2026-08-17.
 out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform" "labelled with its area"
-absent "$log" "needs-triage" "and not called outside work — push access decides that"
+absent "$log" "from:outside" "and not called outside work — push access decides that"
 # Not merely unapplied: not created either, so a repository that has never had
 # an outside contribution does not acquire the vocabulary for one from a
 # maintainer filing their own issue.
-absent "$log" "label create needs-triage" "and the label was not even created"
+absent "$log" "label create from:outside" "and the label was not even created"
 # The comment still goes out, and it no longer explains a label that is not
 # there. Both halves matter: silence would read as the issue having been
 # swallowed, and the stale sentence would read as the message describing some
@@ -276,8 +282,8 @@ echo "== 4b. …and an author without push access keeps every word of it (#433)"
 # labelled the issue themselves.
 out=$(run_issue env EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label area:platform,needs-triage,from:external,needs-clearance" "all four labels"
-contains "$log" "label create needs-triage" "created where the repository lacked it"
+contains "$log" "--add-label area:platform,from:outside,from:non-member,needs-clearance" "all four labels"
+contains "$log" "label create from:outside" "created where the repository lacked it"
 contains "$log" "still has to look" "and told what the label means"
 
 echo "== 4c. the label stops claiming a maintainer still has to look (#433)"
@@ -285,7 +291,7 @@ echo "== 4c. the label stops claiming a maintainer still has to look (#433)"
 # one that can be right about only one of them. Read off the creation call
 # rather than off prose, because the description is what a reader hovering over
 # the label in the GitHub UI is shown.
-created=$(grep -o 'label create needs-triage.*' "$WORK/gh.log" || true)
+created=$(grep -o 'label create from:outside.*' "$WORK/gh.log" || true)
 contains "$created" "Arrived from outside." "says where it came from"
 absent "$created" "A maintainer still has to look" "and stops there"
 
@@ -317,8 +323,7 @@ echo "== 5c. one of the Colony's own runners is labelled, never thanked (#413)"
 out=$(run_issue env AUTHOR=kolonie-triage AUTHOR_TYPE=Bot EXISTING='[]' BODY='moderation-runner is erroring.')
 log=$(cat "$WORK/gh.log")
 contains "$log" "--add-label area:platform" "area: applied, because it is the one label that is always true"
-absent "$log" "from:" "no provenance label — the Colony's own runner is not a contributor"
-absent "$log" "needs-triage" "not marked needs-triage — the detector already routed it"
+absent "$log" "from:" "nothing from the provenance family — the Colony's own runner is not a contributor, and the detector already routed it"
 absent "$log" "needs-clearance" "and not held: what `kolonie-triage` files was moderated before it arrived"
 absent "$log" "issue comment" "not thanked"
 
@@ -333,10 +338,10 @@ echo "== 5d. 'one of ours' is an and, and each half is load-bearing"
 # test — and dropping the prefix test would silence the thank-you for every bot
 # on the internet, which is the direction that costs a citizen something.
 out=$(run_issue env AUTHOR=dependabot AUTHOR_TYPE=Bot EXISTING='[]' BODY='x')
-contains "$(cat "$WORK/gh.log")" "from:external" "a Bot that is not one of ours takes the ordinary path"
+contains "$(cat "$WORK/gh.log")" "from:non-member" "a Bot that is not one of ours takes the ordinary path"
 
 out=$(run_issue env AUTHOR=kolonie-fan AUTHOR_TYPE=User EXISTING='[]' BODY='x')
-contains "$(cat "$WORK/gh.log")" "from:external" "a person whose name starts kolonie- is still a person"
+contains "$(cat "$WORK/gh.log")" "from:non-member" "a person whose name starts kolonie- is still a person"
 
 echo "== 5e. a runner's issue in a repository without its area: label (#407)"
 # **The rejection case for `#407`.** The runner branch above applies `area:` and
@@ -364,7 +369,7 @@ out=$(run_issue env MISSING_LABELS=area:platform EXISTING='[]' BODY='x'); rc=$?
 check "an outside contributor's issue does not fail either" "$rc" "0"
 log=$(cat "$WORK/gh.log")
 contains "$log" "label create area:platform" "created it"
-contains "$log" "--add-label area:platform,needs-triage" "and the whole list survived the one call"
+contains "$log" "--add-label area:platform,from:outside" "and the whole list survived the one call"
 contains "$log" "issue comment" "so the reply survived with it"
 
 echo "== 6. priority is never assigned, by any path"
@@ -379,7 +384,7 @@ done
 echo "== 7. a fork pull request inherits area and priority from the issue it closes"
 out=$(run_pr env ISSUE_LABELS='area:infra,p1' TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='Fixes #40')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label from:external,area:infra,p1" "inherited area:infra and p1, and marked from:external"
+contains "$log" "--add-label from:non-member,area:infra,p1" "inherited area:infra and p1, and marked from:non-member"
 absent "$log" "area:platform" "did not fall back to the calling repository's area"
 absent "$log" "pr comment" "said nothing, because there was nothing to say"
 
@@ -398,7 +403,7 @@ done
 echo "== 8. a pull request that closes no issue is told so, and falls back to the repo's area"
 out=$(run_pr env TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='No issue for this.')
 log=$(cat "$WORK/gh.log")
-contains "$log" "--add-label from:external,area:platform" "fell back to the caller's area"
+contains "$log" "--add-label from:non-member,area:platform" "fell back to the caller's area"
 contains "$log" "pr comment" "commented"
 contains "$log" "No issue is referenced" "and the comment says which convention was missed"
 
@@ -450,7 +455,7 @@ out=$(run_pr env MISSING_LABELS=area:platform TITLE='fix: a thing' \
 check "the step does not fail" "$rc" "0"
 log=$(cat "$WORK/gh.log")
 contains "$log" "label create area:platform" "created the label first"
-contains "$log" "--add-label from:external,area:platform" "and applied the whole list in one call"
+contains "$log" "--add-label from:non-member,area:platform" "and applied the whole list in one call"
 contains "$log" "pr comment" "so the conventions comment survived too"
 
 echo "== 8g. …and the inheriting path creates nothing, because it invents nothing"
@@ -461,7 +466,7 @@ out=$(run_pr env MISSING_LABELS=area:platform ISSUE_LABELS='area:infra,p1' \
   TITLE='fix: a thing' BRANCH='fix/a-thing-40' BODY='Fixes #40')
 log=$(cat "$WORK/gh.log")
 absent "$log" "label create area:platform" "nothing created for an area this pull request never applies"
-contains "$log" "--add-label from:external,area:infra,p1" "and the inherited labels went on unchanged"
+contains "$log" "--add-label from:non-member,area:infra,p1" "and the inherited labels went on unchanged"
 
 echo "== 9. conventions are commented on, never failed"
 # The rejection case that matters most here is that there is no rejection: a red
@@ -470,7 +475,7 @@ echo "== 9. conventions are commented on, never failed"
 out=$(run_pr env ISSUE_LABELS='area:docs' TITLE='made some changes' BRANCH='patch-1' BODY='Fixes #12'); rc=$?
 check "a non-conventional title does not fail the step" "$rc" "0"
 contains "$(cat "$WORK/gh.log")" "pr comment" "it comments instead"
-contains "$(cat "$WORK/gh.log")" "--add-label from:external,area:docs" "and labels it anyway"
+contains "$(cat "$WORK/gh.log")" "--add-label from:non-member,area:docs" "and labels it anyway"
 
 echo "== 10. a maintainer's own branch name is not policed"
 # `feature/<slug>-<n>` is guidance for contributors working in a fork, not a rule

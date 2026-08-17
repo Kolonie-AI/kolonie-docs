@@ -285,7 +285,7 @@ case_setup() {
   # repository on the board today and therefore the state the other cases are
   # about. The case that is about `#333` overwrites this with a repository that
   # is missing one.
-  vocabulary agent:human agent:claude agent:opencode from:external decision idea p1 p2
+  vocabulary agent:human agent:claude agent:opencode from:non-member decision idea p1 p2
 }
 
 # The labels the repository under test has. `--json name` shape, because that is
@@ -542,7 +542,7 @@ absent "an injected priority is not written, whatever the model answered" \
 absent "nor is the unattended route the body asked for" "--add-label agent:opencode" "$log"
 contains "the issue routes to the attended agent instead" "--add-label agent:claude" "$log"
 contains "and its provenance comes from membership, as it did before" \
-  "--add-label from:external" "$log"
+  "--add-label from:non-member" "$log"
 
 echo
 echo "an unsure route is agent:claude, and never the unattended worker (#262)"
@@ -603,10 +603,10 @@ contains "a citizen's defect still reaches the worker" \
 
 # One word wider than `#313` wrote it, and deliberately: `OUTSIDE_PROVENANCE` is
 # what this file already asks *did this arrive from outside*, and `#313`'s own
-# worked example — case 8 in `board-triage-cases.json` — carries `from:external`.
+# worked example — case 8 in `board-triage-cases.json` — carries `from:non-member`.
 case_setup
-searched "$(issue 900 'an outsider would like a field on a response' 'from:external')"
-boarded "900|Inbox|from:external"
+searched "$(issue 900 'an outsider would like a field on a response' 'from:non-member')"
+boarded "900|Inbox|from:non-member"
 run_apply "$(decided 900 "agent:opencode" "" "" "" true)" >/dev/null
 absent "an outsider's proposal is capped the same way" \
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
@@ -797,8 +797,8 @@ searched "$(issue 900 'an outsider wrote this' '' "stranger")"
 boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "p1" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
-contains "from:external comes from organisation membership, not from the model" \
-  "--add-label from:external" "$log"
+contains "from:non-member comes from organisation membership, not from the model" \
+  "--add-label from:non-member" "$log"
 absent "and an issue triage has just found to be external is not prioritised either" \
   "--add-label p1" "$log"
 
@@ -806,15 +806,15 @@ case_setup
 searched "$(issue 900 'a colleague wrote this' '')"
 boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
-absent "a member's issue is not labelled from:external" "from:external" "$(cat "$GH_LOG")"
+absent "a member's issue is not labelled from:non-member" "from:non-member" "$(cat "$GH_LOG")"
 
 # ## The route cap reads the provenance this pass has just decided (`#334`)
 #
 # The reachable path, measured 2026-08-13: an account outside the organisation
 # that holds `write` on the repository opens an issue and labels it itself, so
 # `inbound-triage.yml` takes its *labelled by someone who could label it* exit and
-# the issue arrives here with neither `needs-triage` nor `from:citizen` on it.
-# This pass finds `from:external` from membership — and the cap used to be handed
+# the issue arrives here with neither `from:outside` nor `from:citizen` on it.
+# This pass finds `from:non-member` from membership — and the cap used to be handed
 # the labels GitHub already had, so it saw an unlabelled issue and left
 # `agent:opencode` standing.
 case_setup
@@ -829,7 +829,7 @@ absent "an issue this pass has just found to be external does not reach the unat
   "--add-label agent:opencode" "$log"
 contains "and it caps at agent:claude, on the provenance decided in the same pass" \
   "--add-label agent:claude" "$log"
-contains "and the label it was capped on is written too" "--add-label from:external" "$log"
+contains "and the label it was capped on is written too" "--add-label from:non-member" "$log"
 
 # The cap is for a proposal and not for a defect, so this must not have widened
 # into *nothing from outside is ever the worker's*.
@@ -841,7 +841,7 @@ contains "an outside issue labelled bug is still a defect and still reaches the 
   "--add-label agent:opencode" "$(cat "$GH_LOG")"
 
 # The expensive way to learn this: the first live pass labelled `kolonie-infra#119`
-# — filed by one of the Colony's own watchers — `from:external`, because a bot is
+# — filed by one of the Colony's own watchers — `from:non-member`, because a bot is
 # not a *member* of the organisation. That is the one direction this label must
 # not be wrong in.
 case_setup
@@ -849,7 +849,7 @@ searched "$(issue 900 'a watcher filed this' '' "github-actions[bot]")"
 boarded "900|Inbox|"
 run_apply "$(decided 900 "agent:claude" "" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
-absent "a machine is never labelled from:external" "from:external" "$log"
+absent "a machine is never labelled from:non-member" "from:non-member" "$log"
 absent "and its membership is not even asked about" "members/github-actions" "$log"
 contains "and the run says whose job that provenance is" "kolonie-platform#686" "$(cat "$WORK/stderr")"
 
@@ -1361,7 +1361,7 @@ contains "and says so with both numbers" \
 echo
 echo "a repository that does not have the vocabulary yet (#333)"
 
-# `kolonie-openclaw`, 2026-08-13: none of the three routes and no `from:external`,
+# `kolonie-openclaw`, 2026-08-13: none of the three routes and no `from:non-member`,
 # so both decisions the pass had been billed for were discarded and the two runs
 # after it failed the same way. The labels were created by hand at 08:41Z. This is
 # the pass creating them instead.
@@ -1400,7 +1400,7 @@ contains "and the refusal says which vocabulary it is not in" \
 # The half `#333` is actually named for: the model call was made and billed, and
 # one issue GitHub refuses must not throw away the decisions about the others.
 case_setup
-vocabulary agent:human agent:claude agent:opencode from:external decision idea p1 p2
+vocabulary agent:human agent:claude agent:opencode from:non-member decision idea p1 p2
 searched "$(issue 900 'the one GitHub refuses' '')" "$(issue 901 'the one beside it' '')"
 boarded "900|Inbox|" "901|Inbox|"
 echo 900 > "$GH_FIXTURES/label_fails"

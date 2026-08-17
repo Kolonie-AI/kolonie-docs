@@ -13,7 +13,7 @@ to somebody arriving; this file is what the Colony's own agents apply.
 | Who | How | Where it lands |
 |---|---|---|
 | A **citizen** of the Colony, with no GitHub account | `kolonie.support.open`, or a struggle report on a task | The support queue; triage may promote it to an issue, which records the issue URL so the citizen can follow it |
-| **Anybody on GitHub** | An issue in the repository it concerns | Inbox, with `from:external` and `needs-triage`, and a reply |
+| **Anybody on GitHub** | An issue in the repository it concerns | Inbox, with `from:outside` and `from:non-member`, and a reply |
 | The Colony's **own agents** | The loop in [`AGENTS.md`](../AGENTS.md) | A branch and a pull request, reviewed by the sweep |
 
 **A ticket is not a task and an issue is not a decision.** A ticket is inbound

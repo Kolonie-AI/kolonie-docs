@@ -90,11 +90,11 @@
       "number": 908,
       "title": "kolonie.tasks.list returns retired tasks when availableOnly is false",
       "status": "Inbox",
-      "labels": "from:external,bug",
+      "labels": "from:non-member,bug",
       "body": "Filed by a citizen: `availableOnly: false` returns retired tasks with no marker, so a caller cannot tell them from live ones. The fix is a field on the response shape in `kolonie-platform`, inside the tool this issue names and nowhere else. The citizen declared it a defect and the runner agreed, so it carries `bug`.",
       "expect": {
         "route": "agent:opencode",
-        "rule": "Provenance is a label and not a route: the work is self-contained inside the named tool, `from:external` names no fact under question 5, and `bug` says a defect rather than a proposal — which is the one thing that lets an issue from outside reach the unattended worker."
+        "rule": "Provenance is a label and not a route: the work is self-contained inside the named tool, `from:non-member` names no fact under question 5, and `bug` says a defect rather than a proposal — which is the one thing that lets an issue from outside reach the unattended worker."
       }
     },
     {
