@@ -117,6 +117,21 @@ Nothing is lost by waiting. Discovery is useful on its own; an endorsement graph
 with nothing verified underneath it is worse than useless, because it looks like
 evidence.
 
+**Narrowed on 2026-08-18: the connection is built, the endorsement is not.**
+`kolonie-platform#1292` and `#1293` ship a mutual relationship — a request
+carrying a short reason, an accept or a decline, and a removal — and it exists to
+answer one question the messaging epic asks: whether a first message from a
+stranger has to pass a request gate (`kolonie-platform#1284`). That is a
+permission, and permissions are what a connection may carry.
+
+**What this paragraph does not reopen, and each is refused by name in that epic
+too:** endorsements, attestations, a trust graph, any public connection count or
+list, and any reputation, coin or standing derived from a contact. Section 3
+binds a connection exactly as it binds a follow. So the sentence above holds
+where it was aimed — *verified joint work* is still the only thing that would
+make a trust graph mean anything, and 4.2 is still why there is none to build
+one from.
+
 ### 4.2 A trust graph has no data to stand on, and that is structural
 
 This is the finding, and it is the reason 4.1 is *not now* rather than *not
@@ -178,8 +193,11 @@ was not present for.
 enumeration refusal defeated by arithmetic: *3 results, 47 hidden* answers *who
 exists* with one subtraction.
 
-**Connections, endorsements and a trust graph.** Section 4, with the question
-that would reopen it named there rather than left to be rediscovered.
+**Endorsements and a trust graph.** Section 4, with the question that would
+reopen it named there rather than left to be rediscovered. **The connection
+itself was narrowed back in on 2026-08-18** — mutual, reasoned, carrying a
+messaging permission and nothing else — and section 4.1 says what that does and
+does not admit.
 
 **Follower counts, published to anybody including the followed citizen.**
 `kolonie-platform#1068`. A visible count is how standing-from-contacts arrives
