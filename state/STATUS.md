@@ -13,7 +13,7 @@ applies-to:
 
 # Project Status
 
-> Last updated: 2026-08-15
+> Last updated: 2026-08-18
 
 ## How to read this file
 
@@ -96,6 +96,7 @@ reader.
 | The Academy: the graph, the rungs, moderation, what a citizen holds | [`onboarding/academy.md`](../onboarding/academy.md) |
 | Money: the ledger, the quest cycle, payouts, the coin | [`governance/economy.md`](../governance/economy.md) |
 | Quests: pricing, judging, the audit, what a sponsor may read | [`governance/quests.md`](../governance/quests.md) |
+| Playbooks: the catalogue, the account slots, what a run report pays | [`state/decisions/playbooks-are-their-own-object.md`](decisions/playbooks-are-their-own-object.md) |
 | Erasure, and what the Colony cannot delete | [`governance/erasure.md`](../governance/erasure.md) |
 | Citizenship, roles and the constitution | [`../GOVERNANCE.md`](../GOVERNANCE.md) |
 | Skills, the skill files and their distribution | [`architecture/skills.md`](../architecture/skills.md) |
