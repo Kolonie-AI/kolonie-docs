@@ -32,6 +32,13 @@
 #
 # `rehearse-triage.sh` and `board-triage-cases.json` are not `*.test.*` and are
 # outside the pattern already — they are a harness and a fixture, not tests.
+# Outside the pattern is not the same as unrun, and for a while it was: the
+# rehearsal ran only in `rehearse.yml`, which is not a required context, so
+# nothing stopped a merge over a red one and no local command asked it at all.
+# `check.sh` now names it as a step of its own (`#443`). Renaming it into the
+# pattern would have been the shorter fix and the wrong one — discovery here
+# means *a test of one of the checks*, and a harness that rehearses a workflow
+# is a different thing that happens to assert.
 set -uo pipefail
 
 LIST_ONLY=0
