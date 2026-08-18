@@ -1843,6 +1843,20 @@ case "${1:-}" in
   vocabulary)
     vocabulary
     ;;
+  ensure-vocabulary)
+    # The other half of `vocabulary`, and the reason `board-self-check.sh` 5c has
+    # been filed three times: it names the repositories missing part of the set
+    # and deliberately fixes nothing, because a label in somebody else's
+    # repository is a decision. This is that decision, taken deliberately, in one
+    # command instead of eight `gh label create` calls read off an issue body.
+    #
+    # It writes only the eight labels `label_definition` names, only where they
+    # are absent, and never touches an existing one — `ensure_labels` is the same
+    # function the sweep uses, so this cannot invent vocabulary the sweep would
+    # then refuse to write.
+    ensure_labels "$ORG/${2:?ensure-vocabulary needs a repository name}" $(vocabulary) ||
+      die "the vocabulary could not be written to ${2}" 2
+    ;;
   refusals)
     refusals
     ;;
@@ -1853,6 +1867,6 @@ case "${1:-}" in
     propose "${2:?propose needs the file the model wrote}"
     ;;
   *)
-    die "usage: board-triage.sh admit | repositories | candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
+    die "usage: board-triage.sh admit | repositories | candidates | brief <candidates.json> [offset] [count] | cases-brief [cases.json] | apply <candidates.json> <decisions.json> | sweep <candidates.json> | provenance <login> | vocabulary | ensure-vocabulary <repo> | refusals | proposal-brief <refusals.json> | propose <proposals.json>" 1
     ;;
 esac
