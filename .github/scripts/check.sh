@@ -61,6 +61,22 @@ step() {
 step "the checks are tested before they are trusted" \
   bash .github/scripts/run-tests.sh
 
+# `#443`. Named rather than discovered, and it is the one exception to the rule
+# directly above. `run-tests.sh` discovers `.github/tests/*.test.*`;
+# `rehearse-triage.sh` is deliberately outside that pattern — its own header and
+# `run-tests.sh`'s both say why: it is a harness that reads
+# `inbound-triage.yml` and rehearses it, not a test of one of the checks. So it
+# ran in `rehearse.yml` and nowhere else, and `rehearse.yml` is not a required
+# context on `main` — a red rehearsal stopped nothing and no local command ever
+# asked it. That is two holes, and this closes the half that is in this
+# repository: a push now has to get past it.
+#
+# It needs `pyyaml`, which `rehearse.yml` installs and a fresh checkout may not
+# have. It says so itself and fails rather than skipping — the module is one
+# `pip install` away, which is not the position `no-gateway-leak.sh` is in.
+step "the inbound-triage rehearsal still passes" \
+  bash .github/tests/rehearse-triage.sh
+
 # `#365`. 216 lines on 2026-07-27, 2.021 on 2026-08-14 — every one of them a
 # good-faith improvement, which is why a habit was never going to hold this. The
 # `max-lines:` declarations are a ratchet and the check prints them on every run.

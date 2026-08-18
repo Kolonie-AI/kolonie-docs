@@ -27,6 +27,18 @@ mkdir -p "$BIN"
 
 command -v python3 >/dev/null || { echo "python3 is required"; exit 1; }
 
+# Both preflights, and `pyyaml` gets one because of where this now runs. Until
+# `#443` this only ever ran in `rehearse.yml`, which installs the module a line
+# before calling it; `check.sh` runs it on whatever machine the agent is on, and
+# a missing module there dies inside the heredoc below and is then reported by
+# the guard after it as *the parse is broken, not the workflow* — which sends
+# the reader to the workflow for a problem that is one `pip install` away.
+python3 -c 'import yaml' 2>/dev/null || {
+  echo "pyyaml is required: this reads inbound-triage.yml rather than a copy of it"
+  echo "  pip install pyyaml"
+  exit 1
+}
+
 # The step's script **and the names of the variables it is given** (`#192`).
 #
 # Both come from the same parse for the same reason the script does: a harness
