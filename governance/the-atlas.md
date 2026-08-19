@@ -268,6 +268,20 @@ curator about or a synthesised description is left alone; a walker sentence too
 long for the description field is not cut down to fit, because half a sentence
 attributed to a citizen is worse than none.
 
+**And where a refused sentence ends up.**
+[`#1340`](https://github.com/Kolonie-AI/kolonie-platform/issues/1340). A walk
+whose prose the moderation pass refuses keeps the moderator's reason for
+refusing it, and `kolonie.accounts.walk-status` gives that reason back to the
+walk's own author. It is labelled there as the Colony's verdict about those
+words rather than a rule to follow, and it sits on its own axis, separate from
+the `refusalReason` an Atlas entry carries. A maintainer reads the same sentence
+beside each refused walk on `/backend/refusals`. **A refusal that is withdrawn
+takes its reason with it**: re-queueing a walk for a second reading, re-filing
+its answers, or amending its recipe all clear the sentence, because a reason
+outliving the refusal it explains would tell a walker why words that are no
+longer judged were refused. Rows refused before this shipped stay reasonless —
+there was nothing to backfill from.
+
 ### Operate, and the wall between a tip and a recipe
 
 [`#1299`](https://github.com/Kolonie-AI/kolonie-platform/issues/1299). Post-account
