@@ -183,6 +183,26 @@ q_fallbacks() {
 
 }
 
+# --- query 2a-alt: what the gateway actually answered, on `status` only -------
+# **`reason` names the class and `detail` names the thing** (`#328`). Measured
+# 2026-08-19 against seven days of production: every one of the twelve fallbacks
+# was `moderation-runner`, `reason=status`, and behind every one of them was an
+# HTTP `502` or `503`. The report said *the gateway answered badly* twelve times
+# and could not say which — and `502` (upstream down), `429` (we are over a
+# limit) and `401` (the key is wrong) are three different mornings.
+#
+# **`status` only, and that restriction is not tidiness.** `gateway.ts` draws the
+# line itself where it stamps the response header: *"Only an HTTP status is
+# public accounting. Other details can contain"* — the `unreachable` and
+# `malformed` details are free-text descriptions of an exception, unbounded in
+# cardinality and not ours to publish. Grouping by `detail` across every reason
+# would put an error string into a table and a label into Loki's index.
+q_fallback_statuses() {
+  loki /loki/api/v1/query \
+    'query=sum by (service, detail) (count_over_time({job="containers", level="warn"} | json | event="model.route.fallback" | reason="status" [24h]))' \
+    "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.metric.detail // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
+}
+
 # --- query 2a-bis: the same, hourly, which is what the threshold reads --------
 # **A burst and a trickle are different events and only the shape says which.**
 # Measured over the seven days to 2026-08-12: ten fallbacks in total, nine of
@@ -425,6 +445,7 @@ cmd_gather() {
 
   # --- what the gateway did, which is a `warn` and therefore invisible above ---
   q_fallbacks "$NOW" > "$dir/fallbacks.tsv"
+  q_fallback_statuses "$NOW" > "$dir/fallback-statuses.tsv"
   q_refusals  "$NOW" > "$dir/refusals.tsv"
   q_fallbacks_hourly "$DAY_AGO" "$NOW" > "$dir/fallback-peak.txt"
 
@@ -482,6 +503,17 @@ cmd_gather() {
       awk -F'\t' '{printf "| `%s` | `%s` | %s |\n", $1, $2, $3}' "$dir/fallbacks.tsv"
       echo
       echo "Most in one hour: **$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)**."
+      # **Only when there is one** (`#328`). A day whose fallbacks were all
+      # `timeout` has no status to print, and an empty table under a heading
+      # reads as a query that broke rather than as a class that did not occur.
+      if [ -s "$dir/fallback-statuses.tsv" ]; then
+        echo
+        echo "What the gateway answered, where it answered at all:"
+        echo
+        echo "| service | status | count |"
+        echo "|---|---|---|"
+        awk -F'\t' '{printf "| `%s` | `%s` | %s |\n", $1, $2, $3}' "$dir/fallback-statuses.tsv"
+      fi
     else
       echo "The gateway served everything — no call fell back to OpenRouter."
     fi

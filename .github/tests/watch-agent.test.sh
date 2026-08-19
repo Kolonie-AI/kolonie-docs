@@ -61,7 +61,12 @@ case "$url" in
   */query_range) if [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallback_peak" 2>/dev/null
                  elif [[ "$* " == *"step=86400"* ]]; then cat "$FIX/history" 2>/dev/null
                  else cat "$FIX/hourly" 2>/dev/null; fi ;;
-  */query)       if [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallbacks" 2>/dev/null
+  # `#328` added a third instant query that also names the fallback event; it is
+  # told apart by the `reason=\"status\"` filter, and it is matched **before**
+  # the general fallback case for the reason the block above gives.
+  */query)       if [[ "$* " == *"model.route.fallback"* && "$* " == *"reason%3D%22status%22"* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
+                 elif [[ "$* " == *"model.route.fallback"* && "$* " == *'reason="status"'* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
+                 elif [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallbacks" 2>/dev/null
                  elif [[ "$* " == *"model.route.refused"* ]]; then cat "$FIX/refusals" 2>/dev/null
                  else cat "$FIX/slugs" 2>/dev/null; fi ;;
   *)             cat "$FIX/openrouter" 2>/dev/null ;;
@@ -114,6 +119,7 @@ setup() {
   printf '{"data":{"result":[{"metric":{"service":"api","level":"warn"},"values":[[1785235200,"1"],[1785321600,"3"]]}]}}\n' > "$FIX/history"
   # A day the gateway served everything, which is the ordinary one (`#312`).
   printf '{"data":{"result":[]}}\n' > "$FIX/fallbacks"
+  printf '{"data":{"result":[]}}\n' > "$FIX/fallback_statuses"
   printf '{"data":{"result":[]}}\n' > "$FIX/refusals"
   printf '{"data":{"result":[]}}\n' > "$FIX/fallback_peak"
   : > "$FIX/existing"
@@ -628,12 +634,25 @@ printf '{"data":{"result":[
   {"metric":{"service":"support-triage-runner","reason":"status"},"value":[1785840000,"8"]},
   {"metric":{"service":"verifier-runner","reason":"status"},"value":[1785840000,"1"]}]}}\n' > "$FIX/fallbacks"
 printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"9"]]}]}}\n' > "$FIX/fallback_peak"
+printf '{"data":{"result":[
+  {"metric":{"service":"support-triage-runner","detail":"502"},"value":[1785840000,"6"]},
+  {"metric":{"service":"support-triage-runner","detail":"503"},"value":[1785840000,"2"]},
+  {"metric":{"service":"verifier-runner","detail":"502"},"value":[1785840000,"1"]}]}}\n' > "$FIX/fallback_statuses"
 out=$(bash "$SCRIPT" gather "$WORK/out")
 
 expect "the fallbacks are counted by service and by reason" \
   "$([[ "$out" == *"support-triage-runner"*"status"*"8"* ]] && echo yes || echo no)" "$out"
 expect "and the burst is named as a burst" \
   "$([[ "$out" == *"Most in one hour"*"9"* ]] && echo yes || echo no)" "$out"
+
+# **`reason` names the class and `detail` names the thing** (`#328`). Measured
+# 2026-08-19 across seven days of production: twelve fallbacks, every one
+# `moderation-runner`, every one `reason=status`, and behind every one a `502` or
+# a `503`. The report said *the gateway answered badly* twelve times and could
+# not say which — and `502`, `429` and `401` are three different mornings.
+expect "and where it was a status, the report says which status" \
+  "$([[ "$out" == *"What the gateway answered"* && "$out" == *"502"* ]] && echo yes || echo no)" "$out"
+
 
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "a burst is a finding" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc $out"
@@ -646,6 +665,18 @@ expect "under an identity that joins on the condition, not on the count" \
   "$(logged "watch-finding: gateway-not-serving" && echo yes || echo no)" "$(cat "$GH_LOG")"
 expect "and it says what the threshold was set from" \
   "$(logged "seven days to 2026-08-12" && echo yes || echo no)" "$(cat "$GH_LOG")"
+
+# **Silent when the class did not occur.** A day whose fallbacks were all
+# `timeout` has no status to print, and an empty table under a heading reads as a
+# query that broke rather than as a class nothing hit.
+setup
+printf '{"data":{"result":[{"metric":{"service":"moderation-runner","reason":"timeout"},"value":[1785840000,"4"]}]}}\n' > "$FIX/fallbacks"
+printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"4"]]}]}}\n' > "$FIX/fallback_peak"
+out=$(bash "$SCRIPT" gather "$WORK/out")
+expect "a day with no status fallback prints no status table" \
+  "$([[ "$out" != *"What the gateway answered"* ]] && echo yes || echo no)" "$out"
+expect "and the fallbacks themselves are still reported" \
+  "$([[ "$out" == *"timeout"*"4"* ]] && echo yes || echo no)" "$out"
 
 # **The rejection case the issue names.** A day with no fallback produces no
 # finding — and the section still appears, because *the gateway served everything
