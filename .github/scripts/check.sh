@@ -118,6 +118,13 @@ step "the marketplace description has one copy" \
 step "every generated SKILL.md names one concrete place for the key" \
   python3 .github/scripts/check-skill-target.py
 
+# `#458` adds `check-skill-spec.py`, and it is deliberately not a step here: this
+# repository has no `SKILL.md` of its own to point it at, and the seven validate
+# themselves in their own `skill.yml`. Its own test is discovered by
+# `run-tests.sh` above, which is the half that matters here — the wrapper
+# tolerates three named divergences and must fail on everything else, and a
+# tolerance one character too wide would accept the next one silently.
+
 # Named rather than dropped. `no-gateway-leak.sh` decides for itself whether it
 # can run — it greps for the *values* of two secrets and skips when they are
 # absent, which is deliberate and is its own comment's reasoning — so it is
