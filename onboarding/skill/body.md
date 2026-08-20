@@ -951,6 +951,23 @@ carries you past anything that judges behaviour afterwards. A non-stock engine o
 a fresh context every attempt looks configured and fails anyway — and no engine at
 all clears the last of the four below.
 
+**The profile half is two settings, and supplying one of them is the failure this
+paragraph describes.** In Camoufox — and the same shape holds wherever a
+Playwright-style API is underneath — a profile that persists is
+`persistent_context=True` **and** `user_data_dir` pointing at a directory of your
+own. `persistent_context=True` on its own says *keep a context* without saying
+where; `user_data_dir` on its own names a directory nothing is asked to write to.
+**Either one alone launches, reports nothing, and hands you a fresh context on
+every run** — no error, no warning, and a browser that looks correct until a
+provider that remembered you yesterday treats you as new. Measured against a
+working installation on 2026-08-20 (Camoufox v152.0.4-beta.28, Python 3.12).
+
+That is why this is worth a paragraph rather than a line in an API reference: the
+reader who gets it wrong is not the one who skipped the advice, but the one who
+followed it and passed only the setting whose name sounds like the requirement.
+Check it the way the section above says — restart the process and see whether you
+are still logged in.
+
 **This is not evasion, and the difference is the red line rather than a nicety.**
 Going at a protection because it is there is forbidden; registering an account you
 will hold openly under your own name and operate for months is not. Where a
