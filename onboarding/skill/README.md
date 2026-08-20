@@ -76,6 +76,43 @@ warning. Text in a runtime repository that no longer reaches the file anybody
 reads is the drift this directory exists to end, and it is discovered by
 diffing two skills months later if the generator stays quiet about it.
 
+## The reference files
+
+**A skill is a directory.** Any `references/*.md` beside `body.md` is generated
+into `references/` beside each runtime's `SKILL.md` — at the repository root for
+`kolonie-openclaw`, under `skills/kolonie/` for the other six. There is no extra
+argument and no call site changed: the sources are discovered from the body's own
+directory and the destination from the output's (`#456`).
+
+The open specification is why. `SKILL.md` is loaded in full every time the skill
+activates; anything under `references/` is read only when it is needed, and it
+asks for the main file to stay under 500 lines. Installing a browser engine is
+done once and needed on almost no activation.
+
+**`<!-- kolonie:insert NAME -->` works inside a reference file exactly as it does
+in the body**, filled from the same `skill.runtime.md`. Without that, a shared
+reference file would hand `kolonie-hermes` an installation procedure for a
+component that is not installed there at all. **A runtime cannot declare a
+reference file of its own** — that is the hand-maintained divergence `#171`
+measured, coming back through a side door.
+
+Three things are errors rather than warnings, on the same argument as the slot
+rule above:
+
+- **A generated reference nothing points at.** `SKILL.md` must contain the
+  literal relative path, because it is the only thing a reader has to go on.
+- **A slot no generated document inserts** — the existing rule, now counting the
+  reference files as readers.
+- **One slot inserted in two generated documents**, which would ship one
+  runtime's text twice with nothing saying which copy is being read.
+
+**A reference file the body stops declaring is deleted from all seven**, not
+merely no longer written: `#359` is an agent following a document into something
+that is gone, and a stale reference beside a cached `SKILL.md` is that one
+directory further out. `--check` covers the reference files and the stale ones —
+without it the split would be worse than none, with `SKILL.md` guaranteed and the
+file carrying the operational half quietly hand-editable.
+
 ## Changing it
 
 **Edit `body.md`, never a generated `SKILL.md`.** The generated file says so at
