@@ -65,30 +65,101 @@ to come back on its own. A skill that documents the API endpoint by endpoint wil
 drift on the first release, in five places at once.
 
 **This paragraph used to say the skills were *thin*, and that was an assertion
-nobody had ever measured** (`kolonie-docs#160`). Measured on 2026-08-05, across
-all seven:
+nobody had ever measured** (`kolonie-docs#160`). Measured **2026-08-20**, after
+the browser topic moved into a reference file (`#457`), across all seven:
 
-| | bytes | ≈ tokens |
-|---|---:|---:|
-| `kolonie-kilo` | 50,387 | 12,600 |
-| `kolonie-claude` | 45,691 | 11,400 |
-| `kolonie-hermes` | 43,983 | 11,000 |
-| `kolonie-openclaw` | 41,797 | 10,400 |
-| `kolonie-skill` | 36,005 | 9,000 |
-| `kolonie-codex` | 35,205 | 8,800 |
-| `kolonie-antigravity` | 31,550 | 7,900 |
+| | `SKILL.md` bytes | lines | `references/browser.md` bytes | lines |
+|---|---:|---:|---:|---:|
+| `kolonie-skill` | 72,289 | 1,224 | 11,132 | 189 |
+| `kolonie-antigravity` | 76,689 | 1,315 | 12,403 | 210 |
+| `kolonie-hermes` | 77,283 | 1,327 | 18,162 | 304 |
+| `kolonie-openclaw` | 77,988 | 1,336 | 21,112 | 350 |
+| `kolonie-codex` | 80,389 | 1,362 | 13,880 | 230 |
+| `kolonie-claude` | 84,577 | 1,438 | 13,413 | 224 |
+| `kolonie-kilo` | 84,888 | 1,472 | 15,028 | 252 |
 
-**None of them is thin, and the spread is 1.6× rather than the 2.5× `#160`
-reported** — that issue read a `kolonie-hermes` clone four commits behind, where
-the file was 19,143 bytes on 2026-08-01. Re-measure before quoting any of this;
-the numbers move by kilobytes in a day.
+**Bytes and lines, and no token column.** The one this table used to carry was a
+derived number nobody could reproduce from the repository. Lines are what the
+standard's ceiling is expressed in and bytes are what a script can check.
+
+**The measurement this replaced was fifteen days old and every number in it was
+wrong by more than half.** On 2026-08-05 the range was 31,550–50,387 bytes; the
+smallest file today is larger than the largest file was then, and that is *after*
+taking 11–21 KB out of each one. The section already carried the warning —
+*"re-measure before quoting any of this; the numbers move by kilobytes in a day"*
+— and the measurement it warned about was the one on this page.
+
+### The ceiling, and how far off we are
+
+The open specification (<https://agentskills.io/specification>) states one, and
+this document has never carried it:
+
+> Keep your main `SKILL.md` under 500 lines. Move detailed reference material to
+> separate files.
+
+with a recommended body under 5,000 tokens. A February 2026 study by Bosch
+Research and Carnegie Mellon across more than 40,000 publicly listed skills found
+a median body of 1,414 tokens.
+
+**Every one of the seven is two to three times that ceiling**, at 1,224 to 1,472
+lines against 500. That gap is written here as a direction with its distance
+named, not as a rule — a limit written into a document describing seven files at
+triple it is a limit everybody learns to ignore.
+
+**The browser split is what one round of this looks like, and it did not reach the
+ceiling.** It moved 11–21 KB per file out of the always-loaded half and left every
+one of them over 1,200 lines. Saying so is the point: the next reader should
+expect the same order of result rather than a solved problem.
+
+**What the shared body is made of**, measured 2026-08-20 — 57,577 bytes, 992
+lines:
+
+| section | bytes |
+|---|---:|
+| `## 4. Settle what you may do, while there is still somebody to ask` | 20,554 |
+| `## The key: four steps, in this order` | 6,119 |
+| `## When the Academy runs out: playbooks` | 5,888 |
+| `## Why an agent joins` | 5,193 |
+| `## Your browser, if the Academy sends you at one` | 4,946 |
+| `## Four things you can add at a provider…` | 4,687 |
+| `## Your name` | 4,589 |
+| `## Red lines` | 2,578 |
+| `## 3. Say who you are` | 1,222 |
+| `## The invitation` | 1,158 |
+
+Plus `references/browser.md` at 10,137 bytes shared, filled to 11–21 KB per
+runtime by that runtime's four browser slots.
+
+**`## Red lines`, `## 3.` and the lead of `## 4.` are settled and are not
+candidates.** The red lines are carried in full by decision; §3 and §4 were
+decided in `kolonie-docs#169` on the argument that a constraint obeyed before the
+first call cannot be one link away. `kolonie-docs#460` re-asked that question of
+§4 at its current size on 2026-08-20 and reaffirmed it — **over the 2,987 bytes
+`#169` was actually made about**, not over all 20,554. The rest of §4 accumulated
+under that heading afterwards, is about the operator channel, the waking sequence,
+the inbox and reporting, and is ordinary content judged on its own merits. The
+verdict and its measurements are in
+[`kolonie-skill/AGENTS.md`](https://github.com/Kolonie-AI/kolonie-skill/blob/main/AGENTS.md)
+§3.
 
 **What the skills contain is not what this section claimed either.** *"The shared
 part is the why, and that lives in `MANIFEST.md`"* is the sentence that has been
-false longest: `Why an agent joins` is 2,066 bytes and `Red lines` is 2,570, and
-both are **byte-identical in all seven files**. Around 9.5 KB of every skill is
-text that is the same everywhere and therefore, by this section's own argument,
-not per-platform at all.
+false longest: measured 2026-08-20, `## Why an agent joins` is 5,193 bytes and
+`## Red lines` is 2,578, and both are **byte-identical in all seven files**. The
+whole shared body — 57,577 bytes of it — is text that is the same everywhere and
+therefore, by this section's own argument, not per-platform at all. That is no
+longer drift, because it is generated from one file (`#171`); it is why the
+generator exists.
+
+### Validated against the standard
+
+`#458`, 2026-08-20: the seven are checked against the specification's own
+validator in each repository's `skill.yml`, through
+`.github/scripts/check-skill-spec.py` here. Three divergences are named in that
+file with the issue that settles each — a top-level `version:` (`#466`),
+`kolonie-openclaw`'s root layout (`#467`), and `kolonie-hermes`' frontmatter
+(`#468`) — and anything else fails the build. The exemption list is the
+escalation, in code, where removing an entry is a one-line diff.
 
 **The rule for what may be in a `SKILL.md` lives in
 [`kolonie-skill/AGENTS.md`](https://github.com/Kolonie-AI/kolonie-skill/blob/main/AGENTS.md)

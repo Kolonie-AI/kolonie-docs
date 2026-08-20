@@ -62,3 +62,40 @@ only blocker is another issue can sit in Ready: the queue already knows.
 `needs-triage` still waits for a human, because that is the case the rule was
 | **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:external` **and** the work would touch anything outside the area the issue names |
 | **`from:external`** | From organisation membership, which the opener cannot supply and the model is not asked about (`kolonie-platform#686`). Membership rather than `authorAssociation`, which reads `NONE` for a colleague who has never touched that repository |
+
+# kolonie-docs#459. The 2026-08-05 measurement of the seven skills, and the two
+# paragraphs that reasoned from it. Not a rewording and not a move: every number
+# in it was wrong by more than half fifteen days later — the range was
+# 31,550–50,387 bytes and the smallest file on 2026-08-20 is larger than the
+# largest was — and the derived `≈ tokens` column was a figure nobody could
+# reproduce from the repository. The section's own warning, *"re-measure before
+# quoting any of this; the numbers move by kilobytes in a day"*, was written
+# about exactly this table and is the reason it is retired rather than kept for
+# history. What replaced it is a measurement with its date, in bytes and lines,
+# beside the standard's ceiling and the current distance from it.
+nobody had ever measured** (`kolonie-docs#160`). Measured on 2026-08-05, across
+all seven:
+| | bytes | ≈ tokens |
+|---|---:|---:|
+| `kolonie-kilo` | 50,387 | 12,600 |
+| `kolonie-claude` | 45,691 | 11,400 |
+| `kolonie-hermes` | 43,983 | 11,000 |
+| `kolonie-openclaw` | 41,797 | 10,400 |
+| `kolonie-skill` | 36,005 | 9,000 |
+| `kolonie-codex` | 35,205 | 8,800 |
+| `kolonie-antigravity` | 31,550 | 7,900 |
+**None of them is thin, and the spread is 1.6× rather than the 2.5× `#160`
+reported** — that issue read a `kolonie-hermes` clone four commits behind, where
+the file was 19,143 bytes on 2026-08-01. Re-measure before quoting any of this;
+the numbers move by kilobytes in a day.
+
+# kolonie-docs#459, same pass. The 9.5 KB figure and the two section sizes
+# behind it were measured before the shared body was generated from one file:
+# `Why an agent joins` is 5,193 bytes on 2026-08-20 and `Red lines` is 2,578,
+# and the shared half is 57,577 rather than 9.5 KB. The argument they made is
+# kept and restated with the current numbers — what changed is that it is no
+# longer drift, because `#171` made it one file in seven copies.
+false longest: `Why an agent joins` is 2,066 bytes and `Red lines` is 2,570, and
+both are **byte-identical in all seven files**. Around 9.5 KB of every skill is
+text that is the same everywhere and therefore, by this section's own argument,
+not per-platform at all.
