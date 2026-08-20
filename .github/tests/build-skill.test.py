@@ -182,6 +182,154 @@ with tempfile.TemporaryDirectory() as tmp:
     )
 
 
+# ── A skill is a directory ────────────────────────────────────────────────────
+#
+# The same risk one directory out. `SKILL.md` was guaranteed by `--check` and a
+# reference file carrying the operational half would be hand-editable and
+# silently divergent unless every one of these holds. Three of them are the
+# failure modes `#456` names as errors rather than warnings, and the fourth is
+# the deletion: a stale reference file is `#359` — an agent following a document
+# into something that is gone — one directory further out.
+
+
+def directory(body: str, runtime: str, references: dict[str, str] | None = None):
+    """Build a whole skill directory in a temporary tree.
+
+    Returns `(result, root)` where `result` is the `{relative: text}` mapping or
+    the `Problem` raised, and `root` is the output directory, so a caller can
+    look at what was written as well as at what was returned.
+    """
+    tmp = tempfile.mkdtemp()
+    source = Path(tmp) / "source"
+    (source / "references").mkdir(parents=True)
+    (source / "body.md").write_text(body, encoding="utf-8")
+    for name, text in (references or {}).items():
+        (source / "references" / name).write_text(text, encoding="utf-8")
+    runtime_path = Path(tmp) / "runtime.md"
+    runtime_path.write_text(runtime, encoding="utf-8")
+    out = Path(tmp) / "out" / "SKILL.md"
+    out.parent.mkdir(parents=True)
+    try:
+        return (
+            build_skill.build(source / "body.md", build_skill.read_slots(runtime_path)),
+            out,
+        )
+    except build_skill.Problem as problem:
+        return problem, out
+
+
+POINTING_BODY = BODY.replace(
+    "## Licence",
+    "Read `references/browser.md` before you sign up anywhere.\n\n## Licence",
+)
+FRONTMATTER = slot("frontmatter", "---\nname: kolonie\n---")
+
+made, _ = directory(
+    POINTING_BODY,
+    FRONTMATTER + slot("browser-runtime", "What Kilo gives you"),
+    {"browser.md": "# Your browser\n\n<!-- kolonie:insert browser-runtime -->\n"},
+)
+expect(
+    "a declared reference is generated beside SKILL.md",
+    isinstance(made, dict) and set(made) == {"SKILL.md", "references/browser.md"},
+    repr(made),
+)
+expect(
+    "a slot inside a reference file is filled from the same runtime file",
+    isinstance(made, dict) and "What Kilo gives you" in made["references/browser.md"],
+    repr(made),
+)
+expect(
+    "and a slot that only a reference file inserts is not reported as unused",
+    isinstance(made, dict) and "browser-runtime" not in str(made),
+    repr(made),
+)
+
+# Failure mode 1: a generated reference file nothing points at.
+unpointed, _ = directory(
+    BODY, FRONTMATTER, {"browser.md": "# Your browser\n\nHow to get one.\n"}
+)
+expect(
+    "a reference file no SKILL.md names is an error, naming the path",
+    isinstance(unpointed, build_skill.Problem)
+    and "references/browser.md" in str(unpointed),
+    repr(unpointed),
+)
+
+# Failure mode 2: a slot defined and never inserted — now across both files.
+orphan, _ = directory(
+    POINTING_BODY,
+    FRONTMATTER + slot("browser-runtime", "What Kilo gives you") + slot("touches", "x"),
+    {"browser.md": "# Your browser\n\n<!-- kolonie:insert browser-runtime -->\n"},
+)
+expect(
+    "a slot no document inserts is still an error once references exist",
+    isinstance(orphan, build_skill.Problem)
+    and "touches" in str(orphan)
+    and "browser-runtime" not in str(orphan),
+    repr(orphan),
+)
+
+# Failure mode 3: the same slot inserted in two generated documents.
+both, _ = directory(
+    POINTING_BODY.replace(
+        "<!-- kolonie:insert memory optional -->",
+        "<!-- kolonie:insert browser-runtime optional -->",
+    ),
+    FRONTMATTER + slot("browser-runtime", "What Kilo gives you"),
+    {"browser.md": "# Your browser\n\n<!-- kolonie:insert browser-runtime -->\n"},
+)
+expect(
+    "one slot inserted in two documents is an error, naming both",
+    isinstance(both, build_skill.Problem)
+    and "browser-runtime" in str(both)
+    and "body.md" in str(both),
+    repr(both),
+)
+
+# The deletion, and `--check` seeing it. Both are about `main()` rather than
+# `build()`, so they go through the command line as CI does.
+with tempfile.TemporaryDirectory() as tmp:
+    source = Path(tmp) / "source"
+    (source / "references").mkdir(parents=True)
+    (source / "body.md").write_text(POINTING_BODY, encoding="utf-8")
+    (source / "references" / "browser.md").write_text(
+        "# Your browser\n\nHow to get one.\n", encoding="utf-8"
+    )
+    runtime_path = Path(tmp) / "runtime.md"
+    runtime_path.write_text(FRONTMATTER, encoding="utf-8")
+    out_path = Path(tmp) / "out" / "SKILL.md"
+    out_path.parent.mkdir(parents=True)
+    argv = ["build-skill.py", str(source / "body.md"), str(runtime_path), str(out_path)]
+    reference = out_path.parent / "references" / "browser.md"
+
+    expect("a plain run writes the reference file too", build_skill.main(argv) == 0)
+    expect("and it is where SKILL.md says it is", reference.is_file())
+    expect("--check on the pair is 0", build_skill.main(argv + ["--check"]) == 0)
+
+    reference.write_text(reference.read_text(encoding="utf-8") + "an edit\n", encoding="utf-8")
+    expect(
+        "--check on a hand-edited generated reference is 2",
+        build_skill.main(argv + ["--check"]) == 2,
+    )
+    expect("and it wrote nothing while saying so", "an edit" in reference.read_text(encoding="utf-8"))
+
+    expect("regenerating restores it", build_skill.main(argv) == 0)
+
+    (source / "references" / "browser.md").unlink()
+    expect(
+        "--check sees a reference the body no longer declares, and is 2",
+        build_skill.main(argv + ["--check"]) == 2,
+    )
+    expect("and it is still on disk, because --check writes nothing", reference.is_file())
+    expect("a plain run deletes it", build_skill.main(argv) == 0 and not reference.exists())
+    expect(
+        "and takes the empty directory with it",
+        not (out_path.parent / "references").exists(),
+    )
+    expect("SKILL.md itself survived the deletion", out_path.is_file())
+
+
 # Against the real body, asserting the property that is about the *generator*:
 # that the shared half is large enough for the split to be worth having. If this
 # floor ever fires, somebody has moved the Colony's text back into the runtimes.
