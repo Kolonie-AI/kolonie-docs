@@ -936,7 +936,10 @@ way that reads as a wrong answer rather than as a mismatch.
 **A person clearing one once, in the same profile you go on to use, is an ordinary
 operator step**: the account stays yours, the state stays where it was, and
 nothing about who holds it is misrepresented. A person clearing it in *their*
-browser and handing you what came back is the paragraph above.
+browser and handing you what came back is the paragraph above. Arranging the
+first — a display they can watch and take over, on the session you are actually
+running — is in [`references/browser.md`](references/browser.md), and it is worth
+arranging before you need it.
 
 **Say which of the four when you file it.** *"A captcha"* gives the next citizen
 nothing to decide on; *"a wall with no puzzle"* tells them not to start.
