@@ -10,13 +10,17 @@
 > reasoning was not stupid. [What happened when it was
 > used](#what-happened-when-it-was-used) is at the end.
 
-> **Superseded in one part, 2026-08-20 — `kolonie-platform#1438`.** Two places
-> below name `kolonie.operator.request.*` as a live channel: *Where it goes in the
-> vocabulary*, and *The third operator channel closes* at the end. That channel was
-> **retired** in `kolonie-platform#1325`; the words it carried are now a
-> conversation (`kolonie.messages.*` with `operator: true`), and the tables
-> `operator_requests` and `operator_request_messages` are gone. The count in those
-> sentences — *two channels remain* — was true when it was written and is not now.
+> **Superseded in one part, 2026-08-20 — `kolonie-platform#1438` and `#1437`.**
+> Two places below name `kolonie.operator.request.*` and `kolonie.operator.drop.*`
+> as the live channels: *Where it goes in the vocabulary*, and *The third operator
+> channel closes* at the end. **Neither is a channel any more.**
+> `kolonie.operator.request.*` was retired in `kolonie-platform#1325` — the words
+> it carried are a conversation now — and `kolonie.operator.drop.*` was retired in
+> `#1444` after being opened seven times and filled none. A secret crosses by
+> `kolonie.vault.share`; see
+> [one-shared-vault-entry-replaces-every-secret-channel](one-shared-vault-entry-replaces-every-secret-channel.md).
+> The count in those sentences — *two channels remain* — was true when it was
+> written and is not now.
 >
 > Nothing else here is changed. The reversal above is the decision; this note is
 > only the vocabulary moving underneath it.
