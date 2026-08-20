@@ -108,6 +108,64 @@ measures what survived a session is exactly the thing that arrangement defeats.
 Establish that before the rung rather than during it, because the failure arrives
 looking like a site that forgot you rather than like a setting.
 
+### Making it watchable, so the operator step is available at all
+
+`SKILL.md` says that a person clearing a challenge **once, in the same profile you
+go on to use**, is an ordinary operator step, and that the same person clearing it
+in *their* browser and handing you what came back is the thing forbidden above it.
+What separates the two is entirely mechanical — whether they act in your session
+or in one of their own — and an agent that cannot arrange the first has, in
+practice, only the second available. That is the same shape as the credentials
+paragraph in the red lines: refusing what is legitimate does not hold a line, it
+pushes the operator into the version that does not work.
+
+**Four things have to be true, and the package names below are one way to reach
+them rather than the requirement:**
+
+1. **A display the browser can be seen on**, with a window manager on it so
+   windows can be moved and resized.
+2. **A way to mirror that display**, bound to loopback.
+3. **A way to reach the mirror from the operator's own machine** — a
+   browser-reachable bridge in front of it, listening on **one deliberately named
+   interface**. Which interface is the operator's decision and this file will not
+   make it: a browser holding logged-in profiles reachable from a whole wireless
+   network is a different proposition from one reachable only over a link the
+   operator has already authenticated.
+4. **The browser launched non-headless onto that display, with the same
+   persistent profile it uses headless** — so what the operator sees and touches
+   is the session, not a copy of it. That is the whole point: a copy is the red
+   line again.
+
+**And supervision that restarts them and survives a reboot without a login**, or
+the arrangement exists only until the machine goes down at the moment you need
+it.
+
+One worked example, verified end to end on a Linux host on 2026-08-20 — the
+WebSocket handshake returned `101 Switching Protocols`, the first frame was
+binary, and its payload was `RFB 003.008`, which is the VNC server answering
+through the bridge with the agent's own browser window on the display: `Xvfb`,
+`openbox`, `x11vnc` on loopback, `websockify` with `noVNC` in front of it, and
+`systemd --user` units with lingering enabled.
+
+**Two traps, measured 2026-08-20, neither of which announces itself:**
+
+- **HTTP basic auth in front of noVNC does not work in a browser, and fails
+  silently.** websockify's `BasicHTTPAuth` gates the WebSocket upgrade and not the
+  static files. With it enabled, `/vnc.html` returned **200** with no credentials
+  asked for and `/websockify` returned **401** — and a browser cannot answer a 401
+  on a WebSocket handshake. noVNC's Connect button did nothing at all, with no
+  error shown anywhere: the page looks fine and the screen never arrives. That
+  plugin is for programmatic clients. Protecting this path means a reverse proxy
+  terminating auth for both the page and the upgrade.
+- **The VNC password is truncated at 8 characters by the protocol.** It is not a
+  setting and there is nothing to raise. Which is why requirement 3 above is the
+  real gate, and why it is the operator's decision rather than a default.
+
+Generate the password yourself and keep it out of anything you commit; it belongs
+in the vault, like every other secret you mint.
+
+<!-- kolonie:insert browser-operator-view optional -->
+
 ### The two rules, and what your runtime already does about them
 
 `SKILL.md` states both in full: **screenshot through the browser, not through the

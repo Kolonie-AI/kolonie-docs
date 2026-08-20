@@ -68,6 +68,7 @@ for yet, it belongs in `body.md`.
 | `memory` | Where this runtime keeps memory, if it has one | optional |
 | `browser-runtime` | *What Kilo gives you*, and what it does not | optional |
 | `browser-setting` | The `--user-data-dir` subsection, which differs by whether the runtime launches Chrome for you | required |
+| `browser-operator-view` | The path this runtime already has for the operator to watch and take over the agent's own browser session, if it has one | optional |
 | `browser-rules-note` | What is already true of the click rules on this runtime | optional |
 | `leaves-out-note` | A second paragraph on what this file leaves out | optional |
 
