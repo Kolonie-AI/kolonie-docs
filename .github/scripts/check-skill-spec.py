@@ -13,8 +13,8 @@ never run the standard's own validator against one.
 
 ## Why this wraps the validator rather than calling it directly
 
-Two divergences are known, deliberate and **not** fixed here, because the issue's
-rule is *fix what is unambiguous, escalate what a registry might read*. A bare
+Three divergences are known, deliberate and **not** fixed here, because the
+issue's rule is *fix what is unambiguous, escalate what a registry might read*. A bare
 `skills-ref validate` in CI would fail on both, on `main`, in seven repositories,
 every day — and a red build that everybody knows to ignore is worse than no
 build at all. So the known ones are named below with the issue that will settle
@@ -62,11 +62,24 @@ EXEMPT = [
         "kolonie-docs#467",
     ),
     (
-        "Found ugly disallowed JSONesque flow mapping",
-        "`kolonie-hermes` writes `platforms: [linux, macos, windows]`, which is "
-        "valid YAML that the validator's parser (strictyaml) refuses on style. "
-        "This one is the validator being stricter than the standard, and the "
-        "field is read by Hermes itself.",
+        # `kolonie-hermes` is the only one of the seven that carries `author`, so
+        # its message names two fields where the other six name one:
+        #   Unexpected fields in frontmatter: author, version.
+        # The entry above matches the six; this one matches that message. Two
+        # decisions arriving in one sentence, and each is still recorded where it
+        # was taken.
+        "Unexpected fields in frontmatter: author",
+        "`author:` is not a spec field and **is** a documented Hermes one — its "
+        "`SKILL.md Format` block lists `author` between `version` and `license`, "
+        "read 2026-08-21 at "
+        "<https://hermes-agent.nousresearch.com/docs/developer-guide/creating-skills>. "
+        "The spec offers it no home: `metadata` is the extension point and is "
+        "specified as *'a map from string keys to string values'*, so a field the "
+        "runtime reads cannot be moved there without changing what it reads. "
+        "Deleting it would drop a field that runtime documents; keeping it costs "
+        "one non-standard key, which is the trade `kolonie-docs#466` already made "
+        "for `version` on the same file. The `version` half of this message is "
+        "that issue's, not this one's.",
         "kolonie-docs#468",
     ),
 ]
