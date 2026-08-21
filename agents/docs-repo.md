@@ -65,6 +65,46 @@ this board and both append to the end of the same file. That is a guaranteed
 conflict on every concurrent decision, avoided today by people talking to each
 other rather than by structure. One file per record removes the class.
 
+### A chronicle is left alone only where two entries cannot conflict
+
+The rule above has one exception and it needed sharpening, because as written it
+let the same file grow twice more. *Append-only is correct for a chronicle* is
+true of `operations/incidents.md` at +568/−5: incidents are rare, two are almost
+never in flight, and the append point is not contended.
+
+**It is not true of a chronicle every branch appends to.** Measured in
+`kolonie-platform`, both classified as chronicles under this rule and both split
+anyway:
+
+| File | At the split | Cured by |
+|---|---|---|
+| `packages/core/CHANGELOG.md` | 1745 lines, 138 entries under one heading | `changes/`, assembled by a script — `#951`, `#672` |
+| `docs/decisions.md` | **9497 lines, +9582/−85 in thirty days** | `docs/decisions/`, one record per file — `#1497` |
+
+So the test has two halves and the second is the one that was missing: **is it
+read as a reference**, and **can two entries collide at the append point**. A
+chronicle fails the second whenever the work that writes it is concurrent, and in
+this organisation it usually is.
+
+**Two shapes the split does not take**, both worth naming so nobody rediscovers
+them:
+
+- **Where an assembled file is genuinely read by somebody**, it is *produced* from
+  the directory and checked in, with a `--check` mode in the repository's own
+  check so the two cannot drift. `kolonie-platform/scripts/build-changelog.mjs`
+  is the worked example. If both are hand-edited the conflict returns with an
+  extra step in front of it.
+- **A registry cannot become a directory.** A barrel, a tool list, a table of
+  contents is a list by nature and there is nothing to split — `schema/index.ts`
+  is 122 lines and changed 118 times in thirty days. Those get a **built-in merge
+  driver** in `.gitattributes` instead, with something downstream that would catch
+  a duplicated entry (`kolonie-platform#1496`).
+
+**This file is the source of the rule.** `kolonie-platform/AGENTS.md` §3 carries
+the operational version for that repository and cites this one; if they ever
+disagree, this is the one that is right. Two copies of a convention is the
+failure this whole section is about, one level up.
+
 ## 3. Where the work is: issues, not documents
 
 **Every open task is a GitHub issue.** No task lives in the Markdown files of
