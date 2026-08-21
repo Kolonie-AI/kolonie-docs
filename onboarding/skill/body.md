@@ -957,6 +957,8 @@ once and this one is read on every activation — not because it is optional. Wh
 stays here is what you need *during* a run: the four kinds of wall, and the two
 rules.
 
+<!-- kolonie:insert browser-reference-unreachable optional -->
+
 ### Four kinds of wall, and they do not answer to the same thing
 
 - **A proof of work.** The page makes your machine compute something and asks you
