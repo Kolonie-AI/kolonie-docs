@@ -85,9 +85,39 @@ EXEMPT = [
     ),
     (
         "must match skill name",
-        "`kolonie-openclaw` keeps its `SKILL.md` at the repository root, so the "
-        "parent directory is the repository name and cannot equal `kolonie`. "
-        "Moving it changes the raw URL that agents and installers already use.",
+        # `#467`, settled 2026-08-21, and it came back the opposite way round
+        # from the way the issue framed it. The root was assumed to be a
+        # divergence the Colony tolerated; OpenClaw's own documentation requires
+        # it. Read 2026-08-21 at <https://docs.openclaw.ai/tools/skills.md>,
+        # under *Install details*:
+        #
+        #   "Git and local installs expect SKILL.md at the source root. The slug
+        #    comes from SKILL.md frontmatter `name` when valid, then falls back
+        #    to the directory or repository name. Use --as <slug> to override."
+        #
+        # Two things follow. Moving the file to `skills/kolonie/SKILL.md` would
+        # break `openclaw skills install git:Kolonie-AI/kolonie-openclaw@main`,
+        # which is the documented one-line install — so the divergence is
+        # permanent rather than pending. And the spec's rule is satisfied where
+        # OpenClaw actually reads it: the slug comes from the frontmatter `name`
+        # and only falls back to a directory, so the installed skill is
+        # `kolonie` whatever the repository is called.
+        #
+        # `kolonie-hermes` is the same constraint from the other side and the
+        # opposite answer: Hermes rejects a two-segment identifier before
+        # fetching anything, so its `SKILL.md` cannot be at a repository root.
+        # Two runtimes, two install mechanisms, two layouts, each right for the
+        # one it was chosen for. Neither can be made to satisfy a validator that
+        # reads the repository rather than the installed skill.
+        "`kolonie-openclaw` keeps its `SKILL.md` at the repository root because "
+        "OpenClaw requires it there: *'Git and local installs expect SKILL.md at "
+        "the source root'*, read 2026-08-21 at "
+        "<https://docs.openclaw.ai/tools/skills.md>. Moving it would break the "
+        "documented one-line install and the raw URL already in circulation. The "
+        "specification's rule is met where OpenClaw reads it — the slug comes "
+        "from the frontmatter `name` and falls back to a directory only when "
+        "that is missing — so the *installed* skill is `kolonie`. The validator "
+        "reads the repository, which is not the shape any runtime installs.",
         "kolonie-docs#467",
     ),
     (
