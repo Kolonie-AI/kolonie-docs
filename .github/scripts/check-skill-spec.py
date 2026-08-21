@@ -17,11 +17,20 @@ Three divergences are known, deliberate and **not** fixed here, because the
 issue's rule is *fix what is unambiguous, escalate what a registry might read*. A bare
 `skills-ref validate` in CI would fail on both, on `main`, in seven repositories,
 every day — and a red build that everybody knows to ignore is worse than no
-build at all. So the known ones are named below with the issue that will settle
+build at all. So the known ones are named below with the issue that settled
 each, and **anything else fails**.
 
 That is the whole design: the exemption list is the escalation, in code, where
 removing an entry is a one-line diff on the day the follow-up lands.
+
+## The escalation has answers, and an answered entry stays
+
+`#466` and `#468` both came back *keep it*, with a runtime's own documentation
+naming the field the specification forbids. So an entry here means one of two
+things, and the third element says which: an open question, or a recorded
+divergence between two standards that the Colony is carrying knowingly. The
+second kind is not waiting for anybody — it is waiting for the standards to
+agree, and it names what would reverse it in the record it links to.
 
 ## The validator's absence is a skip, not a pass
 
@@ -45,13 +54,33 @@ from pathlib import Path
 EXEMPT = [
     (
         "Unexpected fields in frontmatter: version",
+        # `#466`, settled 2026-08-21. This entry was a question and is now a
+        # decision: `version:` stays top-level, because a registry reads it
+        # there.
+        #
+        # ClawHub — the registry the OpenClaw ecosystem publishes to —
+        # documents `version` as a top-level frontmatter field in its own
+        # *Basic frontmatter* example, unquoted, and says *The server extracts "
+        # metadata from frontmatter during publish* and *Each publish creates a "
+        # new version (semver)*. Read 2026-08-21 at
+        # <https://docs.openclaw.ai/clawhub/skill-format>. Hermes' own
+        # `SKILL.md Format` block lists it too, between nothing and `author` —
+        # see the `author` entry below, which cites the same page for the field
+        # beside this one.
+        #
+        # So this is not the Colony carrying a non-standard field out of
+        # habit. Two of the seven runtimes' own documented formats put it here,
+        # and the specification puts it in `metadata`; moving it would satisfy
+        # the validator by breaking what a registry reads. The exemption is the
+        # honest record of a standards divergence rather than a placeholder.
         "`version:` is not a spec field — the spec's home for it is inside "
-        "`metadata`. It is not moved because something already reads it where it "
-        "is: `check-plugin-version.py` in the plugin repositories asserts that "
-        "every manifest advertises the version the frontmatter does, and whether "
-        "a marketplace listing reads the same field could not be established by "
-        "reading. A skill that stops installing is a worse outcome than a skill "
-        "carrying one non-standard field.",
+        "`metadata` — and it stays where it is, because a registry reads it "
+        "there. ClawHub documents `version` as top-level frontmatter in its own "
+        "basic example and extracts metadata from frontmatter at publish, read "
+        "2026-08-21 at <https://docs.openclaw.ai/clawhub/skill-format>; Hermes' "
+        "format block lists it as well. `check-plugin-version.py` in the plugin "
+        "repositories reads it there too. Moving it into `metadata` would "
+        "satisfy the validator by breaking the thing the field is for.",
         "kolonie-docs#466",
     ),
     (
