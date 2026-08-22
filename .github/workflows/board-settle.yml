@@ -1,0 +1,103 @@
+name: Board settle
+
+# Move anything closed and outside Done into Done, three times an hour.
+# `kolonie-docs#482`.
+#
+# ## Why a cron job and not the built-in workflow
+#
+# The built-in *Item closed* workflow is enabled on this board and fires
+# unreliably. Measured 2026-08-22: `kolonie-platform#1587` and `#1594` were
+# closed by the same pull request in the same second, and one card reached Done
+# while the other sat in In Review; three of the four cards closed that morning
+# were still in a working column hours later. Nothing here can fix that — what it
+# can do is stop depending on it.
+#
+# ## Why not an agent, which used to do this
+#
+# `agents/orchestration.md` now tells an agent to arm auto-merge and take the
+# next issue, because waiting on its own pull request costs roughly half the
+# session. The consequence is that **the issue closes after the agent has gone**,
+# so §6's *move the item to the column that is now true* cannot reach it. The
+# faster the loop runs, the more cards strand — which is the wrong way round for
+# a board whose whole job is to say what to start next.
+#
+# ## Why not `board-self-check`
+#
+# That one asks the same question daily, in 5c, and must go on only asking it.
+# A monitor that repairs what it measures reports clean for ever, and then a
+# healthy board and one held up by this cron read identically. The two have to be
+# able to disagree.
+#
+# It also could not have caught any of the three: `CLOSED_SETTLE_HOURS=6` against
+# a daily run means a worst case of thirty hours, and `#1583` missed the window
+# by fifteen minutes.
+#
+# ## The budget, since that is what made the other one daily
+#
+# `#132` spent 4,998 of 5,000 GraphQL points in a session and is why nothing here
+# polls. This job is one `board-read` at 2 points plus 1 per move: seventy-two
+# runs a day is under 200 points against a ceiling of 5,000 an hour. The
+# expensive call `#132` is about — `--limit 1000` item listing at 304 points — is
+# the one this deliberately does not make.
+
+on:
+  schedule:
+    # :11, :31, :51 — off the hour, so it never lands in the same minute as
+    # check-red-lines (04:00) or board-self-check (05:00) and never contends
+    # with them for the same GraphQL budget.
+    - cron: '11,31,51 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Say what would move and touch nothing. The way to inspect this job's
+          judgement without giving it the board.
+        type: boolean
+        required: false
+        default: false
+
+# **Queued, never cancelled.** Two runs overlapping would both read the board and
+# both try to move the same cards; the second mutation is a no-op rather than
+# damage, but the warning it would print is a false one. Cancelling instead would
+# be worse — a run killed between reading and moving leaves exactly the state
+# this job exists to clear.
+concurrency:
+  group: board-settle
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The board as the `kolonie-opencode` app rather than as a person
+      # (`#270`): its own hourly GraphQL budget, and its own name on every card
+      # it moves. Minted per run and expires in an hour.
+      - name: Become the board app
+        id: board_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOARD_APP_ID }}
+          private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - uses: actions/checkout@v4
+
+      # First, because a repair nobody has verified is a repair nobody should
+      # let near the board. The stubbed cases run in a second and need no
+      # credential, so there is no reason for them to run anywhere but here.
+      - name: Test the settle job
+        run: bash .github/tests/board-settle.test.sh
+
+      - name: Settle the board
+        env:
+          GH_TOKEN: ${{ steps.board_token.outputs.token }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            bash .github/scripts/board-settle.sh --dry-run
+          else
+            bash .github/scripts/board-settle.sh
+          fi
