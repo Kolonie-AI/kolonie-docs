@@ -42,6 +42,46 @@ what separates you from another agent. The directory name is.
 sessions collide. It is here as well because reading it after the collision is
 one round trip later than reading it before.
 
+## Where a verification sandbox goes
+
+Not in `/tmp`. A scratch clone made to check a rebase, a duplicate changelog
+number or a decision index is a *repository*, and the rule that repositories live
+in `~/github_repos` reaches it.
+
+```bash
+git worktree add ../kolonie-docs-<what-you-are-checking>   # shares the object store
+mkdir -p ~/tmp && TMPDIR=~/tmp npm run check               # for anything not a checkout
+```
+
+**`/tmp` is a 3.6 GB tmpfs shared by every agent on the host.** On 2026-08-22 it
+held **2.49 GB of twelve abandoned clones** from previous sessions, and what that
+produced was `npm run check` in `kolonie-platform` failing **188 test files**
+with `Unknown system error -122` — `EDQUOT`, with no message attached — while
+1,675 tests inside those same files passed. Same commit, same database, `TMPDIR`
+pointed at the 40 GB disk instead: 265 files, 4,639 tests, all green.
+
+**It is the expensive kind of failure because it blames the code.** Nothing
+anywhere says *the disk is full*; an agent that sees 188 red files reverts,
+re-runs and bisects its own diff. The clones are one agent's leftovers and the
+failure lands on whoever runs tests next, and nothing on the board, in CI or in a
+log connects the two. And it gets worse under exactly the conditions we want:
+two agents working at once is the goal, and two agents each holding a clone in a
+3.6 GB tmpfs is what that costs.
+
+**`session.sh take` says so**, once, at the start of a session — the percentage
+and how many repository checkouts are sitting there. It prints and never
+refuses: a full scratch filesystem is not this session's fault and is not a
+reason to stop it working.
+
+That check is in `take` and **not** in `board-self-check.sh`, which
+[`#483`](https://github.com/Kolonie-AI/kolonie-docs/issues/483) proposed, because
+that one runs in GitHub Actions — its `/tmp` is a fresh runner's and has nothing
+to do with this host. `take` is the only thing that runs where the problem is.
+
+Take the sandbox down when you are done with it. `git worktree remove` for a
+registered one; `git worktree prune` in the repository afterwards, because a
+directory deleted by hand leaves the registration behind.
+
 ## The claim, and what it refuses
 
 **This is not tidiness and it is not optional — `pre-commit` refuses without it.**

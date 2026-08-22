@@ -384,7 +384,67 @@ cmd_take() {
   }
 
   [ -n "$issue" ] && print_brief "$issue"
+  report_scratch
   return 0
+}
+
+# How full the shared scratch filesystem may be before `take` says so, and how
+# many repository clones it may hold. `#483`.
+SCRATCH_FULL_PERCENT=${KOLONIE_SCRATCH_FULL_PERCENT:-50}
+
+# --- the other shared resource, and the one that fails as somebody else's bug --
+#
+# **`/tmp` is a small tmpfs shared by every agent on the host, and a repository
+# clone in it is one agent spending another's disk** (`#483`). Measured
+# 2026-08-22: 3.6 GB total, of which **2.49 GB was twelve abandoned clones** from
+# previous sessions — verification sandboxes nobody removed. What that produced
+# was `npm run check` in `kolonie-platform` failing **188 test files** with
+# `Unknown system error -122`, which is `EDQUOT` with no message attached, while
+# 1,675 tests inside those files passed. Same commit, same database, `TMPDIR`
+# pointed anywhere else: 265 files, 4,639 tests, all green.
+#
+# **It reads as a broken change.** There is no line anywhere saying *the disk is
+# full*, the clones belong to one agent and the failure lands on whoever runs
+# tests next, and nothing on the board, in CI or in a log connects the two. An
+# agent that sees 188 red files reverts, re-runs and bisects its own diff.
+#
+# ## Why it is here and not in `board-self-check.sh`
+#
+# `#483` proposes a line there, and that check runs in **GitHub Actions** — its
+# `/tmp` is a fresh runner's and has nothing to do with this host. It would be
+# asking the right question of the wrong machine, silently and daily.
+#
+# `take` is the one thing that runs on the agent host, once, at the start of
+# every session, before any work. It is also already the place a session is set
+# up, so the reader is a session that has not yet made a sandbox — which is when
+# the advice is cheap to follow rather than a cleanup.
+#
+# **It prints and never refuses.** A full `/tmp` is not this session's fault and
+# is not a reason to stop it working; every refusal in this file is about a
+# commit that would be wrong, and this is about one that will be slow.
+report_scratch() {
+  local scratch=${TMPDIR:-/tmp} used clones
+  used=$(df -P "$scratch" 2>/dev/null | awk 'NR==2 { sub(/%$/, "", $5); print $5 }')
+  [ -n "${used:-}" ] || return 0
+
+  # A directory holding a `.git` is a clone or a worktree; either way it is a
+  # repository somebody left in scratch space. One level down only — a `.git`
+  # buried in a fixture is not what this is about, and walking a full tmpfs to
+  # find one would be the second cost.
+  clones=$(find "$scratch" -maxdepth 2 -name .git -print 2>/dev/null | wc -l)
+
+  [ "$used" -lt "$SCRATCH_FULL_PERCENT" ] && [ "$clones" -eq 0 ] && return 0
+
+  echo
+  echo "  ! $scratch is ${used}% full$([ "$clones" -gt 0 ] && echo " and holds $clones repository checkout(s)")."
+  echo "    It is shared by every agent on this host, and a full one fails a test"
+  echo "    run as 'Unknown system error -122' with nothing saying the disk is the"
+  echo "    reason — kolonie-docs#483, where it cost 188 red test files."
+  echo
+  echo "    A verification sandbox goes under the repository or in ~/tmp:"
+  echo
+  echo "      git worktree add ../kolonie-docs-<what-you-are-checking>"
+  echo "      mkdir -p ~/tmp && TMPDIR=~/tmp <command>"
 }
 
 # The brief for the issue this session just took (`kolonie-docs#362`).
