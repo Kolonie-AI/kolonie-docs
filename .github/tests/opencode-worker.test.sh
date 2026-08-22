@@ -1973,6 +1973,46 @@ timeline "Kolonie-AI/kolonie-docs" 274 labeled commented reviewed
 contains "an ordinary timeline is not a disarm" \
   "274" "$(bash "$SCRIPT" unarmed-pull-requests 2>/dev/null)"
 
+# `#480`. **Closing a pull request disables auto-merge, and reopening does not
+# put it back** — so the timeline of a close-and-reopen carries an
+# `auto_merge_disabled` nobody decided. `#326` then concluded *a person wants
+# this to wait* for ever, and the pull request stayed green, open and nobody's.
+# `kolonie-platform#1534`, 2026-08-21: closed at 17:49:14, disarmed at 17:49:15,
+# reopened at 17:49:20.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+timeline "Kolonie-AI/kolonie-docs" 274 auto_merge_enabled closed auto_merge_disabled reopened commented
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+contains "a disarm a reopen came after is stale, and the sweep arms it again" \
+  "274" "$out"
+absent "and it does not claim a person decided anything" \
+  "somebody disarmed" "$(cat "$WORK/err")"
+
+# The other order, which is what keeps `#326` intact: a person who disarms a
+# pull request that was reopened earlier has decided something about the pull
+# request as it stands now.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+timeline "Kolonie-AI/kolonie-docs" 274 closed reopened auto_merge_enabled auto_merge_disabled commented
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "a disarm after the last reopen still sticks" "" "$out"
+contains "and still says a person did that on purpose" \
+  "somebody disarmed" "$(cat "$WORK/err")"
+
+# Twice round, because the rule is *the last of the two events wins* and a rule
+# that only looked at the first pair would read this one backwards.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+timeline "Kolonie-AI/kolonie-docs" 274 auto_merge_disabled reopened auto_merge_disabled commented
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "and the last of several decides it" "" "$out"
+
 # On a green pull request arming is merging, so not knowing is a reason to stop.
 case_setup
 org "Kolonie-AI/kolonie-docs|check"

@@ -1320,7 +1320,8 @@ required_contexts_of() {
 # whether a pull request was disarmed and arming it anyway is the one mistake
 # that cannot be taken back: on a green pull request, arming is merging.
 unarmed_pull_requests() {
-  local repo repos number required state disarmed default_branch base
+  local repo repos number required state disarmed events default_branch base
+  local unarmed=0
 
   # `default_branch` rides along with the name, so filter 7 costs no request.
   repos=$(gh api "orgs/$ORG/repos" -X GET -f per_page=100 -f type=all \
@@ -1382,19 +1383,59 @@ unarmed_pull_requests() {
       # Filter 6. `--paginate` because the event that matters may be anywhere in
       # the timeline, and a disarm the sweep did not scroll far enough to see is
       # the bug this filter exists to fix.
-      if ! disarmed=$(gh api --paginate "repos/$repo/issues/$number/timeline" \
-        --jq '.[] | select(.event == "auto_merge_disabled") | .event' 2>/dev/null); then
+      #
+      # **A disarm that a reopen came after is not a decision** (`#480`).
+      # Closing a pull request disables auto-merge as a side effect, and
+      # reopening it does not put it back. `#326`'s rule then draws a permanent
+      # conclusion — *somebody decided this waits for a person* — from a state
+      # nobody chose, and the pull request stays green, open and nobody's for
+      # ever. That is the whole of *In Review hangs around* on the board.
+      #
+      # `kolonie-platform#1534`, measured 2026-08-21:
+      #
+      #   16:41:21  auto_merge_enabled
+      #   17:49:14  closed
+      #   17:49:15  auto_merge_disabled   ← one second later, from the close
+      #   17:49:20  reopened              ← five seconds after that
+      #
+      # So the two events are read in order and the **last one wins**: a disarm
+      # standing after every reopen is a decision and is respected, and a disarm
+      # a reopen came after is stale. That leaves `#326` exactly as it was — a
+      # person who disarms a pull request nobody afterwards reopens still stops
+      # the sweep, for ever, which is the case the rule was written for.
+      #
+      # **The eviction this issue was filed about does not happen**, and it is
+      # worth writing down so nobody builds for it twice. `kolonie-platform#1561`
+      # was evicted from the merge queue seven times on 2026-08-21 and emitted no
+      # `auto_merge_disabled` at all: an eviction takes the entry out of the
+      # queue and leaves auto-merge armed. The suspected cause was the wrong one.
+      if ! events=$(gh api --paginate "repos/$repo/issues/$number/timeline" \
+        --jq '.[] | select(.event == "auto_merge_disabled" or .event == "reopened") | .event' 2>/dev/null); then
         echo "$repo#$number: could not read the timeline, so whether anybody disarmed it is unknown; leaving it alone" >&2
         continue
       fi
-      if [ -n "$disarmed" ]; then
+      disarmed=$(printf '%s\n' "$events" |
+        awk '/^auto_merge_disabled$/ { d = 1 } /^reopened$/ { d = 0 } END { print d + 0 }')
+      if [ "$disarmed" = 1 ]; then
         echo "$repo#$number: somebody disarmed auto-merge on it; the sweep does not arm it again (#326)" >&2
         continue
       fi
 
+      unarmed=$((unarmed + 1))
       printf '%s\t%s\t%s\n' "$repo" "$number" "$required"
     done <<<"$candidates"
   done <<<"$repos"
+
+  # **Say how many there were** (`#480`). A green, open, unarmed pull request is
+  # something this function can already see and used to say nothing about, so a
+  # filter drawing a wrong permanent conclusion was invisible until somebody
+  # looked at the board and wondered. One line costs nothing and would have
+  # surfaced `kolonie-platform#1534` in an hour rather than in a day.
+  #
+  # On stderr, with the rest of the reasoning: stdout is the tab-separated list
+  # the caller parses, and a count on it would be a row that is not a pull
+  # request.
+  echo "$unarmed green pull request(s) nobody has armed" >&2
 }
 
 # Nothing that is about to be published carries a secret this run holds (`#246`).
