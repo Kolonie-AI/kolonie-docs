@@ -269,6 +269,37 @@ say "release lets the next session start clean"
 allows "release" bash "$GUARD" release
 refuses_with "released" "not claimed by any session" env KOLONIE_AGENT=carol bash "$GUARD" check
 
+# --- the scratch warning (`#483`) --------------------------------------------
+# `take` is the one thing that runs on the agent host at the start of every
+# session, which is why the warning is there rather than in `board-self-check.sh`
+# — that runs in Actions, against a fresh runner's `/tmp`.
+#
+# **Asserted as a warning and never as a refusal.** A full scratch filesystem is
+# not this session's fault and is not a reason to stop it working, so the case
+# that matters most is the exit status: `take` must still succeed.
+say "take says so when the shared scratch space is filling up"
+SCRATCH="$WORK/scratch"
+mkdir -p "$SCRATCH/somebody-elses-clone/.git"
+git switch -q main
+
+out=$(KOLONIE_AGENT=erin TMPDIR="$SCRATCH" bash "$GUARD" take --force 2>&1)
+status=$?
+if [ $status -eq 0 ] && grep -qF "repository checkout(s)" <<<"$out" &&
+   grep -qF "kolonie-docs#483" <<<"$out"; then pass; else
+  fail "a repository clone in scratch space was not reported, or take refused (exit $status)"
+  printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+
+say "and says nothing when there is nothing to say"
+CLEAN="$WORK/clean-scratch"
+mkdir -p "$CLEAN"
+out=$(KOLONIE_AGENT=erin TMPDIR="$CLEAN" KOLONIE_SCRATCH_FULL_PERCENT=100 \
+        bash "$GUARD" take --force 2>&1)
+if ! grep -qF "kolonie-docs#483" <<<"$out"; then pass; else
+  fail "an empty scratch directory produced a warning"
+  printf '%s\n' "$out" | sed 's/^/      | /'
+fi
+
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "session.sh: all cases pass"
