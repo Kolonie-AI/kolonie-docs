@@ -302,7 +302,7 @@ in full, and why there is no fourth column between Ready and In Progress, are in
 An abandoned claim is worse than no claim: it is a stop sign in front of work that
 nobody is doing.
 
-**If the work goes through a pull request, four rules, each measured here rather
+**If the work goes through a pull request, five rules, each measured here rather
 than preferred:** finish the branch *then* open it, because an open pull request
 is not a draft that waits for you and a sweep may merge it within the minute;
 after a multi-commit pull request merges, check your last commit is on `main`
@@ -322,6 +322,21 @@ already given; anywhere else, `gh pr create --title '<subject>' --body 'Closes
 #<n>'`. A branch that answers two issues names both, in two lines. The four hours
 `kolonie-platform#1065` spent Open and In Progress with its code on `main` are in
 [`history/2026-08-16-a-pull-request-body-that-closed-nothing.md`](history/2026-08-16-a-pull-request-body-that-closed-nothing.md).
+
+The fifth: **arm auto-merge and start the next issue — do not wait on your own
+pull request.** A merge queue merges on green whether or not anybody is watching,
+so waiting buys nothing and costs the whole session. Measured over the
+twenty-five pull requests merged into `kolonie-platform` before 2026-08-22: one
+agent working this way turned its branches round in 19–30 minutes, while two
+agents that waited took 70–384 minutes for work of the same size. **The gap is
+not CI latency**, which was the same for all three; it is time an agent spent
+holding still. Two agents that both wait are two agents doing one agent's work.
+
+So the end of a branch is `gh pr merge <n> --auto --squash`, a comment on the
+issue, the card moved to In Review, and the next `take` — in that order and
+without a pause. Come back to it at the start of the next turn: a queue entry
+that was evicted, or a check that went red, is waiting for you either way and
+will not be less waiting for having been watched.
 **8. Record what you did on the issue** — a comment, not a document — and move
 the item to the column that is now true.
 
