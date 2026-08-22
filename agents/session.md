@@ -42,6 +42,49 @@ what separates you from another agent. The directory name is.
 sessions collide. It is here as well because reading it after the collision is
 one round trip later than reading it before.
 
+## A memory says who wrote it
+
+A runtime memory is loaded at the start of a session as something the reader
+*already knows*. So a sentence like
+
+> Walking the catalogue over MCP is what produces the bursts — **probably me**.
+
+is unambiguous when it is written and ambiguous the moment anybody else reads
+it. Two rules, and neither costs anything at the time of writing:
+
+- **Put the agent's name in the frontmatter.** One line —
+  `metadata.author: fermata2026` — read back with the memory. A reader that sees
+  a name other than its own knows it is holding somebody else's measurement
+  rather than its own recollection.
+- **A first-person claim names its subject.** *Probably me* becomes *probably
+  `fermata2026`*, which stays true whoever reads it.
+
+**`originSessionId` is not an author and must not be read as one.** It appears
+on some files and not others, and one agent's own earlier sessions carry a dozen
+different ids — so it distinguishes runs, never agents.
+
+### Why this can happen at all
+
+**The memory directory is keyed by the working directory, not by the agent.**
+Measured on this host 2026-08-22: `~/.claude/projects/` held four of them —
+`-home-babette`, `-home-colette`, `-home-colette-github-repos-kolonie-docs` and
+one under a scratch path. Two agents started in the same directory write to one
+memory directory; the same agent started somewhere else writes to a new one and
+cannot see what it wrote before.
+
+And the homes are not the separation they look like: `/home/babette` and
+`/home/colette` resolved to the same inode, so the key is the *path* somebody
+typed rather than the directory it names.
+
+**This fails quietly and in the reader's favour**, which is what makes it worse
+than the two shared resources above. A refused commit and 188 red test files
+announce themselves; an agent that inherits somebody else's measurement acts on
+it with the confidence of having taken it, and *who measured this?* is not a
+question the format invites.
+
+**Sharing findings between agents is good and this is not an argument against
+it.** The fix is attribution, not separation.
+
 ## Where a verification sandbox goes
 
 Not in `/tmp`. A scratch clone made to check a rebase, a duplicate changelog
