@@ -1,6 +1,6 @@
 name: Board settle
 
-# Move anything closed and outside Done into Done, three times an hour.
+# Move anything closed and outside Done into Done, every ten minutes.
 # `kolonie-docs#482`.
 #
 # ## Why a cron job and not the built-in workflow
@@ -35,17 +35,17 @@ name: Board settle
 # ## The budget, since that is what made the other one daily
 #
 # `#132` spent 4,998 of 5,000 GraphQL points in a session and is why nothing here
-# polls. This job is one `board-read` at 2 points plus 1 per move: seventy-two
-# runs a day is under 200 points against a ceiling of 5,000 an hour. The
+# polls. This job is one `board-read` at 2 points plus 1 per move: 144
+# runs a day is under 500 points against a ceiling of 5,000 an hour. The
 # expensive call `#132` is about — `--limit 1000` item listing at 304 points — is
 # the one this deliberately does not make.
 
 on:
   schedule:
-    # :11, :31, :51 — off the hour, so it never lands in the same minute as
+    # Every ten minutes, off the hour, so it never lands in the same minute as
     # check-red-lines (04:00) or board-self-check (05:00) and never contends
     # with them for the same GraphQL budget.
-    - cron: '11,31,51 * * * *'
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
     inputs:
       dry_run:

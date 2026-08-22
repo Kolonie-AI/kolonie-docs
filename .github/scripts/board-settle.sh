@@ -32,7 +32,7 @@
 #
 # `#132` is the other half of the argument — the daily cadence there exists to
 # protect the GraphQL budget, and it does not reach this file. One `board-read`
-# is 2 points and one move is 1, so three runs an hour costs under 200 points a
+# is 2 points and one move is 1, so six runs an hour costs under 500 points a
 # day against a ceiling of 5,000 an hour.
 set -euo pipefail
 
@@ -42,17 +42,25 @@ PROJECT_ID=${PROJECT_ID:-PVT_kwDOEmwuYs4BebbB}
 STATUS_FIELD=${STATUS_FIELD:-PVTSSF_lADOEmwuYs4BebbBzhY1uQw}
 STATUS_DONE=${STATUS_DONE:-d37dbc2a}
 
-# **An hour, and the reason is not the built-in workflow.** That one either fires
-# in seconds or does not fire, so waiting on it buys nothing. What the window
-# protects is the agent that closed an issue by hand and is three tool calls away
-# from moving the card itself: moving it underneath them turns their next call
-# into a no-op they will read as a failure.
+# **Ten minutes, and the hour it replaced was reasoning about a case that no
+# longer exists.** The window was set to protect the agent that closed an issue
+# by hand and is three tool calls from moving the card itself. But the reason
+# this job exists at all is that `agents/orchestration.md` now tells an agent to
+# arm auto-merge and go — so on the common path the agent is *gone* before the
+# issue closes, and an hour of protection buys a card that reads wrong to
+# everybody for an hour.
 #
-# `board-self-check.sh` uses six hours for the same shape of question and is
-# right to — it is deciding whether to *report a defect*, and a card that settles
-# in twenty minutes is not one. This is deciding whether to *tidy up*, which is
-# cheap and reversible and wants the shorter window.
-SETTLE_HOURS=${SETTLE_HOURS:-1}
+# Measured 2026-08-22: `kolonie-platform#1573` closed at 11:27 when `#1596`
+# merged, and was still In Review at 11:55 — correctly skipped by this job three
+# times, at six, twenty-two and thirty-eight minutes old.
+#
+# Ten minutes is still far longer than any gap between one agent's tool calls,
+# which is the only case left to protect.
+#
+# `board-self-check.sh` keeps its six hours and is right to: it is deciding
+# whether to *report a defect*, and a card that settles in twenty minutes is not
+# one. This is deciding whether to tidy up, which is cheap and reversible.
+SETTLE_MINUTES=${SETTLE_MINUTES:-10}
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true
@@ -76,7 +84,7 @@ if [ "${stated:-0}" -eq 0 ]; then
   exit 1
 fi
 
-cutoff=$(date -u -d "$SETTLE_HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+cutoff=$(date -u -d "$SETTLE_MINUTES minutes ago" +%Y-%m-%dT%H:%M:%SZ)
 
 # Closed, in a column, and that column is not Done. An item with no Status at all
 # is left alone: it has missed a different workflow, and 5d in
