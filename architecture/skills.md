@@ -168,6 +168,30 @@ skill is written from. It is not restated here — a second copy is a version th
 goes out of step, which is `kolonie-docs#120`. What belongs here is the
 architectural consequence and the measurement, and both are above.
 
+### The reference pointer resolves on all seven, and the path is the plain one
+
+`#473`, 2026-08-23: **`references/browser.md` stays a bare relative path in every
+`SKILL.md`, and the `browser-reference-pointer` slot that issue reserved is not
+created.** The one runtime whose form was in doubt was OpenClaw, which documents
+`{baseDir}` for referencing the skill folder; Kilo's was answered by `#458` from
+its own documentation, and the other five never differed.
+
+Measured against **openclaw 2026.7.1-2** by reading the shipped runtime. Its
+skills prompt prepends *when a skill file references a relative path, resolve it
+against the skill directory* to every session, with each skill's absolute
+`<location>` beside it; the slash-command path wraps the body with *References
+are relative to `<baseDir>`* independently. **`{baseDir}` is a spelling rather
+than a mechanism** — nothing in the shipped code substitutes it — and OpenClaw's
+own bundled skills use it for shell invocations only, while every bundled pointer
+at a `references/*.md` file to be *read* is bare.
+
+The argument, the sandbox case, and the command to re-check it when the runtime
+moves are in
+[`a-bare-relative-path-is-what-openclaw-asks-for`](../state/decisions/a-bare-relative-path-is-what-openclaw-asks-for.md).
+`browser-reference-unreachable` stays declared, optional and filled by nobody:
+it is the escape hatch for a runtime that turns out not to reach the file, and an
+empty optional slot is the correct state for one rather than an oversight.
+
 ### Naming
 
 The repository name is a distribution detail. The **skill** name is the brand,
