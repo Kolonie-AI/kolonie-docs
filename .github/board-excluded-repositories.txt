@@ -24,3 +24,8 @@
 # no `AGENTS.md`, so the worker could not act on one of its issues even if the
 # board offered it.
 .github
+
+# The workplace is an isolated product experiment. Gregor and Colette will use
+# its own issue tracker to validate the workflow before deciding whether its work
+# belongs on the Colony-wide project board.
+kolonie-workplace
