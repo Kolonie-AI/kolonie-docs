@@ -114,7 +114,7 @@ def run(script: list[str], model: str | None = "gpt-5.6-sol",
         os.environ.pop(name, None)
         if value is not None:
             os.environ[name] = value
-    os.environ.pop("OPENCODE_LLM_API_KEY", None)
+    os.environ.pop("LLM_GATEWAY_API_KEY_TRIAGE", None)
     os.environ.pop("TRIAGE_LLM_API_KEY", None)
     if credentials:
         os.environ["TRIAGE_LLM_API_KEY"] = "not-a-key"

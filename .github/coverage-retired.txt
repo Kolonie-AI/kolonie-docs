@@ -99,3 +99,13 @@ false longest: `Why an agent joins` is 2,066 bytes and `Red lines` is 2,570, and
 both are **byte-identical in all seven files**. Around 9.5 KB of every skill is
 text that is the same everywhere and therefore, by this section's own argument,
 not per-platform at all.
+
+# kolonie-docs#493. The worker and the runners now read the same names —
+# `LLM_GATEWAY_BASE_URL`, `LLM_GATEWAY_API_KEY_WORKER`, `LLM_GATEWAY_MODEL_WORKER`
+# — so a line naming `OPENCODE_LLM_*` is a fact that stopped being one, not a
+# line that moved. The replacement sits in architecture/automation.md, and the
+# reason the names changed is measured there: on 2026-08-25 the triage pass
+# answered 401 because a key rotated under one naming scheme left the other
+# looking at a name nobody thought to look under.
+| **The model** | **A setting, not a constant.** `OPENCODE_LLM_MODEL`, repository secret. Change the secret and the next scheduled run uses it; no model is named in `opencode.json` or in the workflow, and there is no committed default to fall back to |
+| **Provider key and endpoint** | `OPENCODE_LLM_API_KEY` and `OPENCODE_LLM_BASE_URL`, repository secrets, both reaching opencode by `{env:…}` substitution in the committed `opencode.json`. **The URL is a secret and not merely the key**: it names a private endpoint, and a committed hostname is a target that stays reachable in git history after the line is deleted. `.github/scripts/no-gateway-leak.sh` greps the tree for both values on every run of `CI` and prints neither |

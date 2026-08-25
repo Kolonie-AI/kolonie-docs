@@ -945,13 +945,13 @@ DATABASE_URL=postgres://admin:hunter2@db.internal:5432/kolonie
 Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJlSGVyZQ
 MY_SERVICE_TOKEN=totally-secret-value
 LOG
-out=$(OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
-      OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
+out=$(LLM_GATEWAY_BASE_URL="https://gateway.invalid.example/v1" \
+      LLM_GATEWAY_API_KEY_WORKER="sk-live-abcdefghijklmnop" \
       bash "$SCRIPT" excerpt "$WORK/leaky.log" 2>/dev/null)
 absent "the gateway URL does not reach a comment" "gateway.invalid.example" "$out"
 absent "nor does the gateway key" "sk-live-abcdefghijklmnop" "$out"
 contains "and it says which variable it took out, which is enough to fix it" \
-  "the value of OPENCODE_LLM_BASE_URL" "$out"
+  "the value of LLM_GATEWAY_BASE_URL" "$out"
 
 # By shape second, which is what value-matching cannot do: a credential this
 # run never held, printed by somebody else's build.
@@ -967,7 +967,7 @@ contains "while the line that says what actually failed survives" "npm run check
 # output and turn every excerpt into `[redacted]`.
 case_setup
 printf 'the build failed in packages/db\n' > "$WORK/short.log"
-out=$(OPENCODE_LLM_API_KEY="abc" bash "$SCRIPT" excerpt "$WORK/short.log" 2>/dev/null)
+out=$(LLM_GATEWAY_API_KEY_WORKER="abc" bash "$SCRIPT" excerpt "$WORK/short.log" 2>/dev/null)
 check "a value too short to search for is skipped, not matched" \
   "the build failed in packages/db" "$out"
 
@@ -1066,8 +1066,8 @@ cat > "$WORK/clean-diff" <<'DIFF'
 +The check prerequisite is npm run test:db:up.
 DIFF
 printf 'A repository states what its check needs\n' > "$WORK/clean-messages"
-out=$(OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
-      OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+out=$(LLM_GATEWAY_API_KEY_WORKER="sk-live-abcdefghijklmnop" \
+      LLM_GATEWAY_BASE_URL="https://gateway.invalid.example/v1" \
       bash "$SCRIPT" leak-check "$WORK/clean-diff" "$WORK/clean-messages" 2>&1); rc=$?
 check "an ordinary change is not refused" "0" "$rc"
 # The count of secrets is whatever this environment happens to hold — the run's
@@ -1080,12 +1080,12 @@ cat > "$WORK/leaky-diff" <<'DIFF'
 +// the gateway we talk to
 +const BASE = "https://gateway.invalid.example/v1"
 DIFF
-err=$(OPENCODE_LLM_API_KEY="sk-live-abcdefghijklmnop" \
-      OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+err=$(LLM_GATEWAY_API_KEY_WORKER="sk-live-abcdefghijklmnop" \
+      LLM_GATEWAY_BASE_URL="https://gateway.invalid.example/v1" \
       bash "$SCRIPT" leak-check "$WORK/leaky-diff" 2>&1 >/dev/null); rc=$?
 check "a diff carrying the gateway URL is refused, not warned about" "1" "$rc"
 contains "and it names the variable, which is enough to fix it" \
-  "the value of OPENCODE_LLM_BASE_URL" "$err"
+  "the value of LLM_GATEWAY_BASE_URL" "$err"
 contains "and the file" "leaky-diff" "$err"
 absent "and never the value — printing it here would be the leak itself" \
   "gateway.invalid.example" "$err"
@@ -1094,7 +1094,7 @@ absent "and never the value — printing it here would be the leak itself" \
 case_setup
 printf 'fix: talk to https://gateway.invalid.example/v1 directly\n' > "$WORK/leaky-messages"
 rc=0
-OPENCODE_LLM_BASE_URL="https://gateway.invalid.example/v1" \
+LLM_GATEWAY_BASE_URL="https://gateway.invalid.example/v1" \
   bash "$SCRIPT" leak-check "$WORK/clean-diff" "$WORK/leaky-messages" >/dev/null 2>&1 || rc=$?
 check "a commit message is checked as well as the diff" "1" "$rc"
 

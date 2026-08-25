@@ -5,8 +5,8 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Gateway",
       "options": {
-        "baseURL": "{env:OPENCODE_LLM_BASE_URL}",
-        "apiKey": "{env:OPENCODE_LLM_API_KEY}"
+        "baseURL": "{env:LLM_GATEWAY_BASE_URL}",
+        "apiKey": "{env:LLM_GATEWAY_API_KEY_WORKER}"
       }
     }
   },
