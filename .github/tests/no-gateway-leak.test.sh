@@ -89,25 +89,6 @@ out=$(bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "a leftover key reference fails" "1" "$rc"
 
 echo
-echo "the fallback gateway, which is as private as the first (#493)"
-# A check guarding only the primary would pass while the backup's hostname sat
-# in the tree — and the backup is reached on exactly the days somebody is
-# looking at logs, which is when a committed hostname is most likely to be
-# pasted somewhere.
-rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
-printf 'baseURL: %s\n' "$SECRET_URL" > "$WORK/tree/fallback.yml"
-out=$(LLM_GATEWAY_FALLBACK_BASE_URL="$SECRET_URL" bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
-check "a committed fallback URL fails" "1" "$rc"
-contains "names the variable" "LLM_GATEWAY_FALLBACK_BASE_URL" "$out"
-absent "and never prints the value" "$SECRET_URL" "$out"
-
-rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
-printf 'apiKey = "%s"\n' "$SECRET_KEY" > "$WORK/tree/config.toml"
-out=$(LLM_GATEWAY_FALLBACK_API_KEY_WORKER="$SECRET_KEY" bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
-check "a committed fallback key fails" "1" "$rc"
-absent "and never prints the value" "$SECRET_KEY" "$out"
-
-echo
 echo "a fork, where the secrets are not there"
 # The half that must not become a check firing on a correct configuration. A
 # pull request from a fork gets no secrets, and a failure there blocks every

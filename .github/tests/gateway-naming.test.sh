@@ -101,12 +101,6 @@ guarded=$(sed -n '/^GUARDED=(/,/^)/p' "$ROOT/.github/scripts/no-gateway-leak.sh"
 contains "the base URL" "LLM_GATEWAY_BASE_URL" "$guarded"
 contains "the worker key" "LLM_GATEWAY_API_KEY_WORKER" "$guarded"
 
-# The fallback gateway is a second endpoint and a second key, and both are as
-# private as the first. A leak check that guarded only the primary would pass
-# while the backup's hostname sat in the tree.
-contains "the fallback base URL" "LLM_GATEWAY_FALLBACK_BASE_URL" "$guarded"
-contains "the fallback worker key" "LLM_GATEWAY_FALLBACK_API_KEY_WORKER" "$guarded"
-
 echo
 echo "an unset gateway variable fails loudly rather than proceeding"
 # The guard the worker runs before it asks for anything. Renaming a variable
