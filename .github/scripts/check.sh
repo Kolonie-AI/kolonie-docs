@@ -118,6 +118,11 @@ step "the marketplace description has one copy" \
 step "every generated SKILL.md names one concrete place for the key" \
   python3 .github/scripts/check-skill-target.py
 
+# `#498`. The shared body is the one Colony-facing source; a sentence that still
+# says rotation has no confirmation step reaches all seven generated skills.
+step "the shared skill documents the two-call credential rotation" \
+  python3 .github/scripts/check-skill-rotation.py
+
 # `#458` adds `check-skill-spec.py`, and it is deliberately not a step here: this
 # repository has no `SKILL.md` of its own to point it at, and the seven validate
 # themselves in their own `skill.yml`. Its own test is discovered by
