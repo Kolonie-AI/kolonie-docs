@@ -115,8 +115,13 @@ jobs:
       # for a reason nobody outside could act on.
       - name: Nothing about the private gateway is committed
         env:
-          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
-          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          LLM_GATEWAY_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_API_KEY_WORKER }}
+          # Both gateways, since `#493`. The fallback is a second private
+          # endpoint and a second key, and a check guarding only the primary
+          # would pass while the backup's hostname sat in the tree.
+          LLM_GATEWAY_FALLBACK_BASE_URL: ${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}
+          LLM_GATEWAY_FALLBACK_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_WORKER }}
         run: bash .github/scripts/no-gateway-leak.sh .
 
       # `kolonie-docs#190`. `operations/incidents.md` said *newest first* for six

@@ -204,8 +204,13 @@ jobs:
         id: decide
         if: steps.candidates.outputs.waiting != '0'
         env:
-          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
-          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          # **The triage pass is its own service and takes its own key**
+          # (`#493`). D-122 §3 in `kolonie-platform` is the reason: a runaway
+          # loop in one service must not take the cap for the others with it,
+          # and *whose traffic is this* has to be answerable at the gateway
+          # rather than only in our own logs.
+          LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
           # The account asked when the one above will not answer. Unset is
           # the other of the two names the script knows; `none` switches the
@@ -274,8 +279,13 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
-          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
-          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          # **The triage pass is its own service and takes its own key**
+          # (`#493`). D-122 §3 in `kolonie-platform` is the reason: a runaway
+          # loop in one service must not take the cap for the others with it,
+          # and *whose traffic is this* has to be answerable at the gateway
+          # rather than only in our own logs.
+          LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
           # The account asked when the one above will not answer. Unset is
           # the other of the two names the script knows; `none` switches the

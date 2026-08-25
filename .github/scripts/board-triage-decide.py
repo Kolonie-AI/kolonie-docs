@@ -371,8 +371,8 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     then the other account once. Every attempt is the same brief over the same
     key — nothing about the question changes, only who is asked.
     """
-    key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("OPENCODE_LLM_API_KEY", "")
-    base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("OPENCODE_LLM_BASE_URL", "")).rstrip("/")
+    key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("LLM_GATEWAY_API_KEY_TRIAGE", "")
+    base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("LLM_GATEWAY_BASE_URL", "")).rstrip("/")
     empty = {"model": "", "tokens": None}
     if not key or not base:
         return "", "no gateway credentials — nothing was asked for", empty

@@ -900,13 +900,13 @@ jobs:
           # git history after it is removed. No default is committed as a
           # fallback either, because a fallback is the value that ships on the
           # day the secret is missing — the run should fail loudly instead.
-          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
-          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
+          LLM_GATEWAY_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_API_KEY_WORKER }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
           # **The model is a setting, not a constant.** Change the secret and
           # the next scheduled run uses it; nothing here or in `opencode.json`
           # names one. The gateway serves its whole catalogue on the same key,
           # so switching is a value rather than a migration.
-          OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
+          LLM_GATEWAY_MODEL_WORKER: ${{ secrets.LLM_GATEWAY_MODEL_WORKER }}
           # Cross-repository since `#231`: `github.token` covers this repository
           # and `WORKER_REPO_TOKEN` covers the rest. The fallback keeps a
           # `kolonie-docs` issue working exactly as it did before the secret
@@ -1060,9 +1060,9 @@ jobs:
           # Refuse rather than guess. An unset secret would otherwise reach
           # opencode as `--model gateway/`, which fails somewhere further in
           # with a message about the provider rather than about the secret.
-          : "${OPENCODE_LLM_MODEL:?OPENCODE_LLM_MODEL is not set — the model is a secret, and there is deliberately no default}"
-          : "${OPENCODE_LLM_BASE_URL:?OPENCODE_LLM_BASE_URL is not set}"
-          : "${OPENCODE_LLM_API_KEY:?OPENCODE_LLM_API_KEY is not set}"
+          : "${LLM_GATEWAY_MODEL_WORKER:?LLM_GATEWAY_MODEL_WORKER is not set — the model is a secret, and there is deliberately no default}"
+          : "${LLM_GATEWAY_BASE_URL:?LLM_GATEWAY_BASE_URL is not set}"
+          : "${LLM_GATEWAY_API_KEY_WORKER:?LLM_GATEWAY_API_KEY_WORKER is not set}"
 
           # ## Why the model is written into a derived config rather than left
           # ## to `--model` alone
@@ -1083,7 +1083,7 @@ jobs:
           # `#207` requires that **no model is named in a committed file**, so
           # the declaration is made here from the secret. `opencode.json` stays
           # the source and stays model-free; this adds one key to a copy.
-          # Changing `OPENCODE_LLM_MODEL` still changes the model on the next run
+          # Changing `LLM_GATEWAY_MODEL_WORKER` still changes the model on the next run
           # with no commit, which is the property the issue is about.
           #
           # In the scratch directory with everything else since `#246`. opencode
@@ -1097,7 +1097,7 @@ jobs:
           # target's checkout, which is a different repository four times out of
           # five and has no such file. Reading it from the target would mean
           # every repository carrying a copy — five records of one fact.
-          jq --arg m "$OPENCODE_LLM_MODEL" \
+          jq --arg m "$LLM_GATEWAY_MODEL_WORKER" \
             '.provider.gateway.models[$m] = {}' ../opencode.json \
             > "$SCRATCH/runtime.json"
           export OPENCODE_CONFIG="$SCRATCH/runtime.json"
@@ -1111,7 +1111,7 @@ jobs:
           # from the secret, and what the log can prove is that the run reached
           # the provider rather than falling back to a committed default. There
           # is no committed default to fall back to.
-          echo "model: gateway/${OPENCODE_LLM_MODEL}"
+          echo "model: gateway/${LLM_GATEWAY_MODEL_WORKER}"
 
           # ## The prohibitions are read, not written here (`#260`)
           #
@@ -1187,7 +1187,7 @@ jobs:
           # ## (`#246`, 2026-08-09)
           #
           # Measured on 2026-08-09, the model's process could read
-          # `OPENCODE_LLM_API_KEY`, `OPENCODE_LLM_BASE_URL` and `GH_TOKEN` — the
+          # `LLM_GATEWAY_API_KEY_WORKER`, `LLM_GATEWAY_BASE_URL` and `GH_TOKEN` — the
           # last being `WORKER_REPO_TOKEN`, `repo` scope, all five repositories.
           # **A directory restriction does not stop `env`.** The sandbox was
           # guarding the runner's filesystem, on a container GitHub throws away;
@@ -1216,7 +1216,7 @@ jobs:
           # permission it was refused — can say the last of what it printed
           # instead of leaving a link (`#245`).
           model_log="$RUNNER_TEMP/opencode-model.log"
-          if ! env -u GH_TOKEN opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$prompt" 2>&1 | tee "$model_log"; then
+          if ! env -u GH_TOKEN opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$prompt" 2>&1 | tee "$model_log"; then
             fail worker "opencode's own run did not finish. That is the model, the gateway or the tool — not a verdict on the change" "$model_log"
           fi
 
@@ -1634,9 +1634,9 @@ jobs:
           # value is the only way to catch one whatever it looks like. Same
           # technique and same reasoning as `no-gateway-leak.sh`, which also
           # takes the values in the environment and never prints one.
-          OPENCODE_LLM_API_KEY: ${{ secrets.OPENCODE_LLM_API_KEY }}
-          OPENCODE_LLM_BASE_URL: ${{ secrets.OPENCODE_LLM_BASE_URL }}
-          OPENCODE_LLM_MODEL: ${{ secrets.OPENCODE_LLM_MODEL }}
+          LLM_GATEWAY_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_API_KEY_WORKER }}
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          LLM_GATEWAY_MODEL_WORKER: ${{ secrets.LLM_GATEWAY_MODEL_WORKER }}
           WORKER_REPO_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
           BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
           REPO: ${{ steps.queue.outputs.repo }}
@@ -1707,7 +1707,7 @@ jobs:
           # which has been through the same redaction the excerpt has.
           account=""
           if [ "$kind" = work ] && command -v opencode >/dev/null 2>&1 &&
-             [ -n "${OPENCODE_LLM_MODEL:-}" ] && [ -f /tmp/opencode/runtime.json ] &&
+             [ -n "${LLM_GATEWAY_MODEL_WORKER:-}" ] && [ -f /tmp/opencode/runtime.json ] &&
              [ -s "$FAILURE_DIR/output" ]; then
 
             digest=$(bash .github/scripts/opencode-worker.sh failure-digest "$FAILURE_DIR/output")
@@ -1731,7 +1731,7 @@ jobs:
 
               if ( cd "$reading" &&
                    OPENCODE_CONFIG=/tmp/opencode/reporting.json \
-                   timeout 120 opencode run --model "gateway/$OPENCODE_LLM_MODEL" "$read_prompt" \
+                   timeout 120 opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$read_prompt" \
                    > "$RUNNER_TEMP/opencode-account.raw" 2>/dev/null ); then
                 account=$(bash .github/scripts/opencode-worker.sh redact "$RUNNER_TEMP/opencode-account.raw")
                 echo "the model wrote an account of the failure"

@@ -48,20 +48,20 @@ SECRET_KEY="sk-abcdefghijklmnopqrstuvwxyz0123456789"
 
 echo "a clean tree"
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
-echo '{"provider":{"gateway":{"options":{"baseURL":"{env:OPENCODE_LLM_BASE_URL}"}}}}' > "$WORK/tree/opencode.json"
-out=$(OPENCODE_LLM_BASE_URL="$SECRET_URL" OPENCODE_LLM_API_KEY="$SECRET_KEY" \
+echo '{"provider":{"gateway":{"options":{"baseURL":"{env:LLM_GATEWAY_BASE_URL}"}}}}' > "$WORK/tree/opencode.json"
+out=$(LLM_GATEWAY_BASE_URL="$SECRET_URL" LLM_GATEWAY_API_KEY_WORKER="$SECRET_KEY" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "passes" "0" "$rc"
-contains "and says what it looked for" "no file holds the value of OPENCODE_LLM_BASE_URL" "$out"
+contains "and says what it looked for" "no file holds the value of LLM_GATEWAY_BASE_URL" "$out"
 
 echo
 echo "a committed base URL"
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 printf 'baseURL: %s\n' "$SECRET_URL" > "$WORK/tree/opencode.json"
-out=$(OPENCODE_LLM_BASE_URL="$SECRET_URL" OPENCODE_LLM_API_KEY="$SECRET_KEY" \
+out=$(LLM_GATEWAY_BASE_URL="$SECRET_URL" LLM_GATEWAY_API_KEY_WORKER="$SECRET_KEY" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "fails" "1" "$rc"
-contains "names the variable" "OPENCODE_LLM_BASE_URL" "$out"
+contains "names the variable" "LLM_GATEWAY_BASE_URL" "$out"
 contains "and the file" "opencode.json" "$out"
 # The whole point.
 absent "and never prints the value" "$SECRET_URL" "$out"
@@ -70,7 +70,7 @@ echo
 echo "a committed key"
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 printf 'apiKey = "%s"\n' "$SECRET_KEY" > "$WORK/tree/config.toml"
-out=$(OPENCODE_LLM_BASE_URL="$SECRET_URL" OPENCODE_LLM_API_KEY="$SECRET_KEY" \
+out=$(LLM_GATEWAY_BASE_URL="$SECRET_URL" LLM_GATEWAY_API_KEY_WORKER="$SECRET_KEY" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "fails" "1" "$rc"
 absent "and never prints the value" "$SECRET_KEY" "$out"
@@ -89,15 +89,34 @@ out=$(bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "a leftover key reference fails" "1" "$rc"
 
 echo
+echo "the fallback gateway, which is as private as the first (#493)"
+# A check guarding only the primary would pass while the backup's hostname sat
+# in the tree — and the backup is reached on exactly the days somebody is
+# looking at logs, which is when a committed hostname is most likely to be
+# pasted somewhere.
+rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
+printf 'baseURL: %s\n' "$SECRET_URL" > "$WORK/tree/fallback.yml"
+out=$(LLM_GATEWAY_FALLBACK_BASE_URL="$SECRET_URL" bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+check "a committed fallback URL fails" "1" "$rc"
+contains "names the variable" "LLM_GATEWAY_FALLBACK_BASE_URL" "$out"
+absent "and never prints the value" "$SECRET_URL" "$out"
+
+rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
+printf 'apiKey = "%s"\n' "$SECRET_KEY" > "$WORK/tree/config.toml"
+out=$(LLM_GATEWAY_FALLBACK_API_KEY_WORKER="$SECRET_KEY" bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+check "a committed fallback key fails" "1" "$rc"
+absent "and never prints the value" "$SECRET_KEY" "$out"
+
+echo
 echo "a fork, where the secrets are not there"
 # The half that must not become a check firing on a correct configuration. A
 # pull request from a fork gets no secrets, and a failure there blocks every
 # outside contribution for a reason nobody outside can act on.
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 echo 'nothing to see' > "$WORK/tree/readme.md"
-out=$(env -u OPENCODE_LLM_BASE_URL -u OPENCODE_LLM_API_KEY bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "passes" "0" "$rc"
-contains "and says it skipped rather than passing quietly" "skip: OPENCODE_LLM_BASE_URL is not set" "$out"
+contains "and says it skipped rather than passing quietly" "skip: LLM_GATEWAY_BASE_URL is not set" "$out"
 
 echo
 echo "a value too short to search for"
@@ -106,7 +125,7 @@ echo "a value too short to search for"
 # check would be switched off within a day.
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 echo 'e' > "$WORK/tree/readme.md"
-out=$(OPENCODE_LLM_BASE_URL="e" OPENCODE_LLM_API_KEY="$SECRET_KEY" \
+out=$(LLM_GATEWAY_BASE_URL="e" LLM_GATEWAY_API_KEY_WORKER="$SECRET_KEY" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "fails rather than matching everything" "1" "$rc"
 contains "and says why" "shorter than 10 characters" "$out"

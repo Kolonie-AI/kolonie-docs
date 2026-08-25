@@ -32,7 +32,7 @@
 # values are present.
 #
 # Usage:
-#   OPENCODE_LLM_BASE_URL=… OPENCODE_LLM_API_KEY=… bash .github/scripts/no-gateway-leak.sh [dir]
+#   LLM_GATEWAY_BASE_URL=… LLM_GATEWAY_API_KEY_WORKER=… bash .github/scripts/no-gateway-leak.sh [dir]
 set -uo pipefail
 
 ROOT=${1:-.}
@@ -40,7 +40,22 @@ ROOT=${1:-.}
 # The variables whose *values* must not appear. The model is deliberately not
 # among them: `#207` names `gpt-5.6-sol` in the issue body itself, so it is a
 # setting kept out of the files rather than a secret kept out of the world.
-GUARDED=(OPENCODE_LLM_BASE_URL OPENCODE_LLM_API_KEY)
+#
+# **Both gateways, since `#493`.** The fallback is a second private endpoint and
+# a second key, and it is exactly as committable as the first — a check guarding
+# only the primary would pass while the backup's hostname sat in the tree. Its
+# variables are named in the same shape as the primary's, so an operator reading
+# one can predict the other.
+#
+# **A variable that is not set is skipped and said so**, which is what makes it
+# safe to name four here: a deployment with no fallback configured is the
+# ordinary case, not a failure.
+GUARDED=(
+  LLM_GATEWAY_BASE_URL
+  LLM_GATEWAY_API_KEY_WORKER
+  LLM_GATEWAY_FALLBACK_BASE_URL
+  LLM_GATEWAY_FALLBACK_API_KEY_WORKER
+)
 
 # And the literal strings a swap leaves behind. These are not secrets — they are
 # the old provider, and finding one means the migration is half done, which is
