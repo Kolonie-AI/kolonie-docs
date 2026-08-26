@@ -101,10 +101,6 @@ reach code the ticket never mentioned.
 > thing it complained about. It may not cause a change to the ledger.
 
 #### `queue:operator` and `blocked:human` are not the same label twice
-<!-- Renamed by kolonie-docs#494. The pre-split heading is kept verbatim because
-coverage-retired.txt cannot retire headings (#507):
-#### `agent:human` and `blocked:human` are not the same label twice
--->
 
 They answer different questions and an issue can carry either without the other,
 which is the only reason both exist:

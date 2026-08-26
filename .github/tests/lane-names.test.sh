@@ -114,20 +114,20 @@ docs="AGENTS.md agents/routes.md agents/labels.md"
 for retired in agent:opencode agent:claude agent:human; do
   hits=""
   for f in $docs; do
-    # Exactly two lines may carry a retired name, and both are matched by their
-    # own content rather than excused from a list here: the historical sentence,
-    # and the one pre-split heading kept verbatim because `coverage-retired.txt`
-    # uses `#` as its comment character and cannot express a Markdown heading
-    # (#507). Anything else carrying a retired name is a half-landed rename.
+    # Exactly one line may carry a retired name, and it is matched by its own
+    # content rather than excused from a list here: the historical sentence.
+    # The pre-split heading that used to sit beside its rename is gone —
+    # `coverage-retired.txt` can express a retired Markdown heading since #507,
+    # so it is retired there instead. Anything else carrying a retired name is a
+    # half-landed rename.
     #
-    # Counted rather than filtered: a line is allowed only if it *is* one of the
-    # two, so a third occurrence fails even when it sits beside a marked one.
+    # Counted rather than filtered: a line is allowed only if it *is* that one,
+    # so a second occurrence fails even when it sits beside a marked one.
     # A window around the marker would swallow exactly that regression.
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       case "$line" in
         *"The retired names, in one line"*) continue ;;
-        '#### `agent:human` and `blocked:human` are not the same label twice'*) continue ;;
       esac
       hits="$hits $f"
       break

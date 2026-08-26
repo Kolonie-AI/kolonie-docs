@@ -1,8 +1,10 @@
 # Lines a split deliberately retired, because the split made them untrue.
 #
-# One line of source text per line, under a `#` comment saying why. Nothing else
-# belongs here: a line that merely *moved* is found by the check wherever it
-# landed, and a line that was reworded should be restored rather than excused.
+# One line of source text per line, under a `#` comment saying why. A source
+# line beginning with `#` is escaped with one leading backslash: `\#### Heading`
+# represents `#### Heading`. Nothing else belongs here: a line that merely
+# *moved* is found by the check wherever it landed, and a line that was reworded
+# should be restored rather than excused.
 #
 # `check-brief-coverage.py` prints the size of this list on every run, and fails
 # if an entry is present in the modules after all.
@@ -164,3 +166,9 @@ or `agent:human` is not briefed, not chunked and not asked about. Three things
 concrete action* and makes every route away from `agent:opencode` name the fact that
 | Repository | `agent:opencode` | `opencode:failed` | `opencode:forbidden` |
 **`opencode:failed` has to exist in the target repository, not here.** The worker
+
+# kolonie-docs#494, enabled by #507. This heading used the retired name
+# `agent:human`; its replacement in `agents/routes.md` says `queue:operator`.
+# It is retired rather than restored because restoring it would put the old lane
+# name back into live documentation.
+\#### `agent:human` and `blocked:human` are not the same label twice

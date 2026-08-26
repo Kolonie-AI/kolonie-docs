@@ -58,6 +58,12 @@ under a `#` comment saying why. **The count is printed on every run, passing or
 failing**, because the danger of an exceptions list is that it grows quietly
 until the check is measuring nothing. A line listed there that is still present
 is reported too — a stale entry hides the next real loss behind it.
+
+**A source line that itself begins with `#` is written with one leading
+backslash** — `\\#### A heading` retires `#### A heading`. Without it the syntax
+gives a comment and a Markdown heading the same first character, so a retired
+heading was silently read as a comment and reported lost forever
+(`kolonie-docs#507`). Nothing else in the line is touched.
 """
 import fnmatch
 import pathlib
@@ -106,11 +112,14 @@ SHOW_AT_MOST = 15
 def retired_lines():
     if not RETIRED.exists():
         return set()
-    return {
-        normalise(raw)
-        for raw in RETIRED.read_text().splitlines()
-        if raw.strip() and not raw.lstrip().startswith("#")
-    }
+    retired = set()
+    for raw in RETIRED.read_text().splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if raw.startswith("\\#"):
+            raw = raw[1:]
+        retired.add(normalise(raw))
+    return retired
 
 
 def tracked_files():
