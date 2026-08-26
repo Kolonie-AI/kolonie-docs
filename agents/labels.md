@@ -98,27 +98,42 @@ silently, from where an outside contributor was standing. The workflow now
 creates any of its own labels that a repository lacks —
 [`history/2026-08-12-three-labels-that-were-not-there.md`](history/2026-08-12-three-labels-that-were-not-there.md).
 
-**Route** — `agent:opencode`, `agent:claude`, `agent:human`. **Who may pick the
+**Route** — `queue:worker`, `queue:maintainer`, `queue:operator`. **Who may pick the
 issue up**, which is a different question from what column it is in. Exactly one,
 always; the subsection below is the rule.
 
+**Worker outcome** — `worker:failed` and `worker:forbidden`, and both belong to
+the unattended worker rather than to the issue's subject. `worker:failed` says
+the worker took it and could not finish, and the worker clears it the next time
+it takes the issue — an issue being tried again is exactly when *not finished*
+stops being true. `worker:forbidden` says the worker may not implement it,
+because the only implementation touches a path its prompt forbids, and **nothing
+the worker does ever clears that one**: it takes a person changing something.
+[`routes.md`](routes.md) is where both are the rule rather than a definition.
+
+**They are named after the worker, not after the tool driving it, for the same
+reason the lanes are** — the tool has changed once already and the role has not.
+[`routes.md`](routes.md) records what both were called before
+`kolonie-docs#494`, in one place, so that a closed issue stays explicable
+without every module keeping a copy of a retired name.
+
 **An issue that arrived from outside and is not labelled `bug` caps at
-`agent:claude`** (`#313`). Provenance still does not decide a route — the rule
+`queue:maintainer`** (`#313`). Provenance still does not decide a route — the rule
 is about the *type*: a defect is a change nobody has to decide, and a proposal
 is one somebody does. Without the type label the triage pass cannot tell them
 apart, so it assumes the one that needs a person.
 
-**A cap, and not an eighth `blocked:human` class.** A Claude agent's run is
+**A cap, and not an eighth `blocked:human` class.** A maintainer's run is
 attended — the maintainer is in it — so capping there already puts a person in
 front of the change while keeping the issue in the ordinary board flow.
 `blocked:human` would additionally take it out of that flow, for nothing. The
-rule never produces `agent:human` and never applies `blocked:human`, and a
+rule never produces `queue:operator` and never applies `blocked:human`, and a
 maintainer widens it in one edit as with every other route.
 
 The path it closes had been written down as correct and was passing its own test:
 a citizen files a support ticket asking for a feature, the runner files it as an
 issue, the pass finds a self-contained change with a decisive check and answers
-`agent:opencode`, the worker implements it and the sweep arms auto-merge on green.
+`queue:worker`, the worker implements it and the sweep arms auto-merge on green.
 **Nobody decided that feature, and it is in `main`.**
 
 ### `needs-clearance` — the hold only a member lifts
@@ -145,7 +160,7 @@ in Inbox it is left alone and the run says so in its own log, because a stop tha
 leaves no trace reads as a bug.
 
 **The hold is on the column and not on the route**, which is what keeps it to one
-mechanism. A held issue may be triaged, may be labelled `agent:opencode`, may be
+mechanism. A held issue may be triaged, may be labelled `queue:worker`, may be
 commented on and linked and argued about — it still goes nowhere. Taking the label
 off leaves nothing behind: the next sweep treats the issue exactly as it would any
 other, with no second approval and no residue.

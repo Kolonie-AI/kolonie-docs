@@ -1,6 +1,6 @@
 ---
 module: routes
-summary: agent:opencode / claude / human — who may pick an issue up.
+summary: queue:worker / queue:maintainer / queue:operator — who may pick an issue up.
 applies-to:
   roles: [orchestrator]
   labels: [from:outside]
@@ -20,11 +20,26 @@ agent's head, which is the state this file exists to end.
 
 | Label | What it means | What goes there |
 |---|---|---|
-| **`agent:opencode`** | one issue, one run, unattended | Self-contained. One repository, one check, no question to ask. The change is finished when the target's own check passes |
-| **`agent:claude`** | a development agent, with the maintainer reachable | A package of issues that depend on each other; anything needing database, host or browser access; anything where a question may have to be asked mid-work |
-| **`agent:human`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:non-member` **and** the work would touch anything outside the area the issue names |
+| **`queue:worker`** | one issue, one run, unattended | Self-contained. One repository, one check, no question to ask. The change is finished when the target's own check passes |
+| **`queue:maintainer`** | a maintainer, with judgement, as part of a package | A package of issues that depend on each other; anything needing database, host or browser access; anything where a question may have to be asked mid-work |
+| **`queue:operator`** | no coding agent may take it | Credentials, money, deletions, or the worker's own constraint list. Also: provenance is `from:citizen` or `from:non-member` **and** the work would touch anything outside the area the issue names |
 
 > **Exactly one of the three, always.**
+
+#### A lane is named after who decides, not after the tool that runs
+
+**A lane names who decides, because that survives a change of tool.** Maintainers
+had moved from Claude Code to OpenCode, while the lane named after OpenCode meant
+*the unattended worker may take this by itself* — the opposite of what a
+maintainer using that tool was doing. The three levels are the operator, who
+permits no automation; the maintainer, who carries a package and answers
+questions; and the worker, which runs unattended.
+
+> **The worked example is the cost.** The worker takes its lane from **Ready**.
+> A maintainer who labels her package after her tool hands it to the unattended
+> worker — and two OpenCodes edit one issue.
+
+**The retired names, in one line so a closed issue stays explicable: `agent:opencode`, `agent:claude`, `agent:human`, `opencode:failed`, `opencode:forbidden`.** `operator` names the role rather than the species: maintainers are agents today and could include a person tomorrow.
 
 **An issue with none is an issue nobody has decided about, which is what the
 Inbox column is for.** Measured on 2026-08-10 across the organisation: of 48 open
@@ -44,7 +59,7 @@ in a triage column and it is not work, and the two are not the same thing.
 
 The rule above treats *no route* as *nobody has decided yet*, and the triage
 pass acts on exactly that reading: anything it cannot place becomes
-`agent:claude`. Measured on
+`queue:maintainer`. Measured on
 [`kolonie-platform#727`](https://github.com/Kolonie-AI/kolonie-platform/issues/727):
 **seven sessions over four days**, each picking the issue up, reading the body,
 and concluding there was nothing to do. On 2026-08-16 a person removed the label
@@ -85,7 +100,11 @@ reach code the ticket never mentioned.
 > **So the guard is scope, not suspicion.** A citizen may cause a change to the
 > thing it complained about. It may not cause a change to the ledger.
 
+#### `queue:operator` and `blocked:human` are not the same label twice
+<!-- Renamed by kolonie-docs#494. The pre-split heading is kept verbatim because
+coverage-retired.txt cannot retire headings (#507):
 #### `agent:human` and `blocked:human` are not the same label twice
+-->
 
 They answer different questions and an issue can carry either without the other,
 which is the only reason both exist:
@@ -94,20 +113,20 @@ which is the only reason both exist:
   are the *why*, they are re-checked on the issue, and one of them — class 6,
   priority on an issue that arrived from outside — **gates a field rather than the
   issue**. `p1`/`p2` waits for a person; the work itself may still be a worker's.
-- **`agent:human` says who picks it up.** Anything in classes 1 to 5 or 7 is
-  `agent:human`, and the second clause of the row adds a case no class covers:
+- **`queue:operator` says who picks it up.** Anything in classes 1 to 5 or 7 is
+  `queue:operator`, and the second clause of the row adds a case no class covers:
   work that is ordinary in itself but reaches outside what a citizen's or an
   outsider's issue named.
 
-**An issue carrying `blocked:human` never carries `agent:opencode`** — the worker's
+**An issue carrying `blocked:human` never carries `queue:worker`** — the worker's
 own query excludes it, belt-and-braces, and §5 says why below.
 
 #### What this is not
 
-**Not a difficulty rating.** `agent:claude` is not *hard* — it is *needs something
-opencode does not have, or needs somebody to ask*. A trivial issue that requires
-reading production is `agent:claude`; a large mechanical refactor with a green
-check at the end is `agent:opencode`.
+**Not a difficulty rating.** `queue:maintainer` is not *hard* — it is *needs something
+the unattended worker does not have, or needs somebody to ask*. A trivial issue that requires
+reading production is `queue:maintainer`; a large mechanical refactor with a green
+check at the end is `queue:worker`.
 
 **Not a queue.** The board column still says what is happening. This says who may
 pick it up.
@@ -116,7 +135,7 @@ pick it up.
 above is the whole rule: `kolonie-docs#262`'s triage pass routes against these
 three rows and the prohibitions in
 [`operations/worker-prohibitions.md`](../operations/worker-prohibitions.md), and
-nothing else. **A row it cannot apply confidently means `agent:claude`**, never a
+nothing else. **A row it cannot apply confidently means `queue:maintainer`**, never a
 coin toss — that is the one default in this section chosen for its failure mode
 rather than its accuracy.
 
@@ -129,13 +148,13 @@ looking like a live part of the process for two months (`kolonie-docs#4`).
 
 **That decision has now been taken, and this paragraph is what changed**
 (`kolonie-docs#142`). There is one automation label and it is
-**`agent:opencode`**.
+**`queue:worker`**.
 
-> **`agent:opencode` is queue membership. It is not a status and it is not a
+> **`queue:worker` is queue membership. It is not a status and it is not a
 > trigger.**
 
 **The other two routes have no worker, and since `#265` they have a list.**
-`agent:claude` and `agent:human` say who should do it and nothing comes to take
+`queue:maintainer` and `queue:operator` say who should do it and nothing comes to take
 it, so `.github/workflows/waiting-for-an-agent.yml` publishes what is waiting
 every four hours on one issue here, rewritten in place, with a comment
 only when something new appears. A package (`§4`, issues linked by dependency)
@@ -184,7 +203,7 @@ and it is why the rule is written where the labeller reads rather than only in t
 prompt the labeller never sees.
 
 **And a refusal that names one of those paths now marks the issue**
-(`opencode:forbidden`, below) rather than inviting a fourth attempt. That is the
+(`worker:forbidden`, below) rather than inviting a fourth attempt. That is the
 backstop; this paragraph is the fix. **What neither is: a scanner that guesses
 from an issue's text whether it needs a workflow edit.** That is a classifier
 whose false negatives cost wasted runs and whose false positives cost work never
@@ -203,32 +222,32 @@ obvious reading is wrong in both halves:
   Before this, a failing issue was retried every twenty minutes with nobody
   watching — `kolonie-infra#107` was taken three times in eighty minutes and
   refused identically each time.
-- **And it gains a route.** The same run sets **`agent:claude`**, because an
-  issue that has just lost `agent:opencode` and gained nothing carries no
+- **And it gains a route.** The same run sets **`queue:maintainer`**, because an
+  issue that has just lost `queue:worker` and gained nothing carries no
   `agent:` label at all — which the rule above forbids, at the moment somebody
   most needs to look at it. It is not a judgement about the failure: uncertain
-  means `agent:claude`, and after a failure we are uncertain. A Claude agent
+  means `queue:maintainer`, and after a failure we are uncertain. A maintainer
   reading the comment decides in seconds whether to hand it straight back.
-- **And where a retry cannot help, it says so.** `opencode:forbidden` marks an
+- **And where a retry cannot help, it says so.** `worker:forbidden` marks an
   issue whose only implementation is a path the worker may not write, and `pick`
-  excludes it **whatever the queue label says** — putting `agent:opencode` back
+  excludes it **whatever the queue label says** — putting `queue:worker` back
   is deliberately not enough, because `kolonie-infra#107` was refused three times
   in eighty minutes by a comment inviting exactly that.
-- **And it leaves a mark.** The same run sets **`opencode:failed`**
+- **And it leaves a mark.** The same run sets **`worker:failed`**
   (`kolonie-docs#255`), which the worker clears the next time it takes the issue.
   Without it, an issue nobody has tried and one the worker took and abandoned
   look identical on the board — and the second is the more interesting of the
   two, because a run has already been spent learning something about it and that
   is buried in a comment thread.
 
-  `label:opencode:failed` is the filter: **what did the worker try and not
+  `label:worker:failed` is the filter: **what did the worker try and not
   finish.** It is set on failure and cleared on the next attempt rather than on
   success, because an issue being tried again is exactly when *not finished*
   stops being true.
 - **Except once, and that once is not reversible by a label.**
-  **`opencode:forbidden`** (`kolonie-docs#250`) is set when the model's refusal
+  **`worker:forbidden`** (`kolonie-docs#250`) is set when the model's refusal
   names one of the two paths the worker may not touch, and `pick` excludes it
-  **whatever else the issue carries** — putting `agent:opencode` back is
+  **whatever else the issue carries** — putting `queue:worker` back is
   deliberately not enough. Every other ending is built on *try again if you
   think it is worth it*; this one is not, because an issue whose only possible
   implementation is structurally forbidden does not become possible by being
@@ -271,7 +290,7 @@ there — the same refusal §4 makes about status.
 
 #### It is the one label that changes what *you* may do
 
-> **An issue carrying `agent:opencode` is not yours: do not work it, do not move
+> **An issue carrying `queue:worker` is not yours: do not work it, do not move
 > it, do not rewrite it.** It is claimed by a schedule rather than by a person,
 > and the schedule cannot see that you started.
 
@@ -297,8 +316,8 @@ each issue against §5 and
 [`operations/worker-prohibitions.md`](../operations/worker-prohibitions.md), and
 moves what it routed to Ready. **The maintainer and any agent may still apply the
 label by hand and triage will not loosen it.** The route is a **ratchet**: a pass
-may move an issue towards less autonomy — `agent:opencode` → `agent:claude` →
-`agent:human` — and never the other way. Two reasons, and the second was measured:
+may move an issue towards less autonomy — `queue:worker` → `queue:maintainer` →
+`queue:operator` — and never the other way. Two reasons, and the second was measured:
 nothing should hand the unattended worker an issue somebody chose a narrower route
 for, and two passes that disagree about one issue would otherwise trade it back and
 forth with a comment every hour. Tightening converges after two steps. **Loosening
@@ -308,12 +327,12 @@ agent may take this*.
 **And a pass only routes an issue that carries no route at all** (`kolonie-docs#289`,
 2026-08-11). Measured that day: fifteen out of fifteen candidates on the board were
 already routed, so forty-eight passes a day were paying the strongest model to
-re-decide decisions that existed. An issue carrying `agent:opencode`, `agent:claude`
-or `agent:human` is not briefed, not chunked and not asked about. Three things
+re-decide decisions that existed. An issue carrying `queue:worker`, `queue:maintainer`
+or `queue:operator` is not briefed, not chunked and not asked about. Three things
 follow. A route you set by hand is the last word on that issue rather than the
 opening of a negotiation the machine wins every half hour. The first decision is
 the only one, so it has to be good — which is why the prompt now routes *the next
-concrete action* and makes every route away from `agent:opencode` name the fact that
+concrete action* and makes every route away from `queue:worker` name the fact that
 prevents it. And the ratchet above stays where it is as a guard that no longer
 fires: once a route is written once, there is nothing to trade. What still runs over
 a decided issue is the Ready ↔ Inbox move, from facts — an open blocker, a
@@ -357,14 +376,14 @@ repository in the organisation: it was the single one, which meant
 repository however it searched. It now exists in the five that carry issues *on
 the board*:
 
-| Repository | `agent:opencode` | `opencode:failed` | `opencode:forbidden` |
+| Repository | `queue:worker` | `worker:failed` | `worker:forbidden` |
 |---|---|---|---|
 | `kolonie-docs` | yes, since 2026-08-04 | yes, 2026-08-10 | yes, 2026-08-10 |
 | `kolonie-platform`, `kolonie-infra`, `kolonie-website` | yes, created 2026-08-08 | yes, 2026-08-10 | yes, 2026-08-10 |
 | `kolonie-email` | yes, created 2026-08-08 | yes, 2026-08-10 | yes, 2026-08-10 |
 | the skill repositories, `kolonie-dns`, `.github` | **no, deliberately** | — | — |
 
-**`opencode:failed` has to exist in the target repository, not here.** The worker
+**`worker:failed` has to exist in the target repository, not here.** The worker
 sets it on the issue it took, wherever that lives, so a repository in the queue
 without the label gets a failed edit and the comment says so — which is why the
 edit is best-effort and reports rather than throws.
