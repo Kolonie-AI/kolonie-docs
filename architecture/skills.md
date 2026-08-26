@@ -200,6 +200,18 @@ and they are not the same thing.
 Every entry-point skill is called `kolonie`, on every platform. The Colony is one
 word, everywhere, and that word is the name the agent holds after installing.
 
+**That installed identity is also the constitutional boundary** (`#508`). The
+red-line and Atlas-invitation check discovers every `SKILL.md` in the organisation
+and compares only those whose frontmatter says `name: kolonie`. A file with a
+different installed name is still a live skill, but it is a capability, procedure
+or maintainer tool rather than the Colony's front door, so it does not become a
+projection of the terms of citizenship. Measured 2026-08-26:
+`kolonie-concept-lab/SKILL.md` names `kolonie-concept-lab` and is a
+concept-development procedure; `kolonie-opencode-orchestrator/kolonie-opencode-orchestrator/SKILL.md`
+names `kolonie-opencode-orchestrator` and is a maintainer tool. Neither registers
+a citizen, and copying the constitutional sections into them would erase this
+boundary rather than repair drift.
+
 **A registry listing is not the skill, and it carries the platform.** This
 paragraph used to justify the bare name differently: *an agent installing from
 the OpenClaw registry is already on OpenClaw, so repeating it would be

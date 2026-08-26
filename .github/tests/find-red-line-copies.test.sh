@@ -80,9 +80,13 @@ is_empty_repo() { : > "$GH_FIXTURES/absent_$(key_of "$1")"; }
 ORG_REPOS='orgs/Kolonie-AI/repos'
 PLATFORM_TREE='repos/Kolonie-AI/kolonie-platform/git/trees/HEAD?recursive=1'
 OPENCLAW_TREE='repos/Kolonie-AI/kolonie-openclaw/git/trees/HEAD?recursive=1'
+CONCEPT_TREE='repos/Kolonie-AI/kolonie-concept-lab/git/trees/HEAD?recursive=1'
+ORCHESTRATOR_TREE='repos/Kolonie-AI/kolonie-opencode-orchestrator/git/trees/HEAD?recursive=1'
 DOCS_TREE='repos/Kolonie-AI/kolonie-docs/git/trees/HEAD?recursive=1'
 ABOUT='repos/Kolonie-AI/kolonie-platform/contents/apps/api/src/about.ts'
 OPENCLAW_SKILL='repos/Kolonie-AI/kolonie-openclaw/contents/skills/kolonie/SKILL.md'
+CONCEPT_SKILL='repos/Kolonie-AI/kolonie-concept-lab/contents/SKILL.md'
+ORCHESTRATOR_SKILL='repos/Kolonie-AI/kolonie-opencode-orchestrator/contents/kolonie-opencode-orchestrator/SKILL.md'
 
 # A whole organisation as the API would answer it: two repositories holding a
 # skill, and this one holding none.
@@ -90,14 +94,20 @@ setup() {
   export GH_FIXTURES="$WORK/fixtures" GH_LOG="$WORK/log"
   rm -rf "$GH_FIXTURES" "$WORK/copies"; mkdir -p "$GH_FIXTURES"; : > "$GH_LOG"
 
-  answers "$ORG_REPOS" 'Kolonie-AI/kolonie-docs
+  answers "$ORG_REPOS" 'Kolonie-AI/kolonie-concept-lab
+Kolonie-AI/kolonie-docs
+Kolonie-AI/kolonie-opencode-orchestrator
 Kolonie-AI/kolonie-openclaw
 Kolonie-AI/kolonie-platform'
   answers "$DOCS_TREE" ''
   answers "$PLATFORM_TREE" ''
   answers "$OPENCLAW_TREE" 'skills/kolonie/SKILL.md'
+  answers "$CONCEPT_TREE" 'SKILL.md'
+  answers "$ORCHESTRATOR_TREE" 'kolonie-opencode-orchestrator/SKILL.md'
   serves "$ABOUT" 'const RED_LINES = []'
-  serves "$OPENCLAW_SKILL" '## Red lines'
+  serves "$OPENCLAW_SKILL" $'---\nname: kolonie\n---\n\n## Red lines'
+  serves "$CONCEPT_SKILL" $'---\nname: kolonie-concept-lab\n---\n\n## Evidence Language'
+  serves "$ORCHESTRATOR_SKILL" $'---\nname: kolonie-opencode-orchestrator\n---\n\n## Prerequisites'
 }
 
 run() { bash "$SCRIPT" "$WORK/copies" > "$WORK/out" 2>&1; }
@@ -130,6 +140,16 @@ expect "what lives elsewhere is still fetched" \
 expect "a discovered skill is fetched and listed" \
   "$(grep -q 'kolonie-openclaw/skills/kolonie/SKILL.md' "$WORK/copies/manifest.json" \
     && echo yes || echo no)" "$(cat "$WORK/copies/manifest.json" 2>/dev/null)"
+expect "a live non-entry-point skill is not a constitutional copy" \
+  "$(grep -q 'kolonie-concept-lab/SKILL.md' "$WORK/copies/manifest.json" \
+    && echo no || echo yes)" "$(cat "$WORK/copies/manifest.json" 2>/dev/null)"
+expect "and neither is a maintainer skill" \
+  "$(grep -q 'kolonie-opencode-orchestrator/.*/SKILL.md' "$WORK/copies/manifest.json" \
+    && echo no || echo yes)" "$(cat "$WORK/copies/manifest.json" 2>/dev/null)"
+expect "non-entry-point skills are read once for identity, not fetched again as copies" \
+  "$([ "$(attempts_at "$CONCEPT_SKILL")" -eq 1 ] \
+    && [ "$(attempts_at "$ORCHESTRATOR_SKILL")" -eq 1 ] && echo yes || echo no)" \
+  "$(cat "$GH_LOG")"
 
 # The second subject (`#399`). The assertion that matters is not that a second
 # manifest exists — it is that it names **the same files** as the first, because
