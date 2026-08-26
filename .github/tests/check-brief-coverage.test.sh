@@ -16,6 +16,8 @@
 #   a link retargeted by the split       passes; the target is not content
 #   a line listed as retired             passes, and the count is printed
 #   a retired line that is present       fails as a stale entry
+#   a deleted Markdown heading           fails until it is retired, and passes
+#                                        once the escaped form is written (#507)
 #   a SHA that is not in the repository  fails rather than skipping
 #
 # It runs against a fixture repository, because the source has to be pinned by a
@@ -47,6 +49,8 @@ A rule about the board, which most work never touches.
 
 The reason that rule exists, which is a story about 2026-08-12.
 
+#### `agent:human` and `blocked:human` are not the same label twice
+
 See [the board](#the-board) for the rest of it.
 MD
 
@@ -66,6 +70,8 @@ MD
 # The board
 
 A rule about the board, which most work never touches.
+
+#### `agent:human` and `blocked:human` are not the same label twice
 
 See [the board](board.md#the-board) for the rest of it.
 MD
@@ -129,6 +135,27 @@ git add -A >/dev/null
 out=$(run); rc=$?
 [ $rc -ne 0 ] && pass "a stale retirement fails" || fail "a retirement of a line that is present passed"
 grep -q "present after all" <<<"$out" && pass "and says which" || fail "the stale entry was not named"
+
+echo
+echo "a retired Markdown heading (#507)"
+
+split
+sed -i '/are not the same label twice/d' "$REPO/agents/board.md"
+git add -A >/dev/null
+out=$(run); rc=$?
+[ $rc -ne 0 ] && pass "a deleted heading fails before it is retired" \
+  || fail "a deleted Markdown heading passed unretired"
+grep -q "not the same label twice" <<<"$out" && pass "and the heading is named" \
+  || fail "the missing heading was not named"
+
+printf '# it was renamed\n\\#### `agent:human` and `blocked:human` are not the same label twice\n' \
+  > "$REPO/.github/coverage-retired.txt"
+git add -A >/dev/null
+out=$(run); rc=$?
+[ $rc -eq 0 ] && pass "the escaped heading retires it" \
+  || fail "an escaped retired heading was not excused: $out"
+grep -q "1 line(s) are deliberately retired" <<<"$out" && pass "and it is counted" \
+  || fail "the escaped entry was not counted"
 
 echo
 echo "it cannot pass by being broken"
