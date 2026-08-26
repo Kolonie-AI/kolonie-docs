@@ -155,7 +155,19 @@ case "$1 $2" in
       echo "$n" > "$GH_FIXTURES/.calls"
       d=$(cat "$GH_FIXTURES/existing_delay" 2>/dev/null || echo 0)
       [ "$n" -gt "$d" ] && cat "$GH_FIXTURES/existing" 2>/dev/null
-    else cat "$GH_FIXTURES/issues" 2>/dev/null; fi ;;
+    else
+      for _i in $(seq 1 $#); do
+        eval "_a=\${$_i}"
+        [ "$_a" = --repo ] && {
+          eval "_r=\${$((_i + 1))}"
+          if [ -f "$GH_FIXTURES/issues_${_r##*/}" ]; then
+            cat "$GH_FIXTURES/issues_${_r##*/}"
+          else
+            cat "$GH_FIXTURES/issues" 2>/dev/null
+          fi
+        }
+      done
+    fi ;;
   *) : ;;
 esac
 exit 0
@@ -250,6 +262,53 @@ expect "a short board listing fails without accusing every issue" \
   "$([ $rc -eq 1 ] && [[ "$out" != *"#20"* ]] && echo yes || echo no)" "$out"
 expect "and says why it did not run the comparison" \
   "$([[ "$out" == *"was not run"* ]] && echo yes || echo no)" "$out"
+
+# **An excluded repository's issues are not missing from the board — they were
+# never going to be on it** (`#349`). `.github/board-excluded-repositories.txt`
+# is the one way out of the sweep, and `admit` honours it: `#492` put
+# `kolonie-workplace` there on 2026-08-24 and the triage pass has reported
+# `admitted 0 … 2 excluded`, green, ever since. 5b listed `gh repo list` raw, so
+# it read that decision as six issues the sweep had failed to add and sent a
+# reader to debug a pass that was working. It asks `board-triage.sh
+# repositories` now — the same list 5c already asks for, which is what makes the
+# two unable to drift.
+#
+# The exclusion file is named explicitly rather than inherited from the
+# checkout: a case that read the live list would pass today because `#492`
+# happens to name `kolonie-workplace`, and stop testing anything the day
+# somebody takes it back out.
+setup
+printf '%s\n' "# because a test said so" kolonie-workplace > "$WORK/excluded.txt"
+export ADMIT_EXCLUSIONS="$WORK/excluded.txt"
+printf '%s\n' kolonie-docs kolonie-workplace > "$GH_FIXTURES/repos"
+echo "Kolonie-AI/kolonie-workplace#7" > "$GH_FIXTURES/issues_kolonie-workplace"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an open issue in an excluded repository is not a finding" \
+  "$([ $rc -eq 0 ] && [[ "$out" != *"kolonie-workplace#7"* ]] && echo yes || echo no)" "rc=$rc $out"
+
+# And the exclusion is not a blanket silence: the same sweep list still carries
+# every repository nobody excluded, so a genuine gap in one of them still fails
+# in the same run that stays quiet about the excluded one.
+setup
+printf '%s\n' kolonie-docs kolonie-workplace > "$GH_FIXTURES/repos"
+echo "Kolonie-AI/kolonie-workplace#7" > "$GH_FIXTURES/issues_kolonie-workplace"
+echo "Kolonie-AI/kolonie-docs#99" >> "$GH_FIXTURES/issues_kolonie-docs"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an issue in a swept repository still fails alongside an excluded one" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"kolonie-docs#99"* ]] && [[ "$out" != *"kolonie-workplace#7"* ]] && echo yes || echo no)" "$out"
+
+unset ADMIT_EXCLUSIONS
+
+# The silent-clean hazard on the other side of the same call. A repository
+# listing that fails leaves nothing to compare the board against, and an empty
+# comparison reads exactly like *every open issue is on the board* — 5b's own
+# floor argument, one call along.
+setup; : > "$GH_FIXTURES/repos"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository listing that failed does not read as a clean board" \
+  "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and names the call that failed" \
+  "$([[ "$out" == *"board-triage.sh repositories"* ]] && echo yes || echo no)" "$out"
 
 echo
 echo "5c — is the automation pointed at the repository (#333)"

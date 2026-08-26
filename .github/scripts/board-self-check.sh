@@ -145,6 +145,12 @@ check_pruning() {
 # So this should now find nothing, and a line here is a finding about that sweep
 # rather than about a repository nobody wired up — which is why it stays. It
 # still only reports: the fix is a write to the board, and this file makes none.
+#
+# **It asks about the repositories the sweep covers, which is not every
+# repository** (`#349`). The exclusion file is a decision somebody took, so an
+# excluded repository's issues are not missing from the board — they were never
+# going to be on it, and reporting them tells a reader to go and debug a pass
+# that is doing what it was told.
 # The listing itself, read once and answered from a variable after that. Three
 # questions want it now — 5b, 5c and 5d — and the whole reason 5b reads the board
 # this way is that the expensive way emptied the budget, so a second reader asks
@@ -188,7 +194,30 @@ check_arrivals() {
     return 1
   fi
 
-  missing=$(for r in $(gh repo list "$ORG" --limit 50 --json name --jq '.[].name'); do
+  # **The repositories the sweep covers, and not every repository there is**
+  # (`#349`). This listed `gh repo list` raw, so it asked *is every open issue in
+  # the organisation on the board* — a question nobody's automation answers yes
+  # to. `.github/board-excluded-repositories.txt` is the deliberate way out of
+  # `admit` (`#332`), and `#492` used it on 2026-08-24 to keep
+  # `kolonie-workplace` off the board while that experiment runs. 5b read the
+  # exclusion as six issues the sweep had dropped and told the reader to start
+  # with the pass's log; the pass was green and correct, and the finding was
+  # this line.
+  #
+  # It asks `board-triage.sh repositories` — the same call 5c makes, for the
+  # same reason `#338` gave it: two lists that agree today are the drift 5c
+  # exists to catch, so both questions read the one list the sweep itself
+  # sweeps.
+  local swept
+  if ! swept=$(bash "$HERE/board-triage.sh" repositories 2>/dev/null) || [ -z "$swept" ]; then
+    # Nothing to compare against reads exactly like every issue being on the
+    # board, which is the silent-clean direction — the same argument as the
+    # board floor above, one call along.
+    echo "5b — **The organisation's repositories could not be listed**, so no comparison was run and this is not a report that every open issue is on the board. \`bash .github/scripts/board-triage.sh repositories\` is the call that failed; the likely causes are a spent GraphQL budget or a token that lost \`repo\` scope."
+    return 1
+  fi
+
+  missing=$(for r in $swept; do
       gh issue list --repo "$ORG/$r" --state open --limit 200 \
         --json number --jq ".[] | \"$ORG/$r#\(.number)\""
     done | sort -u | comm -23 - "$BOARD_LISTING")
