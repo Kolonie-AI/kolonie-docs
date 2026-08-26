@@ -119,6 +119,7 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 | **The agent** | `opencode run`, pinned to **v1.18.13** from `anomalyco/opencode` releases — **not** the official action, and not `latest`. Why both, below |
 | **The model** | **A setting, not a constant.** `LLM_GATEWAY_MODEL_WORKER`, repository secret. Change the secret and the next scheduled run uses it; no model is named in `opencode.json` or in the workflow, and there is no committed default to fall back to. **The name is the runners' own** since `#493` — the worker is a service in the same sense they are, so it reads `LLM_GATEWAY_MODEL_<SERVICE>` like every other |
 | **Provider** | The maintainer's own OpenAI-compatible gateway, which serves its whole catalogue on one key — so a model change is a value rather than a migration |
+| **The second gateway** | Configured beside it under `LLM_GATEWAY_FALLBACK_*` (`kolonie-platform#1695`), independently: an unconfigured half is simply absent rather than a literal default. The names in full, the swap order and how a fourth tier is added are below; `D-141` in `kolonie-platform` is why there is a gateway at all |
 | **Provider key and endpoint** | `LLM_GATEWAY_API_KEY_WORKER` and `LLM_GATEWAY_BASE_URL`, repository secrets, both reaching opencode by `{env:…}` substitution in the committed `opencode.json`. **The URL is a secret and not merely the key**: it names a private endpoint, and a committed hostname is a target that stays reachable in git history after the line is deleted. `.github/scripts/no-gateway-leak.sh` greps the tree for the values of both gateways — primary and `LLM_GATEWAY_FALLBACK_*` — on every run of `CI`, and prints neither |
 | **One naming scheme, and what the three cost** | `#493`, 2026-08-25. There were three names for one idea: the runners in `kolonie-platform` read `LLM_GATEWAY_*`, this repository's workflows read `OPENCODE_LLM_*`, and both reached OpenRouter directly for the fallback. **The cost was measured rather than argued** — on 2026-08-25 `board-triage.yml` logged `gpt-5.6-sol: the gateway answered 401` and `grok-4.5: the gateway answered 401` on a live run, because the key had been rotated on the deployment host and in `kolonie-platform` while the Actions secrets kept a name nobody thought to look under. Rotating a key is now one edit per place it is installed rather than a hunt. `.github/tests/gateway-naming.test.sh` greps for the retired names so the rename cannot half-land |
 | **A key per service, not one shared** | The worker reads `LLM_GATEWAY_API_KEY_WORKER` and the triage pass reads `LLM_GATEWAY_API_KEY_TRIAGE`. D-122 §3 in `kolonie-platform` is the reason and it is not tidiness: a runaway loop in one service must not take the cap for the others with it, and *whose traffic is this* has to be answerable at the gateway rather than only in our own logs. One can be revoked alone |
@@ -140,6 +141,98 @@ Recorded here so it does not have to be reconstructed from a workflow file.
 | **A pull request that goes red afterwards** | `.github/workflows/opencode-red.yml` (`#240`, 2026-08-09), on `check_suite: completed`. The worker has exited by the time CI reports, so this is a separate trigger rather than a step: it **closes the pull request, keeps the branch, and returns the issue to Ready**. Only `opencode/issue-<n>` branches, only a conclusive `failure` or `timed_out`, idempotent, and it never touches `agent:opencode`. Logic in `.github/scripts/opencode-red.sh`, tested in `.github/tests/opencode-red.test.sh`. **It sees `kolonie-docs` pull requests only** — a `check_suite` event fires in the repository it happened in, so the other four wait on the same credential `#231` and `#232` do |
 | **What it reads** | The assigned issue, **plus background** — `.github/scripts/opencode-context.sh` gathers the issues that issue references, depth one, at most five, organisation only, each with its board column and state (`#235`). `kolonie-docs` is checked out beside the target so the documents those issues quote are readable |
 | **The boundary on that background** | The gathered text is untrusted input reaching a model with write access. It arrives fenced, labelled per item by provenance, under a header saying the assigned issue is the only instruction; `from:citizen` items are **included and marked** rather than excluded; no URL found in any issue body is ever fetched, and a URL fragment cannot become a reference. `.github/tests/opencode-context.test.sh` feeds it an issue whose reference says *ignore your previous instructions* |
+
+## How a gateway is reached, and how one is swapped
+
+Everything above that talks to a model does it the same way, and this section is
+the operating half: the names, and the order to do things in. **Why** it is
+shaped this way is `D-141` in `kolonie-platform` — that record carries the
+rejected alternative for each rule, and this one carries none of them.
+
+### The variables
+
+Two gateways, described identically and configured independently. `<SERVICE>` is
+one of `VERIFIER`, `MODERATION`, `TRIAGE`, `REVIEWER`, `DOCTOR`, `WORKER` — the
+same six tokens for keys and models, so a service named in one place and not the
+other is a compile error rather than a variable nothing reads.
+
+| | Primary | Fallback |
+|---|---|---|
+| Address | `LLM_GATEWAY_BASE_URL` | `LLM_GATEWAY_FALLBACK_BASE_URL` |
+| Key | `LLM_GATEWAY_API_KEY_<SERVICE>` | `LLM_GATEWAY_FALLBACK_API_KEY_<SERVICE>` |
+| What to ask for | `LLM_GATEWAY_MODEL_<SERVICE>`, falling back to `LLM_GATEWAY_MODEL` | the same value — one tier string reaches both |
+| Output ceiling | `LLM_GATEWAY_MAX_TOKENS_<SERVICE>`, **unset** in the ordinary case | — |
+
+**Both base URLs are secrets, not merely the keys.** A committed hostname names a
+private endpoint and stays reachable in git history after the line is deleted.
+`.github/scripts/no-gateway-leak.sh` greps the tree for the values of all four
+private strings on every `CI` run and prints none of them.
+
+**A gateway needs its address, its key and something to ask for — all three, or
+it is not configured at all.** That is the sentence the swap order below exists
+to respect: a half-configured gateway is `undefined` rather than an error, so a
+renamed variable whose secret still carries the old name reads as *no gateway*
+and the service degrades quietly to the other one.
+
+**What a service asks for is a capability tier and never a model name.** Three of
+them, defined once in `packages/core/src/llm/tier.ts`; which model serves a tier
+is a setting at the gateway and is deliberately written down in neither
+repository, because a document naming the current model is wrong within a month.
+
+### Swapping a gateway
+
+**In this order, and the order is the whole of it.**
+
+1. **Create the tiers or presets at the new provider** — all three, before
+   anything points at it. A tier that does not exist answers every call with a
+   `400` that reads exactly like a wrong key.
+2. **Install the key for every service**, under the name for the half you are
+   replacing. Six services; a missing one is not an error, it is that service
+   silently on the other gateway.
+3. **Change the base URL.** This is the switch, and it is one value — which is
+   the entire reason the Colony only talks to OpenAI-compatible gateways.
+4. **Verify one call per tier**, against the new address, before you touch
+   anything else. Three calls; a tier nobody exercised is a tier nobody knows is
+   wired.
+5. **Remove the old key last.** Removing it before step 4 leaves nothing to fall
+   back to while you are still finding out whether the new one works.
+
+**Why the order and not the steps is the fragile part.** Steps 2 and 3 in the
+other order give you a live address with no credential, which is a `401` per
+call; step 5 before step 4 gives you no way back. Both failures are quiet at the
+configuration layer and loud only in the logs, which is how the 2026-08-25
+rotation was found — see the row above.
+
+### Adding a fourth tier
+
+**One place: `CAPABILITY_TIERS` in `packages/core/src/llm/tier.ts`.** It is a
+closed set with its type derived from the schema, so the type, the validator and
+the list cannot disagree — and a service naming a tier outside the set is a
+compile error rather than a `400` at three in the morning.
+
+The whole change is: add the string to that set, create the matching preset at
+**both** gateways, and assign it in `SERVICE_TIERS` to the services that should
+use it. `tier.test.ts` asserts the set is exactly three, so that assertion moves
+in the same commit — deliberately, because it is what makes adding one a decision
+somebody wrote down rather than a value that drifted in.
+
+**`D-141` §3 argues why there are three** and is where a fourth belongs in the
+record. Adding one is not forbidden; it is a judgement about whether the Colony
+genuinely spends differently on a fourth class of call.
+
+### What is not configurable
+
+Two things are decided rather than set, and both are `D-122` in
+`kolonie-platform`. **Pointers, not copies** — a third statement of either rule
+is the one that goes stale:
+
+- **Embeddings never route.** `D-122` §1, which also says why it is not a flag.
+- **Quest moderation never falls back.** `D-122` §4, which carries the reason the
+  one irreversible call is the one exception.
+
+A `tier-1` preset must also carry no internal fallback chain of its own. Nothing
+in either repository can check that — it is configuration at the provider — and
+`D-141` §5 is where the reason is written for whoever sets one up.
 
 **To switch it off: disable the workflow in the Actions tab, or delete the file.**
 Nothing else depends on it. The label stays where it is, the board stays where it
