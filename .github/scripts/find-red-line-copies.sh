@@ -12,8 +12,12 @@
 # it does so silently, which is the worst available failure for a check.
 #
 # So: ask the API which repositories exist, ask each one whether it holds a file
-# named `SKILL.md` anywhere, and take the ones that do. A skill repository added
-# next month is checked next month without anybody editing this.
+# named `SKILL.md` anywhere, and read the installed identity from that file.
+# **Only a skill whose frontmatter names it `kolonie` is an entry point**, because
+# `architecture/skills.md` defines that as the brand left after installation. A
+# capability, procedure or maintainer skill keeps its own name and does not become
+# a constitutional projection merely because its repository contains `SKILL.md`.
+# A new entry-point repository is still checked without anybody editing this.
 #
 # `about.ts` is named rather than discovered, because there is nothing to derive
 # it from — it is one known field in one known file, and a search for anything
@@ -242,15 +246,33 @@ index=0
 for repo in $(echo "$repos" | sort); do
   tree=$(skill_paths_in "$repo") || exit 1
   for path in $tree; do
+    # `#508`: a `SKILL.md` is evidence that this is a skill and nothing more.
+    # The organisation also carries a concept-development procedure and a
+    # maintainer orchestrator under that filename. Neither registers a citizen;
+    # neither is the front door. Entry-point identity is already documented and
+    # machine-readable: every installed entry point is named exactly `kolonie`.
+    # Fetch once, inspect only the frontmatter for identity, and retain the file
+    # only when it is a projection. A helper is observed for classification and
+    # then discarded; it never enters either manifest or either comparison.
+    candidate=$(mktemp "$OUT/.skill-candidate.XXXXXX") || exit 1
+    fetch "$repo" "$path" "$candidate" || { rm -f "$candidate"; exit 1; }
+    frontmatter=$(sed -n '1{/^---$/!q}; 2,/^---$/p' "$candidate")
+    name=$(printf '%s\n' "$frontmatter" | sed -n 's/^name:[[:space:]]*//p' | head -1)
+    if [ "$name" != kolonie ]; then
+      rm -f "$candidate"
+      echo "skipped $repo/$path — installed skill name is ${name:-absent}, not kolonie"
+      continue
+    fi
+
     file="skill-$index.md"
-    fetch "$repo" "$path" "$OUT/$file" || exit 1
+    mv "$candidate" "$OUT/$file"
     entries="$entries,$(printf '{"label":"%s/%s","file":"%s","kind":"markdown-skill"}' \
       "$repo" "$path" "$file")"
     invitation_entries="$invitation_entries,$(printf \
       '{"label":"%s/%s","file":"%s","kind":"markdown-bullets","section":"%s"}' \
       "$repo" "$path" "$file" "$INVITATION_SECTION")"
     index=$((index + 1))
-    echo "found $repo/$path"
+    echo "found entry point $repo/$path"
   done
 done
 
