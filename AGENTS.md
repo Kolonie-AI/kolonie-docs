@@ -96,8 +96,8 @@ them are the ones this file always had, so `§6 step 7` still means what it mean
 |---|---|
 | [`agents/orchestration.md`](agents/orchestration.md) | §6 — the loop: read the board, decide, claim before you touch anything, record, deposit what you learned |
 | [`agents/board.md`](agents/board.md) | §4 — columns, dependencies as relations, item ids, what a new repository needs before the automation is pointed at it |
-| [`agents/routes.md`](agents/routes.md) | §5 — `agent:opencode`, `agent:claude`, `agent:human`: who may pick an issue up, and the seven classes |
-| [`agents/labels.md`](agents/labels.md) | §5 — every other label: priority, area, type, origin, and `blocked:human` |
+| [`agents/routes.md`](agents/routes.md) | §5 — `queue:worker`, `queue:maintainer`, `queue:operator`: who may pick an issue up, and the seven classes |
+| [`agents/labels.md`](agents/labels.md) | §5 — every other label: priority, area, type, origin, `worker:failed`, `worker:forbidden`, and `blocked:human` |
 | [`agents/issues.md`](agents/issues.md) | §7 — writing an issue somebody who has never seen this project can pick up |
 | [`agents/docs-repo.md`](agents/docs-repo.md) | §2, §3 — what this repository holds, and the rules that keep its documents from growing back |
 | [`agents/session.md`](agents/session.md) | Why `session.sh` refuses, and how a checkout gets an identity of its own |

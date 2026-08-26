@@ -109,3 +109,58 @@ not per-platform at all.
 # looking at a name nobody thought to look under.
 | **The model** | **A setting, not a constant.** `OPENCODE_LLM_MODEL`, repository secret. Change the secret and the next scheduled run uses it; no model is named in `opencode.json` or in the workflow, and there is no committed default to fall back to |
 | **Provider key and endpoint** | `OPENCODE_LLM_API_KEY` and `OPENCODE_LLM_BASE_URL`, repository secrets, both reaching opencode by `{env:…}` substitution in the committed `opencode.json`. **The URL is a secret and not merely the key**: it names a private endpoint, and a committed hostname is a target that stays reachable in git history after the line is deleted. `.github/scripts/no-gateway-leak.sh` greps the tree for both values on every run of `CI` and prints neither |
+
+# kolonie-docs#494. The three lanes were named after the tool that ran them and
+# one of those names had stopped being true: no maintainer used Claude Code any
+# more, so `agent:claude` meant *a maintainer takes this* while `agent:opencode`
+# meant *the unattended worker may*, and a maintainer labelling her package
+# after the tool she was actually driving handed it to the worker. The lanes are
+# now named after who decides — `queue:operator`, `queue:maintainer`,
+# `queue:worker`, with the worker's markers as `worker:failed` and
+# `worker:forbidden`.
+#
+# Every line below is a pre-split line whose *only* change is that rename. None
+# of them lost a word, which is why they are retired rather than restored: the
+# sentence each one makes is still in `agents/routes.md` and `agents/labels.md`
+# under the new names, and restoring the old string would put a retired label
+# back into live documentation — the one thing #494 exists to remove.
+#
+# These rows go when the AGENTS.md row above them goes. They are not a licence
+# to retire prose: a line that lost content is still a lost line, and the check
+# reports one that reappears.
+**Route** — `agent:opencode`, `agent:claude`, `agent:human`. **Who may pick the
+`agent:claude`** (`#313`). Provenance still does not decide a route — the rule
+**A cap, and not an eighth `blocked:human` class.** A Claude agent's run is
+rule never produces `agent:human` and never applies `blocked:human`, and a
+`agent:opencode`, the worker implements it and the sweep arms auto-merge on green.
+| **`agent:opencode`** | one issue, one run, unattended | Self-contained. One repository, one check, no question to ask. The change is finished when the target's own check passes |
+| **`agent:claude`** | a development agent, with the maintainer reachable | A package of issues that depend on each other; anything needing database, host or browser access; anything where a question may have to be asked mid-work |
+- **`agent:human` says who picks it up.** Anything in classes 1 to 5 or 7 is
+  `agent:human`, and the second clause of the row adds a case no class covers:
+**An issue carrying `blocked:human` never carries `agent:opencode`** — the worker's
+**Not a difficulty rating.** `agent:claude` is not *hard* — it is *needs something
+opencode does not have, or needs somebody to ask*. A trivial issue that requires
+reading production is `agent:claude`; a large mechanical refactor with a green
+check at the end is `agent:opencode`.
+nothing else. **A row it cannot apply confidently means `agent:claude`**, never a
+**`agent:opencode`**.
+> **`agent:opencode` is queue membership. It is not a status and it is not a
+`agent:claude` and `agent:human` say who should do it and nothing comes to take
+(`opencode:forbidden`, below) rather than inviting a fourth attempt. That is the
+- **And it gains a route.** The same run sets **`agent:claude`**, because an
+  issue that has just lost `agent:opencode` and gained nothing carries no
+  means `agent:claude`, and after a failure we are uncertain. A Claude agent
+- **And where a retry cannot help, it says so.** `opencode:forbidden` marks an
+  excludes it **whatever the queue label says** — putting `agent:opencode` back
+- **And it leaves a mark.** The same run sets **`opencode:failed`**
+  `label:opencode:failed` is the filter: **what did the worker try and not
+  **`opencode:forbidden`** (`kolonie-docs#250`) is set when the model's refusal
+  **whatever else the issue carries** — putting `agent:opencode` back is
+> **An issue carrying `agent:opencode` is not yours: do not work it, do not move
+may move an issue towards less autonomy — `agent:opencode` → `agent:claude` →
+`agent:human` — and never the other way. Two reasons, and the second was measured:
+re-decide decisions that existed. An issue carrying `agent:opencode`, `agent:claude`
+or `agent:human` is not briefed, not chunked and not asked about. Three things
+concrete action* and makes every route away from `agent:opencode` name the fact that
+| Repository | `agent:opencode` | `opencode:failed` | `opencode:forbidden` |
+**`opencode:failed` has to exist in the target repository, not here.** The worker
