@@ -385,6 +385,16 @@ jobs:
                   "messages": [{"role": "system", "content": system},
                                {"role": "user", "content": user}],
                   "response_format": {"type": "json_object"},
+                  # **Asked for, because the gateway's default is the other one.**
+                  # Measured 2026-08-27 against the configured gateway: this exact
+                  # body without this field answers 200 with an SSE stream for
+                  # `@preset/tier-1`, `-2` and `-3` alike, and `json.load` below
+                  # cannot read one. A caller that parses one JSON object has to
+                  # say so in the request. One shape for every model — no
+                  # per-model branch and no alias sniffing, because the next alias
+                  # would not be in it (`#527`, after `#525` fixed the first of
+                  # the two callers).
+                  "stream": False,
                   # 4000 was the first value here and it was wrong, measured rather
                   # than guessed: against a 2 KB diff the model spent 979 tokens
                   # thinking and ran out mid-JSON, and OpenRouter returns
@@ -430,6 +440,14 @@ jobs:
                   return None, f"status {e.code}"
               except TimeoutError:
                   return None, "timeout"
+              except json.JSONDecodeError:
+                  # A 200 whose body is not one JSON object — an SSE stream is
+                  # what `#527` measured, and the request above is what asks for
+                  # the other. Its own class rather than `unreachable`, which
+                  # sends whoever reads the log to the network for a protocol
+                  # fault. No part of the body is named, for the reason the
+                  # header gives.
+                  return None, "the reply was not JSON (not one object)"
               except Exception as e:
                   # A connect timeout arrives wrapped in URLError rather than
                   # raised as itself, so the class above does not catch it and
