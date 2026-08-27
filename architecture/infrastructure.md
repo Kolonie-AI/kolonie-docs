@@ -125,6 +125,14 @@ socket; the service name reaches it as a json-file log label instead. Labels are
 `service` and `level` and nothing else, because cardinality is how a Loki install
 dies. Retention is 30 days against a measured 3.5 MB a day.
 
+**GitHub Actions writes to the same store** (`kolonie-docs#503`), so *what went
+wrong yesterday* is one question rather than two. `.github/scripts/loki-event.sh`
+in `kolonie-docs` is the one write path; the closed label set above binds it
+exactly as it binds Promtail, and `run_id`, `sha` and `pr_number` go in the line
+rather than opening a stream each. The push can never fail the step that calls
+it — a store that is down is not a reason to lose a run — and a line here is for
+analysis, never for an alarm.
+
 **Something reads the logs every morning** (`kolonie-docs#133`). The Watch Agent
 runs in Actions rather than on the host — a watcher that dies with the thing it
 watches is not a watcher — sends the model aggregated counts and never a log line,
