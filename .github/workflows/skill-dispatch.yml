@@ -39,7 +39,7 @@ name: Push the shared skill body to the seven
 # arrangement as `board-triage.yml`'s schedule behind the host timer: the fast
 # path is an optimisation over a clock that still works on its own.
 #
-# ## Why a token, and why the absence of one is a warning rather than a failure
+# ## Why a token, and why neither empty ending is green (`#500`)
 #
 # `GITHUB_TOKEN` reaches this repository and no other, so dispatching a workflow
 # in `kolonie-claude` needs a credential that spans them. `SKILL_SYNC_TOKEN` is
@@ -48,18 +48,36 @@ name: Push the shared skill body to the seven
 # `kolonie-dns`, **not this repository**, so this workflow cannot read it yet.
 # Scoping it is a credential decision and belongs to a maintainer (`agents/routes.md`).
 #
-# So the two states are told apart rather than blurred, which is the same
-# distinction `kolonie-platform#971` is about one repository over:
+# The two states are still told apart, which is the same distinction
+# `kolonie-platform#971` is about one repository over. What `#500` changes is
+# that **neither of them is conclusion success** — `#359` is closed, so an
+# unreadable token is a broken fast path rather than an unfinished one:
 #
-#   - **no token** — nothing is wired up yet, the seven are on their cron, and
-#     that is the state this repository has been in all along. A `::warning::`,
-#     a step summary naming the one setting to change, and **exit 0**. Failing
-#     here would turn `main` red on every edit to the shared body, block the
-#     auto-merge sweep for everything else, and report a regression where there
-#     is only an unfinished wiring.
+#   - **no token** — nothing can be dispatched. A `::error::`, a step summary
+#     naming the one setting to change, and **exit 1**. This used to be
+#     `::warning::` and exit 0 so an unfinished wiring would not turn `main`
+#     red; measured 2026-08-25 that is exactly how run 32908682526 dispatched
+#     none of the seven and reported success.
 #   - **a token, and a dispatch that did not land** — this is wired up and
 #     broken. `::error::` and exit 1, because the fast path silently not working
 #     is precisely the failure `#359` is about, one level up.
+#
+# ## Why the logic is a script (`#500`)
+#
+# The distinction above was written down here and enforced by nothing. Measured
+# 2026-08-25: a push of the shared body produced run 32908682526 — event `push`,
+# conclusion **success**, 7s — having dispatched **none** of the seven. The
+# second state above is exactly what happened, and it reported as the first.
+#
+# A `run:` block cannot be exercised by a test, so the endings now live in
+# `.github/scripts/skill-dispatch.sh` and are asserted in
+# `.github/tests/skill-dispatch.test.sh`, which this workflow runs before it
+# dispatches anything — the arrangement `board-triage.yml` and
+# `waiting-for-an-agent.yml` already use. The first state above is what the live
+# run measured: no readable token, none of the seven asked, conclusion success.
+# **A shortfall of any size is red**: six of seven is the case that reads as
+# success from a distance, and the seventh keeps serving withdrawn text until
+# its own cron.
 #
 # ## What it may never do
 #
@@ -101,68 +119,20 @@ jobs:
       # state the header describes and the step below reports.
       SKILL_SYNC_TOKEN: ${{ secrets.SKILL_SYNC_TOKEN }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      # The list is written out rather than derived. There is no API that
-      # answers *which repositories carry a generated SKILL.md*, and a wrong
-      # answer here is a repository that silently keeps a withdrawn tool — the
-      # exact failure this exists to prevent. `check-skill-target.py` and
-      # `check-skill-description.py` carry the same seven for the same reason.
-      REPOS: >-
-        kolonie-skill
-        kolonie-claude
-        kolonie-codex
-        kolonie-hermes
-        kolonie-kilo
-        kolonie-openclaw
-        kolonie-antigravity
+      # The seven live in `skill-dispatch.sh`, beside the loop that reads them,
+      # rather than here. They were in both places for as long as the logic was
+      # a `run:` block, and two records of one fact is what `#378` and
+      # `AGENTS.md` §4 refuse — the script is the one a test can check.
 
     steps:
+      # The dispatch is a script so that it can be tested (`#500`). A `run:`
+      # block cannot be exercised by anything: the ending measured on
+      # 2026-08-25 — no readable token, no dispatch attempt, conclusion success —
+      # is only assertable if the logic is callable from a test.
+      - uses: actions/checkout@v4
+
+      - name: The dispatch logic is tested before it is trusted
+        run: bash .github/tests/skill-dispatch.test.sh
+
       - name: Ask them
-        run: |
-          set -uo pipefail
-
-          if [ -z "${SKILL_SYNC_TOKEN:-}" ]; then
-            echo "::warning::the shared skill body moved and the seven were not told; they will regenerate on their own cron at 06:17 instead. SKILL_SYNC_TOKEN is not readable from this repository."
-            {
-              echo "### The seven were not told"
-              echo
-              echo "The shared skill body moved and this workflow could not dispatch \`skill.yml\` anywhere, because \`SKILL_SYNC_TOKEN\` is not readable here."
-              echo
-              echo "**They are on their cron.** Each of the seven regenerates at \`17 6 * * *\` and opens a pull request if the body has moved, so nothing is lost — only delayed, by up to a day. That is the state \`#359\` measured."
-              echo
-              echo "**One setting closes it.** \`SKILL_SYNC_TOKEN\` is an organisation secret whose selected-repositories list is the seven plus \`kolonie-dns\`; adding \`kolonie-docs\` to it is the whole change. The token also needs \`actions: write\` on the seven — \`workflow_dispatch\` is a different permission from the \`contents\` and \`pull-requests\` writes it already uses."
-              echo
-              echo "This is a credential decision and belongs to a maintainer (\`agents/routes.md\`). Nothing here is broken and this run is deliberately green."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          failed=0
-          asked=0
-          for repo in $REPOS; do
-            if GH_TOKEN="$SKILL_SYNC_TOKEN" gh workflow run skill.yml \
-                 --repo "Kolonie-AI/$repo" --ref main; then
-              echo "::notice::$repo was asked to regenerate"
-              asked=$((asked + 1))
-            else
-              # Named one at a time rather than counted. Six of seven arriving is
-              # the case that reads as success from a distance and is not one:
-              # the seventh keeps serving a withdrawn tool for up to a day, and
-              # whoever reads this needs to know which.
-              echo "::error::Kolonie-AI/$repo could not be asked to regenerate, so it stays on its 06:17 cron with a stale shared body. Dispatch skill.yml there by hand: $RUN_URL"
-              failed=1
-            fi
-          done
-
-          {
-            echo "### Asked the seven to regenerate"
-            echo
-            echo "**$asked of 7** dispatched \`skill.yml\`."
-            echo
-            if [ "$failed" -ne 0 ]; then
-              echo "The rest are named in the annotations above. Each one keeps a stale shared body until its own cron at 06:17, which is the delay \`#359\` is about."
-            else
-              echo "Each opens a pull request if the body has moved, and **merges nothing** — the human gate on a change reaching seven repositories is unchanged (\`#359\`)."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          exit "$failed"
+        run: bash .github/scripts/skill-dispatch.sh
