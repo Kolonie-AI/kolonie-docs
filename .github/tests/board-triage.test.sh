@@ -1677,6 +1677,89 @@ absent "and it writes nothing while answering" \
   "addProjectV2ItemById" "$(cat "$GH_LOG")"
 
 echo
+echo "triage states the escalation asymmetry, and records every lane decision (#496)"
+
+# Once the lanes are named after who decides, triage is deciding **how much
+# autonomy an issue gets**, and the two mistakes are not the same size: upward
+# costs a maintainer a few minutes, downward implements something nobody
+# trusted yet, unattended, with write access. `#496` asks for the *reason* to be
+# in the prompt rather than a rule — a model given the cost reasons better than
+# a model given an instruction — so these assert the argument is present, not
+# merely a "be careful".
+prompt=$(python3 - <<'PY'
+import importlib.util, pathlib, sys
+spec = importlib.util.spec_from_file_location(
+    "decide", pathlib.Path(".github/scripts/board-triage-decide.py"))
+module = importlib.util.module_from_spec(spec)
+sys.modules["decide"] = module
+spec.loader.exec_module(module)
+print(module.SYSTEM)
+PY
+)
+
+contains "the prompt says an upward mistake costs minutes" "costs a few minutes" "$prompt"
+contains "and that a downward one is unbounded" "unbounded" "$prompt"
+contains "and resolves uncertainty upward on that reasoning" "resolves upward" "$prompt"
+
+# Origin is **a factor and not a rule**, and both halves have to be said. Only
+# the first stops triage sending every outside report up the chain; only the
+# second is the security property.
+contains "origin is one input among several" "one input among several" "$prompt"
+contains "outside is not automatically the operator's lane" \
+  "not automatically \`queue:operator\`" "$prompt"
+contains "and never automatically the worker's" \
+  "never automatically \`queue:worker\`" "$prompt"
+
+# The entry conditions are `board-triage.sh`'s and this slice does not touch
+# them. Asserted here because a prompt that started claiming them would be the
+# first step towards the model deciding them.
+contains "the prompt still defers the refusals to the script" \
+  "enforced by \`board-triage.sh\`" "$prompt"
+
+# Without this the distribution is a feeling and the prompt gets tuned by
+# argument. `#496`: one line per decision, carrying the issue, the lane, the
+# origin class it read, and a short reason.
+case_setup
+searched "$(issue 900 'a self-contained change' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:worker" "" "" "" true "one function, one check")" >/dev/null
+logged=$(grep -F '"event":"triage.lane"' "$WORK/stderr" 2>/dev/null | tail -1)
+
+contains "a lane decision emits one structured line" '"event":"triage.lane"' "$logged"
+contains "carrying the issue" '"issue":"Kolonie-AI/kolonie-docs#900"' "$logged"
+contains "and the lane it chose" '"lane":"queue:worker"' "$logged"
+contains "and the origin class it read" '"origin":"unclassified"' "$logged"
+contains "and the reason, so a distribution can be read by lane and cause" \
+  '"reason":"one function, one check"' "$logged"
+check "the line is one JSON object, which is what makes it queryable" "ok" \
+  "$(printf '%s' "$logged" | python3 -c 'import json,sys; json.loads(sys.stdin.read()); print("ok")' 2>&1)"
+
+# The origin class is read from the labels GitHub carries, never from the model:
+# `#262`'s *never route on the author's say-so*, applied to the field that would
+# be worth lying about.
+case_setup
+searched "$(issue 900 'a citizen would like a field' 'from:citizen')"
+boarded "900|Inbox|from:citizen"
+run_apply "$(decided 900 "queue:worker" "" "" "" true "self-contained")" >/dev/null
+logged=$(grep -F '"event":"triage.lane"' "$WORK/stderr" 2>/dev/null | tail -1)
+contains "an issue from outside is logged as such" '"origin":"from:citizen"' "$logged"
+# The cap already applies here (#313); what this asserts is that the line
+# records the lane that was *written*, not the one the model proposed.
+contains "and the lane logged is the one applied, not the one proposed" \
+  '"lane":"queue:maintainer"' "$logged"
+
+# A person will query this field rather than read it by eye, so it stays bounded
+# even when a provider ignores the prompt's request for a short sentence.
+long_reason=$(printf 'x%.0s' {1..600})
+case_setup
+searched "$(issue 900 'a self-contained change' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:worker" "" "" "" true "$long_reason")" >/dev/null
+logged=$(grep -F '"event":"triage.lane"' "$WORK/stderr" 2>/dev/null | tail -1)
+check "the structured reason is bounded" "500" \
+  "$(jq -r '.reason | length' <<<"$logged")"
+
+echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
   echo "all good"
   exit 0
