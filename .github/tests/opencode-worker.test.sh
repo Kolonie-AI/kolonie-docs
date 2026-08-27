@@ -244,7 +244,37 @@ case "$1 $2" in
         cat "$GH_FIXTURES/prs" 2>/dev/null ;;
       */pulls/*)
         key=${2#repos/}
-        cat "$GH_FIXTURES/pull_${key//\//_}" 2>/dev/null ;;
+        fixture="$GH_FIXTURES/pull_${key//\//_}"
+        [ -f "$fixture" ] || exit 0
+        # **One line per read, and the last one repeats** (`#484`). The sweep now
+        # asks a second time when the first answer is `dirty`, because a `dirty`
+        # computed against a base that has since moved is a stale verdict and the
+        # first read is what makes GitHub recompute it. A stub that answered the
+        # same thing forever could not tell *it recomputed and it was stale* from
+        # *it recomputed and the conflict is real*, which is the only distinction
+        # the change makes. Repeating the last line keeps every case written
+        # before this one saying exactly what it said.
+        state=$(head -n 1 "$fixture")
+        if [ "$(wc -l < "$fixture")" -gt 1 ]; then
+          tail -n +2 "$fixture" > "$fixture.next" && mv "$fixture.next" "$fixture"
+        fi
+        # The sweep asks for the state and the age together — one request
+        # answers both, which is why saying how long costs nothing. The stub
+        # dispatches on the `--jq` it was given, as the dependencies path above
+        # already does.
+        expression=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --jq) expression=$2; shift 2 ;;
+            *)    shift ;;
+          esac
+        done
+        case "$expression" in
+          *updated_at*)
+            printf '%s\t%s\n' "$state" \
+              "$(cat "$GH_FIXTURES/updated_${key//\//_}" 2>/dev/null)" ;;
+          *) printf '%s\n' "$state" ;;
+        esac ;;
       # `#275` sweeps every repository rather than one search result, so it asks
       # three more questions: which repositories exist, which pull requests are
       # open in each, and what `main` requires there.
@@ -1887,9 +1917,22 @@ opened() {
 }
 
 # `mergeable_state` per pull request, one fixture each, as the sweep reads it.
+# Several states may be given: the sweep reads once, and on `dirty` reads again,
+# so a case can say *it said dirty and then said clean* — which is what a stale
+# verdict actually looks like from outside (`#484`). One state given is that
+# state for every read, so every case written before `#484` is unchanged.
 mergeability() {
-  local repo=$1 number=$2 state=$3
-  printf '%s\n' "$state" > "$GH_FIXTURES/pull_${repo//\//_}_pulls_$number"
+  local repo=$1 number=$2; shift 2
+  printf '%s\n' "$@" > "$GH_FIXTURES/pull_${repo//\//_}_pulls_$number"
+}
+
+# How long a pull request has been carrying the verdict it has (`#484`). The
+# sweep reads it from the same call that answers mergeability — one request
+# answers both, so saying how long costs nothing. Given as an ISO timestamp,
+# which is what `updated_at` is; absent means the sweep could not read one.
+pull_updated() {
+  local repo=$1 number=$2 when=$3
+  printf '%s\n' "$when" > "$GH_FIXTURES/updated_${repo//\//_}_pulls_$number"
 }
 
 # A pull request's timeline, as `#326` reads it: the event names in order. Given
@@ -2090,10 +2133,98 @@ contains "a check that has not reported yet is exactly the case for arming" \
 case_setup
 org "Kolonie-AI/kolonie-docs|check"
 opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
-mergeability "Kolonie-AI/kolonie-docs" 274 dirty
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty dirty
 out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
 check "GitHub refuses to arm a conflicting one, so the sweep does not ask" "" "$out"
 contains "and says that is what it is" "conflicts with main" "$(cat "$WORK/err")"
+
+# ## A `dirty` that is no longer true (`#484`)
+#
+# Measured 2026-08-22: `kolonie-platform#1604` read `DIRTY` from 12:29 to about
+# 14:00 while three other pull requests merged beneath it, and `git merge-tree`
+# against the `main` of that moment produced a tree with no conflict at 13:39. It
+# merged clean and GitHub reported a conflict for another twenty minutes.
+#
+# `mergeable_state` is computed at a moment and is correct for that moment. What
+# was wrong is reading it as current ninety minutes later — and the sweep runs
+# hourly and re-read the same field, so a verdict stale for ninety minutes was
+# skipped on every pass.
+#
+# **The first read is what makes GitHub recompute.** Asking again is the whole
+# fix: a stale verdict answers differently the second time, and a real conflict
+# answers `dirty` again and costs one request.
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty clean
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+contains "a dirty that recomputes to clean is armed rather than skipped" "274" "$out"
+contains "and the sweep says it did not trust the cached verdict" \
+  "recomputed" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty blocked
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+contains "and one that recomputes to blocked is armed too — a check pending is the case for arming" \
+  "274" "$out"
+
+# The cost of the recompute, stated so nobody removes it as a spare request: it
+# is one extra read per `dirty` pull request per pass, and `dirty` is rare.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 clean
+bash "$SCRIPT" unarmed-pull-requests >/dev/null 2>&1
+check "a clean pull request is read exactly once, so the recompute costs nothing on a quiet day" \
+  "1" "$(grep -c 'repos/Kolonie-AI/kolonie-docs/pulls/274 ' "$GH_LOG")"
+
+# And the other half of that number: a dirty one costs exactly one extra read,
+# not a poll. A loop here would be an hourly sweep waiting on GitHub's scheduler.
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty dirty
+bash "$SCRIPT" unarmed-pull-requests >/dev/null 2>&1
+check "a dirty one is read twice and never more" \
+  "2" "$(grep -c 'repos/Kolonie-AI/kolonie-docs/pulls/274 ' "$GH_LOG")"
+
+# ## Say how long (`#484`)
+#
+# Ninety minutes passed with nothing anywhere saying so, and it was found by
+# hand. A pull request that has read `dirty` for more than an hour is worth one
+# line beside the count `#480` added — whatever the verdict turns out to be,
+# because the point is that nobody should have to go looking.
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty dirty
+pull_updated "Kolonie-AI/kolonie-docs" 274 "2020-01-01T00:00:00Z"
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+contains "one that has been dirty for over an hour is visible without anybody looking" \
+  "has read dirty for" "$(cat "$WORK/err")"
+contains "and the line names the pull request" "274" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty dirty
+pull_updated "Kolonie-AI/kolonie-docs" 274 "$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+absent "one that has just gone dirty is not, because a fresh conflict is ordinary" \
+  "has read dirty for" "$(cat "$WORK/err")"
+contains "and it is still reported as conflicting" "conflicts with main" "$(cat "$WORK/err")"
+
+case_setup
+org "Kolonie-AI/kolonie-docs|check"
+opened "Kolonie-AI/kolonie-docs" "274|false|$mine|null"
+mergeability "Kolonie-AI/kolonie-docs" 274 dirty dirty
+out=$(bash "$SCRIPT" unarmed-pull-requests 2>"$WORK/err")
+check "an unreadable age does not stop the sweep" "" "$out"
+contains "and the pull request is still reported" "conflicts with main" "$(cat "$WORK/err")"
 
 case_setup
 org "Kolonie-AI/kolonie-docs|check"

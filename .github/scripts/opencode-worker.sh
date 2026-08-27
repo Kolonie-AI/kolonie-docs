@@ -1370,9 +1370,66 @@ unarmed_pull_requests() {
         continue
       fi
 
-      state=$(gh api "repos/$repo/pulls/$number" --jq '.mergeable_state' 2>/dev/null) || continue
+      # ## `mergeable_state` is a measurement, not a fact (`#484`)
+      #
+      # Measured 2026-08-22: `kolonie-platform#1604` read `DIRTY` from 12:29 to
+      # about 14:00 — ninety minutes — while three other pull requests merged
+      # into `main` beneath it. Halfway through that window `git merge-tree
+      # --write-tree` against the `main` of that moment produced a tree and no
+      # conflict. Nobody touched the branch; GitHub recomputed on its own.
+      #
+      # It is not GitHub misbehaving. The field is computed at a moment and is
+      # correct for that moment; what is wrong is reading it as current ninety
+      # minutes later. This sweep runs hourly and re-read the same field, so a
+      # verdict stale that long was skipped every time it looked — the same shape
+      # `#480` fixed one level up, where a transient machine-caused state was
+      # read as a settled fact.
+      #
+      # **The read is what triggers the recompute**, which is what makes asking
+      # again the whole fix rather than a workaround: GitHub computes
+      # mergeability lazily when something asks, so the first read starts the
+      # work and the second read gets the answer. A stale verdict answers
+      # differently; a real conflict answers `dirty` again and costs one request
+      # on a state that is rare.
+      #
+      # **The age comes back on the same call.** `#484` asks for a pull request
+      # stuck this way to be visible without anybody looking for it, and one
+      # request answers both questions, so saying how long costs nothing.
+      #
+      # `pull.base.sha` is not the staleness signal it looks like, and this is
+      # written down so nobody re-walks it: measured across three open pull
+      # requests at 14:19, all three carried the identical `base.sha` and all
+      # three lagged `main`. It tracks the base branch generally, not when this
+      # pull request's mergeability was computed.
+      local seen updated
+      seen=$(gh api "repos/$repo/pulls/$number" \
+        --jq '[.mergeable_state, (.updated_at // "")] | @tsv' 2>/dev/null) || continue
+      IFS=$'\t' read -r state updated <<<"$seen"
+
+      if [ "${state:-}" = dirty ]; then
+        # Ask once more. The read above is what asked GitHub to recompute, and
+        # this is the answer to that recompute rather than a second look at the
+        # same cached verdict.
+        local recomputed
+        if recomputed=$(gh api "repos/$repo/pulls/$number" \
+          --jq '[.mergeable_state, (.updated_at // "")] | @tsv' 2>/dev/null); then
+          IFS=$'\t' read -r state updated <<<"$recomputed"
+          [ "${state:-}" = dirty ] ||
+            echo "$repo#$number read dirty and recomputed to ${state:-unknown}; the cached verdict was stale (#484)" >&2
+        fi
+      fi
+
       case "${state:-}" in
         dirty)
+          # **Say how long** (`#484`). Ninety minutes passed with nothing
+          # anywhere saying so, and it was found by hand. An age this sweep
+          # cannot read is not a reason to say nothing about the conflict — the
+          # line below is printed either way and only the duration is dropped.
+          if [ -n "${updated:-}" ] && stuck=$(date -u -d "$updated" +%s 2>/dev/null); then
+            local hours=$(( ( $(date -u +%s) - stuck ) / 3600 ))
+            [ "$hours" -ge 1 ] &&
+              echo "$repo#$number has read dirty for ${hours}h, since $updated — long enough that the verdict may be stale rather than settled (#484)" >&2
+          fi
           echo "$repo#$number conflicts with main; auto-merge cannot be enabled on it" >&2
           continue ;;
         unknown|"")
