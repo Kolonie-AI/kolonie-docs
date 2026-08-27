@@ -321,6 +321,60 @@ note() {
   echo "$1" >&2
 }
 
+# ## One JSON object per lane decision (`#496`)
+#
+# **Without this, *too much is landing on the operator* is a feeling.** `#496`'s
+# argument, and the reason the field list is what it is: a distribution read by
+# lane and by origin is a query, and a prompt tuned by argument is tuned by
+# whoever argues hardest. The first tuning pass is worth making after roughly two
+# weeks of these, not on the first surprising decision — one wrong lane is noise.
+#
+# **The lane logged is the one that was applied**, after `sane_route` has had its
+# say, because the distribution somebody reads has to be the distribution the
+# board actually got. The model's proposal is in the comment on the issue, which
+# is where an argument about a single decision belongs.
+#
+# **The origin class is read from the labels GitHub carries**, never from the
+# model and never from the author's own account of itself — `#262`'s *never route
+# on the author's say-so*, applied to the one field that would be worth lying
+# about.
+#
+# **One line, on stderr, and it may not disturb the pass.** `kolonie-platform`'s
+# `AGENTS.md` §3: one JSON object per line, never prose, with a stable `event`
+# slug because `msg` gets reworded and a query grouping by `event` must not break
+# when it does. It is not pushed to Loki: `loki-event.sh` writes `error` and
+# `warn` only, deliberately (`#503` — an `info` stream from Actions is log
+# forwarding), and a routine decision is neither. The runner's own log collection
+# is what carries these.
+lane_event() {
+  local repo=$1 number=$2 lane=$3 origin=$4 reason=$5
+
+  # `jq --arg` throughout, so a reason carrying a quote or a newline cannot
+  # produce a line that is not JSON — which is the whole value of the line.
+  jq -cn --arg issue "$repo#$number" --arg lane "$lane" --arg origin "$origin" \
+    --arg reason "$reason" \
+    '{event: "triage.lane", issue: $issue, lane: $lane, origin: $origin,
+      reason: ($reason[0:500])}' >&2
+}
+
+# The most specific origin label the issue carries. The umbrella is the fallback
+# when GitHub could establish only that the issue came from outside; an issue
+# with no origin label says so rather than inventing an inside provenance.
+lane_origin() {
+  local labels=$1 origin
+  for origin in from:citizen from:non-member from:maintainer from:agent from:watcher; do
+    if has_any "$labels" "$origin"; then
+      echo "$origin"
+      return
+    fi
+  done
+  if has_any "$labels" "from:outside"; then
+    echo from:outside
+  else
+    echo unclassified
+  fi
+}
+
 # ## A write GitHub refused is not the same fact as nothing to write (`#302`)
 #
 # **Both were silent and only one of them is fine.** An issue the model left
@@ -960,6 +1014,14 @@ apply_one() {
   # instead — with the model's sentence kept below, marked as the proposal it was.
   local rule=""
   IFS=$'\x1f' read -r route rule < <(sane_route "$route" "$effective_labels" "$current_route" "$depends")
+
+  # **Recorded here, where the lane is settled and before anything is written**
+  # (`#496`). Every decision leaves a line, including the ones that change no
+  # label: an issue this pass looked at and left where it was is part of the
+  # distribution, and a record that only counted the writes would report the
+  # board as more decided than it is.
+  lane_event "$repo" "$number" "$route" "$(lane_origin "$effective_labels")" "$reason"
+
   local -a remove=()
   if [ "$route" != "$current_route" ]; then
     add+=("$route")
