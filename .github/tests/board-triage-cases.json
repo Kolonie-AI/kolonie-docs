@@ -9,7 +9,7 @@
       "labels": "",
       "body": "`quest-reward.ts` applies the assistance reduction with `Math.round`, so a 30% reduction on 7 lamports pays 5 where governance/decisions/D-030 says it pays 4. D-030 is recorded and closed; the floor and the direction of rounding are both written down there. One repository, one function, and `pnpm test` covers the table.",
       "expect": {
-        "route": "agent:opencode",
+        "route": "queue:worker",
         "rule": "The money rule is already recorded in a closed decision, so the next concrete action is an edit to one function with a decisive check — question 4, and nothing on the prohibitions list is touched."
       }
     },
@@ -21,7 +21,7 @@
       "labels": "",
       "body": "The Colony holds funds for the first quest season and nobody has decided how much moves to the quest wallet, or when. Proposals so far: a fixed amount per season, or a share of the balance.",
       "expect": {
-        "route": "agent:human",
+        "route": "queue:operator",
         "rule": "The next concrete action is committing money — question 6's named act, not a sentence about money."
       }
     },
@@ -33,7 +33,7 @@
       "labels": "from:watcher",
       "body": "The api container has logged `payout wallet unreachable` 41 times in the last hour. No diagnosis yet: it could be the RPC endpoint, the wallet address configuration, or the network.",
       "expect": {
-        "route": "agent:claude",
+        "route": "queue:maintainer",
         "rule": "The next action is a diagnosis on a running host, which is question 5's named fact — the wallet in the message is the subject, and question 2 says the subject never decides the route."
       }
     },
@@ -45,8 +45,8 @@
       "labels": "",
       "body": "About 60 call sites across `kolonie-platform` still write the lamport amounts as literals. The constant exists in `src/economy/units.ts`. Mechanical, one repository, and `pnpm typecheck && pnpm test` fails loudly on a missed one.",
       "expect": {
-        "route": "agent:opencode",
-        "rule": "Large is not a fact that prevents `agent:opencode` — question 5 asks for a named one, and a mechanical change in one repository with a decisive check has none."
+        "route": "queue:worker",
+        "rule": "Large is not a fact that prevents `queue:worker` — question 5 asks for a named one, and a mechanical change in one repository with a decisive check has none."
       }
     },
     {
@@ -57,8 +57,8 @@
       "labels": "",
       "body": "One line in the compose file. The point of the issue is the confirmation afterwards: the restarts have to be watched on the host for an hour to know whether the limit was the cause.",
       "expect": {
-        "route": "agent:claude",
-        "rule": "The change is trivial and the observation is on a host no unattended run can reach — question 5's named fact, and question 6 does not reach `agent:human` because a person is reachable behind `agent:claude`."
+        "route": "queue:maintainer",
+        "rule": "The change is trivial and the observation is on a host no unattended run can reach — question 5's named fact, and question 6 does not reach `queue:operator` because a person is reachable behind `queue:maintainer`."
       }
     },
     {
@@ -69,7 +69,7 @@
       "labels": "",
       "body": "The worker refuses an issue with an open blocker even when the blocker is closed minutes later. The only implementation is an edit to `.github/scripts/opencode-worker.sh` and the prohibitions it reads.",
       "expect": {
-        "route": "agent:human",
+        "route": "queue:operator",
         "rule": "The only implementation edits the worker's own constraints, which the prohibitions reserve to a person — question 5 names the prohibition, and question 6 is satisfied because widening its own limits is the one thing no coding agent may do for itself."
       }
     },
@@ -78,7 +78,7 @@
       "number": 907,
       "title": "Anything at all, already routed",
       "status": "Ready",
-      "labels": "agent:claude",
+      "labels": "queue:maintainer",
       "body": "The body does not matter. This case is not about an answer.",
       "expect": {
         "route": "",
@@ -93,7 +93,7 @@
       "labels": "from:non-member,bug",
       "body": "Filed by a citizen: `availableOnly: false` returns retired tasks with no marker, so a caller cannot tell them from live ones. The fix is a field on the response shape in `kolonie-platform`, inside the tool this issue names and nowhere else. The citizen declared it a defect and the runner agreed, so it carries `bug`.",
       "expect": {
-        "route": "agent:opencode",
+        "route": "queue:worker",
         "rule": "Provenance is a label and not a route: the work is self-contained inside the named tool, `from:non-member` names no fact under question 5, and `bug` says a defect rather than a proposal — which is the one thing that lets an issue from outside reach the unattended worker."
       }
     },
@@ -105,9 +105,9 @@
       "labels": "",
       "body": "`apps/api` waits 5 seconds for a citizen's wake endpoint. `onboarding/skill/body.md` in this repository tells citizens they have 30. One of the two numbers is wrong, and whichever way it is settled both have to change together, in `kolonie-platform` and in `kolonie-docs`.",
       "expect": {
-        "route": "agent:claude",
-        "rule": "Two repositories in one run is on the prohibitions list, which is question 5's named fact — and question 6 does not reach `agent:human`, because nothing here is reserved to a person.",
-        "reason": "the fix is one number in `kolonie-platform` and one in `kolonie-docs` and neither is right on its own, and no worker run changes two repositories; split into a platform issue and a docs issue that depends on it, and both are `agent:opencode`"
+        "route": "queue:maintainer",
+        "rule": "Two repositories in one run is on the prohibitions list, which is question 5's named fact — and question 6 does not reach `queue:operator`, because nothing here is reserved to a person.",
+        "reason": "the fix is one number in `kolonie-platform` and one in `kolonie-docs` and neither is right on its own, and no worker run changes two repositories; split into a platform issue and a docs issue that depends on it, and both are `queue:worker`"
       }
     },
     {
@@ -118,8 +118,8 @@
       "labels": "from:citizen",
       "body": "Filed by a citizen: `kolonie.tasks.list` returns everything and a caller that only wants one rung filters client-side. A `rung` parameter on the tool would be one field on the request shape in `kolonie-platform`, inside the tool this issue names and nowhere else.",
       "expect": {
-        "route": "agent:claude",
-        "rule": "The change is as self-contained as case 8's, and the difference is that nobody has decided it: `from:citizen` without `bug` is a proposal, and a proposal caps at `agent:claude` however small the diff would be."
+        "route": "queue:maintainer",
+        "rule": "The change is as self-contained as case 8's, and the difference is that nobody has decided it: `from:citizen` without `bug` is a proposal, and a proposal caps at `queue:maintainer` however small the diff would be."
       }
     }
   ]

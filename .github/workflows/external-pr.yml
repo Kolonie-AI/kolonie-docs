@@ -26,7 +26,7 @@ name: An external pull request becomes an issue
 #
 # It does not judge the change. The issue it opens carries the description
 # verbatim, marked as arriving from outside, and goes to Inbox like any other —
-# the routing rule in `agents/routes.md` then caps it at `agent:claude` if it is
+# the routing rule in `agents/routes.md` then caps it at `queue:maintainer` if it is
 # not a defect, which is what puts a person in front of a proposal nobody asked
 # for.
 

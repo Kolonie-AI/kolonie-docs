@@ -59,6 +59,6 @@ are where this policy actually reaches somebody: a template is read and a
 `CONTRIBUTING.md` often is not.
 
 An issue that arrives from outside and is not labelled `bug` caps at
-`agent:claude` — a defect is a change nobody has to decide, and a proposal is one
+`queue:maintainer` — a defect is a change nobody has to decide, and a proposal is one
 somebody does. That rule is in [`agents/routes.md`](../agents/routes.md), and it
 is the reason an outside proposal always reaches a person.

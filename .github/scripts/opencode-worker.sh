@@ -91,12 +91,12 @@
 #
 # **A run that loses leaves the issue exactly as it found it and exits 0.** Not
 # through the failure path: since `#251` and `#255` that path removes
-# `agent:opencode` and sets `opencode:failed`, and an issue demoted for losing a
+# `queue:worker` and sets `worker:failed`, and an issue demoted for losing a
 # coin toss is worse than the collision this prevents.
 #
 # ## What this never does
 #
-# **It never removes the `agent:opencode` label.** Nothing in *this script* does,
+# **It never removes the `queue:worker` label.** Nothing in *this script* does,
 # and that is still true: the label is queue membership and not a status, the
 # board column says what is happening to an issue, and the label says who is
 # allowed to work it.
@@ -129,13 +129,13 @@ STATUS_IN_REVIEW=${STATUS_IN_REVIEW:-bd543ca4}
 STATUS_BLOCKED=${STATUS_BLOCKED:-9caff3d3}
 
 ORG=${ORG:-Kolonie-AI}
-QUEUE_LABEL=${QUEUE_LABEL:-agent:opencode}
+QUEUE_LABEL=${QUEUE_LABEL:-queue:worker}
 
 # The mark on an issue whose implementation the worker is **not permitted** to
 # write, as opposed to one it merely failed at (`#250`).
 #
-# `opencode:failed` says *tried and not finished*, and its whole design is that a
-# person can put `agent:opencode` back and get another attempt. That is the right
+# `worker:failed` says *tried and not finished*, and its whole design is that a
+# person can put `queue:worker` back and get another attempt. That is the right
 # default and it is wrong for exactly one case: an issue whose only possible
 # implementation is a path the worker's own prompt forbids. `kolonie-infra#107`
 # was taken three times in eighty minutes on 2026-08-09 and refused identically
@@ -147,7 +147,7 @@ QUEUE_LABEL=${QUEUE_LABEL:-agent:opencode}
 #
 # An issue carrying this is out of the queue whatever its labels say. It comes
 # off when a person changes something about the issue, which is the point.
-FORBIDDEN_LABEL=${FORBIDDEN_LABEL:-opencode:forbidden}
+FORBIDDEN_LABEL=${FORBIDDEN_LABEL:-worker:forbidden}
 
 # The paths the worker may not write. **They are not listed here** (`#260`):
 # `operations/worker-prohibitions.md` holds them once, this script reads them from
@@ -1671,9 +1671,9 @@ case "${1:-}" in
     # number alone lets `kolonie-platform#204` decide whether `kolonie-docs#204`
     # is in Ready. Now that the search is organisation-wide this is no longer a
     # latent defect: the candidate set genuinely contains several repositories.
-    # **`opencode:forbidden` is excluded here and not by the search**, so that
+    # **`worker:forbidden` is excluded here and not by the search**, so that
     # an issue carrying it is out of the queue even when somebody has put
-    # `agent:opencode` back — which is exactly the case `#250` is about, and the
+    # `queue:worker` back — which is exactly the case `#250` is about, and the
     # case a search term the labeller can overwrite would not cover.
     selection=$(jq -r --arg forbidden "$FORBIDDEN_LABEL" --slurpfile board "$board_file" '
       # **The repositories a run is already working in.** Two runs in one
@@ -1767,8 +1767,8 @@ case "${1:-}" in
     #
     # A lost race prints `lost` and exits **0**. Not 3, not 4: nothing is wrong
     # here, and every non-zero exit from this step ends the run through the
-    # failure path, which since `#251` and `#255` takes `agent:opencode` off the
-    # issue and marks it `opencode:failed`. That is the correct ending for work
+    # failure path, which since `#251` and `#255` takes `queue:worker` off the
+    # issue and marks it `worker:failed`. That is the correct ending for work
     # that was tried and not finished, and the wrong one for work somebody else
     # is doing right now.
     if [ "${status:-}" != "Ready" ]; then
@@ -1958,7 +1958,7 @@ case "${1:-}" in
           | select(.content.repository == $repo)
           | select(.status == "Ready")
           | select((.content.state // "OPEN") == "OPEN")
-          | select((.labels // []) | index("agent:opencode"))
+          | select((.labels // []) | index("queue:worker"))
           | select((.labels // []) | index("blocked:human") | not)
           | select((.labels // []) | index($forbidden) | not)
         ] | length' <<<"$board")

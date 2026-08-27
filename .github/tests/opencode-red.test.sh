@@ -6,7 +6,7 @@
 # `#240` turns on four properties that a green run cannot show: that an
 # inconclusive check moves nothing, that a pull request on any other branch is
 # left alone, that a second report does not comment twice, and that
-# `agent:opencode` is never touched. Each is a branch that would look fine in
+# `queue:worker` is never touched. Each is a branch that would look fine in
 # review and be wrong in production — the last one silently, for a week.
 #
 # Stubbed `gh`, for `opencode-worker.test.sh`'s reason: it is the only way to

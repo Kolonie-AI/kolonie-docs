@@ -166,10 +166,10 @@ and was stale on two of 129 items when this was measured.
 **1. What can be started right now, by anyone:**
 
 ```bash
-jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("agent:opencode") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
+jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("queue:worker") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
-**Queries 1 and 2 exclude `agent:opencode`, and that is not a refinement — it is
+**Queries 1 and 2 exclude `queue:worker`, and that is not a refinement — it is
 the rule** (`kolonie-docs#233`). An issue in Ready carrying that label is waiting
 for the hourly worker, not for you. §5 says why the label is the one that changes
 what you may do; this is where it becomes a command rather than a paragraph
@@ -178,7 +178,7 @@ somebody has to remember having read.
 **2. What is on the critical path and startable — start here:**
 
 ```bash
-jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("p1")) and ((.labels // []) | index("agent:opencode") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
+jq -r '.items[] | select(.status=="Ready" and ((.labels // []) | index("p1")) and ((.labels // []) | index("queue:worker") | not)) | "\(.content.repository)#\(.content.number)  \(.title)"' "$board"
 ```
 
 **3. What is stuck, and why** — read the "Blocked by" section of each:

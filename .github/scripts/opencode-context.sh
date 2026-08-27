@@ -125,8 +125,8 @@ reference_block() {
   column=$(board_column_for "$repo" "$number")
 
   # Matched against a separator-only copy rather than against `$labels`, which is
-  # joined with `", "` for the table. `",$labels,"` on `agent:claude, from:citizen`
-  # is `,agent:claude, from:citizen,` and the pattern `*,from:citizen,*` does not
+  # joined with `", "` for the table. `",$labels,"` on `queue:maintainer, from:citizen`
+  # is `,queue:maintainer, from:citizen,` and the pattern `*,from:citizen,*` does not
   # find `, from:citizen,` in it — so the untrusted-text marking fired only when
   # the label happened to sort first, and read `written inside the Colony` on
   # everything else. That is the whole boundary this file's header describes,

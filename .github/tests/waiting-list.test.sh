@@ -225,24 +225,24 @@ labelled_at() {
 echo "what is waiting"
 
 case_setup
-searched agent:claude "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|A thing"
-searched agent:human "11|2026-08-02T00:00:00Z|agent:human,p1,blocked:human|Kolonie-AI/kolonie-docs|A decision"
+searched queue:maintainer "10|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|A thing"
+searched queue:operator "11|2026-08-02T00:00:00Z|queue:operator,p1,blocked:human|Kolonie-AI/kolonie-docs|A decision"
 boarded "10:Ready:Kolonie-AI/kolonie-docs" "11:Blocked:Kolonie-AI/kolonie-docs"
 entries=$(bash "$SCRIPT" entries 2>/dev/null)
-contains "an issue routed to a Claude agent is on the list" "kolonie-docs	10	agent:claude" "$entries"
-contains "and so is one routed to a person" "kolonie-docs	11	agent:human" "$entries"
+contains "an issue routed to a Claude agent is on the list" "kolonie-docs	10	queue:maintainer" "$entries"
+contains "and so is one routed to a person" "kolonie-docs	11	queue:operator" "$entries"
 check "and both of them, once each" "2" "$(wc -l <<<"$entries")"
 
 # The point of asking per label: two `label:` qualifiers are an AND, so a single
 # search would have returned nothing and the list would have been silently empty.
-contains "the labels are searched one at a time" "--label agent:claude" "$(cat "$GH_LOG")"
-contains "and the other one too" "--label agent:human" "$(cat "$GH_LOG")"
+contains "the labels are searched one at a time" "--label queue:maintainer" "$(cat "$GH_LOG")"
+contains "and the other one too" "--label queue:operator" "$(cat "$GH_LOG")"
 
 # A column that means somebody already has it is not waiting for anybody.
 case_setup
-searched agent:claude \
-  "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Being worked" \
-  "12|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waiting"
+searched queue:maintainer \
+  "10|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Being worked" \
+  "12|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Waiting"
 boarded "10:In Progress:Kolonie-AI/kolonie-docs" "12:Ready:Kolonie-AI/kolonie-docs"
 entries=$(bash "$SCRIPT" entries 2>/dev/null)
 absent "an issue somebody is already working is not waiting" "	10	" "$entries"
@@ -251,17 +251,17 @@ contains "and the one nobody has is" "	12	" "$entries"
 # `p1` before `p2`, then oldest — the same order the queue uses, because a list
 # somebody reads top to bottom should agree with it.
 case_setup
-searched agent:claude \
-  "10|2026-08-05T00:00:00Z|agent:claude,p2|Kolonie-AI/kolonie-docs|Later" \
-  "12|2026-08-06T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|First"
+searched queue:maintainer \
+  "10|2026-08-05T00:00:00Z|queue:maintainer,p2|Kolonie-AI/kolonie-docs|Later" \
+  "12|2026-08-06T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|First"
 boarded "10:Ready:Kolonie-AI/kolonie-docs" "12:Ready:Kolonie-AI/kolonie-docs"
 check "p1 sorts above p2" "12" \
   "$(bash "$SCRIPT" entries 2>/dev/null | head -1 | cut -f2)"
 
-# The reason it is not `agent:opencode`, in one clause, off the labels — which is
+# The reason it is not `queue:worker`, in one clause, off the labels — which is
 # all there is to read until triage records why it decided.
 case_setup
-searched agent:claude "10|2026-08-01T00:00:00Z|agent:claude,p1,opencode:forbidden|Kolonie-AI/kolonie-docs|Forbidden"
+searched queue:maintainer "10|2026-08-01T00:00:00Z|queue:maintainer,p1,worker:forbidden|Kolonie-AI/kolonie-docs|Forbidden"
 boarded "10:Ready:Kolonie-AI/kolonie-docs"
 contains "an entry says why the worker cannot take it" "the worker may not write it" \
   "$(bash "$SCRIPT" entries 2>/dev/null)"
@@ -273,10 +273,10 @@ echo "a package is one entry, not its parts"
 # package — this only has to notice, and the order it prints them in is the order
 # they have to be worked in.
 case_setup
-searched agent:claude \
-  "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|The first half" \
-  "12|2026-08-02T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|The second half" \
-  "20|2026-08-03T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Unrelated"
+searched queue:maintainer \
+  "10|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|The first half" \
+  "12|2026-08-02T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|The second half" \
+  "20|2026-08-03T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Unrelated"
 boarded "10:Ready:Kolonie-AI/kolonie-docs" "12:Ready:Kolonie-AI/kolonie-docs" \
         "20:Ready:Kolonie-AI/kolonie-docs"
 blocked_by "Kolonie-AI/kolonie-docs|12" "Kolonie-AI/kolonie-docs|10|open"
@@ -291,7 +291,7 @@ contains "and the unrelated issue keeps its own entry" "### Unrelated" "$body"
 # A blocker nobody has routed to an agent is somebody else's work: it is named,
 # and it does not drag that issue into this list's package.
 case_setup
-searched agent:claude "12|2026-08-02T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waits on the worker"
+searched queue:maintainer "12|2026-08-02T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Waits on the worker"
 boarded "12:Ready:Kolonie-AI/kolonie-docs"
 blocked_by "Kolonie-AI/kolonie-docs|12" "Kolonie-AI/kolonie-platform|700|open"
 bash "$SCRIPT" entries > "$WORK/entries" 2>/dev/null
@@ -330,7 +330,7 @@ echo "the body says when it was read (#409)"
 today=$(date -u '+%Y-%m-%d')
 
 case_setup
-printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+printf 'Kolonie-AI/kolonie-docs\t10\tqueue:maintainer\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
 body=$(bash "$SCRIPT" body "$WORK/entries")
 contains "a list that has something on it says when it was read" "Read at $today" "$body"
 contains "and says an entry may have closed since" "may have been closed since" "$body"
@@ -347,7 +347,7 @@ contains "and so does a body with nothing on it" "Read at $today" "$body"
 # The stamp changes on every run and must not read as a change to the list:
 # `arrivals` compares issues, not bodies, and this is what says so.
 case_setup
-printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+printf 'Kolonie-AI/kolonie-docs\t10\tqueue:maintainer\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
 bash "$SCRIPT" body "$WORK/entries" > "$WORK/body"
 check "and a fresh stamp on an unchanged list announces nothing" "" \
   "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
@@ -356,8 +356,8 @@ echo
 echo "only a change is announced"
 
 case_setup
-printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
-printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\nKolonie-AI/kolonie-docs\t12\tagent:claude\t0\t2026-08-02T00:00:00Z\t\twhy\tAnother\n' > "$WORK/entries.next"
+printf 'Kolonie-AI/kolonie-docs\t10\tqueue:maintainer\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+printf 'Kolonie-AI/kolonie-docs\t10\tqueue:maintainer\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\nKolonie-AI/kolonie-docs\t12\tqueue:maintainer\t0\t2026-08-02T00:00:00Z\t\twhy\tAnother\n' > "$WORK/entries.next"
 bash "$SCRIPT" body "$WORK/entries" > "$WORK/body"
 check "an unchanged list announces nothing" "" \
   "$(bash "$SCRIPT" arrivals "$WORK/body" "$WORK/entries" 2>/dev/null)"
@@ -366,7 +366,7 @@ check "and a new issue is the only thing announced" "Kolonie-AI/kolonie-docs#12"
 
 # The first run has no previous body at all, and everything on the list is new.
 case_setup
-printf 'Kolonie-AI/kolonie-docs\t10\tagent:claude\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
+printf 'Kolonie-AI/kolonie-docs\t10\tqueue:maintainer\t0\t2026-08-01T00:00:00Z\t\twhy\tA thing\n' > "$WORK/entries"
 check "the first run announces the whole list" "Kolonie-AI/kolonie-docs#10" \
   "$(bash "$SCRIPT" arrivals "$WORK/nothing-here" "$WORK/entries" 2>/dev/null)"
 
@@ -376,10 +376,10 @@ echo "a claim nobody is behind (#381)"
 # The worker has been saying this on the issue every four hours to nobody. The
 # list is the one page the person who can move the card actually reads.
 case_setup
-searched agent:claude "12|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waiting"
+searched queue:maintainer "12|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Waiting"
 boarded "12:Ready:Kolonie-AI/kolonie-docs" \
   "10:In Progress:Kolonie-AI/kolonie-docs@48" \
-  "20:Ready:Kolonie-AI/kolonie-docs@1+agent:opencode"
+  "20:Ready:Kolonie-AI/kolonie-docs@1+queue:worker"
 entries=$(bash "$SCRIPT" entries 2>/dev/null)
 contains "a card that has sat for two days is on the list" \
   "Kolonie-AI/kolonie-docs	10	stuck:in-progress" "$entries"
@@ -397,7 +397,7 @@ contains "and says what moving it would start" "\`pick\` skips every other issue
 
 # A card that moved this morning is somebody working, not somebody forgetting.
 case_setup
-searched agent:claude "12|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|Waiting"
+searched queue:maintainer "12|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|Waiting"
 boarded "12:Ready:Kolonie-AI/kolonie-docs" "10:In Progress:Kolonie-AI/kolonie-docs@2"
 entries=$(bash "$SCRIPT" entries 2>/dev/null)
 absent "a claim from two hours ago is not stuck" "stuck:in-progress" "$entries"
@@ -473,7 +473,7 @@ check "and a day where the set is unchanged announces nothing" "" \
 # **The rejection case.** Nothing held is a sentence and not an empty heading —
 # the rule this file already follows for the list itself.
 case_setup
-searched agent:claude "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|A thing"
+searched queue:maintainer "10|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|A thing"
 boarded "10:Ready:Kolonie-AI/kolonie-docs"
 bash "$SCRIPT" entries > "$WORK/entries" 2>/dev/null
 absent "nothing held is no held row" "held:needs-clearance" "$(cat "$WORK/entries")"
@@ -508,7 +508,7 @@ check "and prints nothing" "" "$out"
 contains "and says the list would be wrong" "the list would be wrong" "$(cat "$WORK/err")"
 
 case_setup
-searched agent:claude "10|2026-08-01T00:00:00Z|agent:claude,p1|Kolonie-AI/kolonie-docs|A thing"
+searched queue:maintainer "10|2026-08-01T00:00:00Z|queue:maintainer,p1|Kolonie-AI/kolonie-docs|A thing"
 echo yes > "$GH_FIXTURES/board_fails"
 out=$(bash "$SCRIPT" entries 2>"$WORK/err"); rc=$?
 check "a board that cannot be read is not a list of everything" "1" "$rc"

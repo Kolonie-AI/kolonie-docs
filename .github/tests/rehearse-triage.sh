@@ -266,7 +266,7 @@ echo "== 4. a maintainer's *unlabelled* issue is labelled but not called outside
 # `#433`. The early exit above catches the maintainer who labelled their own
 # issue; this is the one who did not, and until `#433` they fell through to
 # `from:outside` — a label whose description says *arrived from outside*, and
-# which `board-triage.sh` reads twice: the priority guard and the `agent:claude`
+# which `board-triage.sh` reads twice: the priority guard and the `queue:maintainer`
 # route cap. 94 issues carried it wrongly on 2026-08-17.
 out=$(run_issue env PERMISSION=admin EXISTING='[]' BODY='x')
 log=$(cat "$WORK/gh.log")
