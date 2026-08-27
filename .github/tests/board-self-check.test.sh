@@ -138,25 +138,22 @@ case "$1 $2" in
         # **A `.fail` sentinel, for the same reason `label list` has one**
         # (`#349`, extended by `#285`). An absent fixture is the file not being
         # there — a real gap, fixed by copying a workflow. A read that *failed*
-        # is a credential that cannot see the repository, and the two want
-        # opposite fixes, so the stub has to be able to produce both. GitHub
-        # answers `Resource not accessible by integration` here, not 404.
-        [ -f "$GH_FIXTURES/triage_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
-        [ -f "$GH_FIXTURES/triage_${_r##*/}" ] || exit 1
+        # is a credential that cannot see the repository's contents, and the two
+        # want opposite fixes, so the stub has to be able to produce both.
+        #
+        # **The two are told apart by HTTP status and by nothing else.** GitHub
+        # answers 403 `Resource not accessible by integration` for the first and
+        # 404 `Not Found` for the second, and `gh` exits 1 on both — so a stub
+        # that only failed could not express the distinction the script now
+        # makes. Both are emitted in `gh`'s own shape, which is what the script
+        # parses.
+        [ -f "$GH_FIXTURES/triage_${_r##*/}.fail" ] && { echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1; }
+        [ -f "$GH_FIXTURES/triage_${_r##*/}" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
         base64 -w0 < "$GH_FIXTURES/triage_${_r##*/}" ;;
       */contents/.github/workflows/review.yml)
         _r=${_p%%/contents/*}
-        [ -f "$GH_FIXTURES/review_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
-        [ -f "$GH_FIXTURES/review_${_r##*/}" ] || exit 1 ;;
-      # *Can this credential see the repository at all?* — the question that
-      # separates a workflow that is missing from a repository that is
-      # unreadable. A repository whose triage probe was made to fail is one the
-      # credential cannot see, so this fails for it too; everything else answers.
-      */) : ;;
-      *)
-        _r=$_p
-        [ -f "$GH_FIXTURES/triage_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
-        echo '{"name":"'"${_r##*/}"'"}' ;;
+        [ -f "$GH_FIXTURES/review_${_r##*/}.fail" ] && { echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1; }
+        [ -f "$GH_FIXTURES/review_${_r##*/}" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; } ;;
     esac ;;
   "issue list")
     # Two different listings reach this stub and they must not be confused.
@@ -439,6 +436,46 @@ out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a repository whose workflows could not be read is not accused of having none" \
   "$([[ "$out" != *"no workflow calls"* && "$out" != *"no reviewer:"* ]] && echo yes || echo no)" "$out"
 expect "and it says the read failed, which is a different fix from copying a file" \
+  "$([[ "$out" == *"could not be read"* ]] && echo yes || echo no)" "$out"
+
+# **The status is the whole discriminator, and the first attempt got it wrong.**
+# `#516` asked *can I read the repository at all* with `gh api repos/<repo>`.
+# That probe answers 200 for exactly the repositories this is about: the board
+# App holds Metadata — which is what `repos/<repo>` reads — and does **not** hold
+# Contents, which is what the two workflow probes read. So the guard never fired
+# and run 33043244482 on `main` was red for the same false finding it was meant
+# to remove, with the new test passing beside it because the stub failed both
+# calls together.
+#
+# 403 and 404 are the two answers, `gh` exits 1 on both, and only the status
+# separates them. Measured 2026-08-27 against the live repository:
+#
+#   $ gh api repos/Kolonie-AI/kolonie-concept-lab/contents/.github/workflows/nonexistent-xyz.yml
+#   gh: Not Found (HTTP 404)
+#
+# A file that is genuinely absent in a repository this credential *can* read is
+# still the gap it always was.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"
+bash "$ROOT/.github/scripts/board-triage.sh" vocabulary > "$GH_FIXTURES/labels_kolonie-openclaw"
+: > "$GH_FIXTURES/review_kolonie-openclaw"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a 404 on triage.yml is a missing workflow, not an unreadable repository" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"no workflow calls"* && "$out" != *"could not be read"* ]] && echo yes || echo no)" "$out"
+
+# The mirror: readable repository, present triage, absent reviewer.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"; covered kolonie-openclaw
+rm -f "$GH_FIXTURES/review_kolonie-openclaw"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "and a 404 on review.yml is a missing reviewer for the same reason" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"no reviewer:"* && "$out" != *"could not be read"* ]] && echo yes || echo no)" "$out"
+
+# One forbidden and one absent, which is the case a single shared verdict would
+# get wrong in whichever direction it picked.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"; covered kolonie-openclaw
+: > "$GH_FIXTURES/triage_kolonie-openclaw.fail"
+rm -f "$GH_FIXTURES/review_kolonie-openclaw"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a forbidden triage probe does not turn a genuinely missing reviewer into a reading" \
   "$([[ "$out" == *"could not be read"* ]] && echo yes || echo no)" "$out"
 
 # The half this must not break: a repository that answers and genuinely has

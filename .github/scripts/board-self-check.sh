@@ -337,20 +337,45 @@ check_coverage() {
     # gap is copying a file into another repository, and this is an
     # installation's repository access. A 404 is still the gap — `--silent`
     # cannot tell them apart, so the status is asked for explicitly.
-    local probe_rc probe_body
-    probe_body=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>/dev/null); probe_rc=$?
-    if [ "$probe_rc" -ne 0 ] && ! gh api "repos/$ORG/$repo" --silent >/dev/null 2>&1; then
-      gaps+="        its workflows could not be read — \`gh api repos/$ORG/$repo\` failed too, so this credential cannot see the repository at all; that is a reading and not a finding about it"$'\n'
+    # **403 and 404 are different answers and only the status separates them.**
+    # `gh` exits 1 on both, so a guard that only asks *did it fail* cannot tell
+    # *this credential may not read the contents* from *the file is not there*.
+    #
+    # The first attempt at this asked `gh api repos/<repo>` — *can I see the
+    # repository at all* — and that is the wrong question for exactly the
+    # repositories this is about: the board App holds **Metadata**, which is
+    # what `repos/<repo>` reads, and does not hold **Contents**, which is what
+    # the two probes below read. The probe answered 200, the guard never fired,
+    # and run 33043244482 on `main` was red for the same false finding.
+    forbidden() { grep -q '403\|not accessible' <<<"$1"; }
+
+    local probe_body probe_err
+    probe_err=$(mktemp)
+    probe_body=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>"$probe_err")
+    if forbidden "$(cat "$probe_err")"; then
+      # One sentence for the repository rather than one per probe: the
+      # credential cannot read this repository's contents, so neither answer
+      # below would mean anything, and both are withheld together.
+      gaps+="        its workflows could not be read — the contents endpoint answered 403, so this credential may not read them; that is a reading and not a finding about the repository"$'\n'
+      rm -f "$probe_err"
     else
+      rm -f "$probe_err"
       listing=$(printf '%s' "$probe_body" | base64 -d 2>/dev/null)
       case "$listing" in
         *inbound-triage.yml@*) : ;;
         *) gaps+="        no workflow calls \`inbound-triage.yml\`, so an issue filed from outside gets no \`area:\` label and no reply — copy \`.github/workflows/triage.yml\` and set its \`area:\`"$'\n' ;;
       esac
 
-      if ! gh api "repos/$ORG/$repo/contents/.github/workflows/review.yml" --silent >/dev/null 2>&1; then
-        gaps+="        no reviewer: copy \`.github/workflows/review.yml\`"$'\n'
+      local review_err
+      review_err=$(mktemp)
+      if ! gh api "repos/$ORG/$repo/contents/.github/workflows/review.yml" --silent >/dev/null 2>"$review_err"; then
+        if forbidden "$(cat "$review_err")"; then
+          gaps+="        its \`review.yml\` could not be read — the contents endpoint answered 403; that is a reading and not a finding about the repository"$'\n'
+        else
+          gaps+="        no reviewer: copy \`.github/workflows/review.yml\`"$'\n'
+        fi
       fi
+      rm -f "$review_err"
     fi
 
     [ -n "$gaps" ] && finding+="    $ORG/$repo"$'\n'"$gaps"
