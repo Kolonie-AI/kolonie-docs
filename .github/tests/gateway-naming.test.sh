@@ -118,6 +118,35 @@ decide=$(cat "$ROOT/.github/scripts/board-triage-decide.py")
 contains "the key" "LLM_GATEWAY_API_KEY_TRIAGE" "$decide"
 contains "the base URL" "LLM_GATEWAY_BASE_URL" "$decide"
 
+# `#502`. This file greps for retired *variable names*; the outage it was written
+# after was a retired *model value*, sent every half hour through a healthy
+# gateway. Measured 2026-08-26: the two bare identifiers answered 503 and the
+# served prefixed names and the tier alias answered 200. A default in the
+# workflow is the one place a bare name can come back without anybody choosing
+# it, so that is what is asserted here.
+echo
+echo "no workflow defaults to a model identifier the gateway does not serve"
+triage=$(cat "$ROOT/.github/workflows/board-triage.yml")
+for name in "grok-4.5" "gpt-5.6-sol"; do
+  hits=$(grep -n "|| *'$name'" "$ROOT/.github/workflows/board-triage.yml" 2>/dev/null)
+  check "board-triage.yml does not default to $name" "" "$hits"
+done
+
+# The second half of `#502`: a pass with candidates that could not ask anything
+# must not be conclusion success. The step is what enforces it, so the step is
+# what is asserted — prose in a header cannot fail a run.
+echo
+echo "a pass that asked nothing and had candidates fails visibly"
+contains "the script has an exit code meaning nothing could be asked" "NO_ANSWER" "$decide"
+contains "the workflow counts the chunks nothing answered" "unanswered=" "$triage"
+contains "the workflow captures an unanswered exit without losing the other chunks" \
+  '|| rc=$?' "$triage"
+contains "and propagates an unexpected script failure instead of calling it unanswered" \
+  '*) exit "$rc"' "$triage"
+contains "and refuses the pass where every chunk went unanswered" \
+  "steps.decide.outputs.unanswered == steps.decide.outputs.chunks" "$triage"
+contains "with a non-zero exit rather than a warning" "          exit 1" "$triage"
+
 echo
 echo "the documentation names what the workflows read"
 automation=$(cat "$ROOT/architecture/automation.md")

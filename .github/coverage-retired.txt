@@ -203,3 +203,19 @@ and `agent:human` have nobody, so a routed issue used to be labelled and then
 - **No recovery.** A lost key means no erasure, matching what
   `onboarding/agent-guide.md` already tells an arriving agent about lost keys.
   Anything else would make the erasure path the account-takeover path.
+
+# kolonie-docs#502. Both lines state something that was measured false on
+# 2026-08-26 and is now the opposite of what the code does. The first names a
+# bare model identifier as the configured model: through one healthy gateway
+# that name answered 503 on every attempt while the served prefixed identifiers
+# and the tier alias answered 200, so naming it here would send the next reader
+# back to the failure. The second states the exit-0-on-every-failure policy that
+# made a deterministic misconfiguration report success forty-eight times a day;
+# a chunk that had candidates and got no answer now exits non-zero and the
+# workflow refuses the pass where every chunk ended that way. Retired rather
+# than moved, because neither is a line that went somewhere — each is a fact
+# that stopped being one. The replacements sit in the same tables in
+# architecture/automation.md and keep what the originals were protecting: one
+# provider hiccup still costs its own chunk and not the pass.
+| **The model** | `gpt-5.6-sol`, the strongest on the gateway, and the reason is the dependency step: noticing that a new issue reads something one of forty-odd open ones creates is a judgement over the whole board at once. It is also what decides whether a citizen's words reach code. A setting (`TRIAGE_LLM_MODEL`), so the strongest model in six months is one variable away |
+| **When it cannot ask** | It writes no decisions and exits 0, per chunk. Forty-eight passes a day means a provider hiccup that turned red would produce red runs nobody believes — `watch-judge.py`'s policy, one workflow along. A pass that decided nothing says so in the log |

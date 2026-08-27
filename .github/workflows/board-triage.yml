@@ -211,11 +211,15 @@ jobs:
           # rather than only in our own logs.
           LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
           LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
-          TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
-          # The account asked when the one above will not answer. Unset is
-          # the other of the two names the script knows; `none` switches the
-          # second attempt off. See the constants in the script for why the
-          # second name is a second model rather than a second provider.
+          # **A model identifier the gateway serves, or a tier alias** (`#502`).
+          # Measured 2026-08-26: the bare names this defaulted to answered 503
+          # while the served prefixed identifiers and `@preset/tier-1` answered
+          # 200, so a bare default was a deterministic failure on a schedule.
+          # The script drops any name absent from `GET /v1/models` before asking.
+          TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL }}
+          # The account asked when the one above will not answer. **Named or not
+          # asked**: it is no longer inferred as a second hard-coded name, which
+          # is what made the retry path unable to reach a served model at all.
           TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
           CHUNK: 6
           WAITING: ${{ steps.candidates.outputs.waiting }}
@@ -225,6 +229,8 @@ jobs:
           parts="$RUNNER_TEMP/parts"
           mkdir -p "$parts"
 
+          chunks=0
+          unanswered=0
           offset=0
           while [ "$offset" -lt "$WAITING" ]; do
             brief="$RUNNER_TEMP/brief-$offset.md"
@@ -232,19 +238,50 @@ jobs:
               "${{ steps.candidates.outputs.file }}" "$offset" "$CHUNK" > "$brief"
             echo "issues $offset..$((offset + CHUNK - 1)): a $(wc -c < "$brief")-character brief"
 
-            # It writes an empty decisions file and exits 0 when it cannot ask, and
-            # the reason is in its own header: this runs forty-eight times a day,
-            # and a provider hiccup that turned red would produce a red run nobody
-            # believes. A chunk that fails costs its own issues and not the pass.
-            python3 .github/scripts/board-triage-decide.py "$brief" "$parts/$offset.json"
+            # It writes an empty decisions file either way, so one bad chunk
+            # costs its own issues and not the pass — that half is unchanged and
+            # is why a provider hiccup still does not turn this red. What is new
+            # (`#502`) is that *no model answered* exits 3 and is counted here:
+            # a chunk that decided nothing because nothing could be asked is not
+            # the same event as a chunk the model read and had nothing to say
+            # about, and only the second one is a quiet board.
+            rc=0
+            python3 .github/scripts/board-triage-decide.py "$brief" "$parts/$offset.json" || rc=$?
+            case "$rc" in
+              0) : ;;
+              3) unanswered=$((unanswered + 1)) ;;
+              *) exit "$rc" ;;
+            esac
+            chunks=$((chunks + 1))
             offset=$((offset + CHUNK))
           done
 
           jq -s '{decisions: map(.decisions[]?)}' "$parts"/*.json > "$decisions"
           decided=$(jq '.decisions | length' "$decisions")
-          echo "$decided decision(s) in total"
+          echo "$decided decision(s) in total, $unanswered of $chunks chunk(s) unanswered"
           echo "count=$decided" >> "$GITHUB_OUTPUT"
           echo "decisions=$decisions" >> "$GITHUB_OUTPUT"
+          echo "unanswered=$unanswered" >> "$GITHUB_OUTPUT"
+          echo "chunks=$chunks" >> "$GITHUB_OUTPUT"
+
+      # ## The pass that could not ask is not a pass that decided (`#502`)
+      #
+      # Measured 2026-08-26: three undecided issues, six 503s, `nothing was
+      # triaged this pass`, and a green run — forty-eight times a day while
+      # Inbox grew. The tolerance that produced it is still here and still
+      # right: **one chunk** that could not be asked costs its own issues, the
+      # retries and the second account run first, and a genuinely empty board
+      # never reaches this step at all because `decide` is gated on
+      # `waiting != '0'`.
+      #
+      # What is refused is the ending where **every** chunk went unanswered.
+      # That is not a hiccup, it is the pass being unable to do its work, and it
+      # is the one shape that used to be indistinguishable from success.
+      - name: Refuse a pass where nothing could be asked
+        if: steps.decide.outcome == 'success' && steps.decide.outputs.chunks != '0' && steps.decide.outputs.unanswered == steps.decide.outputs.chunks
+        run: |
+          echo "::error::${{ steps.candidates.outputs.waiting }} issue(s) waited and no model answered any of ${{ steps.decide.outputs.chunks }} chunk(s) — the pass routed nothing. The step log above names the status the gateway returned for each model that was asked."
+          exit 1
 
       # `#503`: an Actions run used to leave its only trace in its own stdout,
       # which made yesterday's repeated failure impossible to query beside the
@@ -311,11 +348,10 @@ jobs:
           # rather than only in our own logs.
           LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
           LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
-          TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL || 'gpt-5.6-sol' }}
-          # The account asked when the one above will not answer. Unset is
-          # the other of the two names the script knows; `none` switches the
-          # second attempt off. See the constants in the script for why the
-          # second name is a second model rather than a second provider.
+          # Same rule as the routing step above (`#502`): a served identifier or
+          # a tier alias, never a bare legacy name defaulted to in this file.
+          TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL }}
+          # Named or not asked; never inferred as a second hard-coded name.
           TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
         run: |
           set -uo pipefail
