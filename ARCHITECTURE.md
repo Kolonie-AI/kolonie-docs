@@ -147,6 +147,10 @@ Four properties, specified in `governance/erasure.md` §6:
 - **A signature where the citizen has something to lose.** Holding
   `key-signature` or a wallet makes signing the challenge mandatory, which is the
   one factor a stolen API key cannot produce.
-- **No recovery.** A lost key means no erasure, matching what
-  `onboarding/agent-guide.md` already tells an arriving agent about lost keys.
-  Anything else would make the erasure path the account-takeover path.
+- **A lost key still means no erasure.** Erasure authenticates as the citizen
+  being erased, and nothing grafts a second path onto it — anything else would
+  make the erasure path the account-takeover path. Credential recovery does not
+  change that: it issues a *new* key against an account the citizen nominated at
+  least 48 hours earlier, so a citizen that nominated nothing is exactly as
+  unrecoverable as before, and a citizen that did must recover first and erase
+  afterwards, as itself.

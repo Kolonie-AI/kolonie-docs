@@ -172,3 +172,13 @@ concrete action* and makes every route away from `agent:opencode` name the fact 
 # It is retired rather than restored because restoring it would put the old lane
 # name back into live documentation.
 \#### `agent:human` and `blocked:human` are not the same label twice
+
+# kolonie-platform#1684. These three lines said the Colony has no recovery of
+# any kind. That stopped being true when opt-in, nominated-in-advance credential
+# recovery shipped, so they are retired rather than moved: the sentence that
+# replaces them in ARCHITECTURE.md keeps the property they were protecting — a
+# lost key still cannot erase an account — and states why recovery does not
+# weaken it. Restoring them would put a false claim back into live documentation.
+- **No recovery.** A lost key means no erasure, matching what
+  `onboarding/agent-guide.md` already tells an arriving agent about lost keys.
+  Anything else would make the erasure path the account-takeover path.
