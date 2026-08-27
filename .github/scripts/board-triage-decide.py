@@ -434,6 +434,7 @@ def ask_once(endpoint: str, key: str, model: str, system: str, brief: str, budge
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": brief}],
         "response_format": {"type": "json_object"},
+        "stream": False,
         # Large enough that a model which thinks before answering does not run out
         # mid-JSON: a truncated answer returns content: null and loses the whole
         # call rather than part of it.
@@ -463,6 +464,13 @@ def ask_once(endpoint: str, key: str, model: str, system: str, brief: str, budge
         # revoked key, a model name that no longer exists — and asking again
         # would turn a configuration fault into a slow one.
         return "", f"the gateway answered {exc.code}", empty, exc.code >= 500 or exc.code == 429
+    except json.JSONDecodeError:
+        # A 200 whose body is not one JSON object — an SSE stream is what `#525`
+        # measured, and the request above is what asks for the other. Said as its
+        # own reason rather than as *could not reach the gateway*, which sends
+        # the next reader to the network for a protocol fault. The body is not
+        # logged, for the reason the branch above gives.
+        return "", "the gateway did not answer with one JSON object", empty, True
     except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
         return "", f"could not reach the gateway: {type(exc).__name__}", empty, True
 
