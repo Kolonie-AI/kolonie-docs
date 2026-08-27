@@ -135,11 +135,28 @@ case "$1 $2" in
     case "$_p" in
       */contents/.github/workflows/triage.yml)
         _r=${_p%%/contents/*}
+        # **A `.fail` sentinel, for the same reason `label list` has one**
+        # (`#349`, extended by `#285`). An absent fixture is the file not being
+        # there — a real gap, fixed by copying a workflow. A read that *failed*
+        # is a credential that cannot see the repository, and the two want
+        # opposite fixes, so the stub has to be able to produce both. GitHub
+        # answers `Resource not accessible by integration` here, not 404.
+        [ -f "$GH_FIXTURES/triage_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
         [ -f "$GH_FIXTURES/triage_${_r##*/}" ] || exit 1
         base64 -w0 < "$GH_FIXTURES/triage_${_r##*/}" ;;
       */contents/.github/workflows/review.yml)
         _r=${_p%%/contents/*}
+        [ -f "$GH_FIXTURES/review_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
         [ -f "$GH_FIXTURES/review_${_r##*/}" ] || exit 1 ;;
+      # *Can this credential see the repository at all?* — the question that
+      # separates a workflow that is missing from a repository that is
+      # unreadable. A repository whose triage probe was made to fail is one the
+      # credential cannot see, so this fails for it too; everything else answers.
+      */) : ;;
+      *)
+        _r=$_p
+        [ -f "$GH_FIXTURES/triage_${_r##*/}.fail" ] && { echo "GraphQL: Resource not accessible by integration" >&2; exit 1; }
+        echo '{"name":"'"${_r##*/}"'"}' ;;
     esac ;;
   "issue list")
     # Two different listings reach this stub and they must not be confused.
@@ -398,12 +415,83 @@ out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "and it too goes quiet once it has the triage and the reviewer" \
   "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
+# ## A read that failed is not a workflow that is missing (`#285`)
+#
+# `#349` taught the *label* half of 5c to ask `gh` whether it could read rather
+# than inferring it from the answer. The two workflow probes below it were left
+# inferring, and they infer the loudest possible wrong thing: a repository the
+# credential cannot see is reported as having no triage and no reviewer.
+#
+# Measured 2026-08-27, run 33041540890 on `main`. The board app's token could not
+# reach `kolonie-concept-lab` or `kolonie-opencode-orchestrator` — the log
+# carries `GraphQL: Resource not accessible by integration (repository.issues)`
+# twice — and 5c reported both as missing all three things. Both repositories
+# have `triage.yml` calling `inbound-triage.yml@main` and `review.yml` beside it,
+# verified by hand. **The finding was false and the run was red for it**, which
+# is `#285` reopening for a cause that is the check rather than the board.
+#
+# The distinction matters because the fixes are opposites: a real gap is `cp`
+# into another repository, and this is an installation's repository access.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"; covered kolonie-openclaw
+: > "$GH_FIXTURES/triage_kolonie-openclaw.fail"
+: > "$GH_FIXTURES/review_kolonie-openclaw.fail"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository whose workflows could not be read is not accused of having none" \
+  "$([[ "$out" != *"no workflow calls"* && "$out" != *"no reviewer:"* ]] && echo yes || echo no)" "$out"
+expect "and it says the read failed, which is a different fix from copying a file" \
+  "$([[ "$out" == *"could not be read"* ]] && echo yes || echo no)" "$out"
+
+# The half this must not break: a repository that answers and genuinely has
+# neither is still the finding it always was.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"
+bash "$ROOT/.github/scripts/board-triage.sh" vocabulary > "$GH_FIXTURES/labels_kolonie-openclaw"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a repository that really has no triage workflow is still reported" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"no workflow calls"* ]] && echo yes || echo no)" "$out"
+expect "and so is a missing reviewer" \
+  "$([[ "$out" == *"no reviewer:"* ]] && echo yes || echo no)" "$out"
+
+# And the one that would otherwise pass by accident: a triage.yml that exists and
+# calls something else is a covered-looking repository that is not covered. That
+# was true before this change and has to stay true after it.
+setup; echo "kolonie-openclaw" >> "$GH_FIXTURES/repos"; covered kolonie-openclaw
+echo "uses: somebody-else/some-other-workflow.yml@main" > "$GH_FIXTURES/triage_kolonie-openclaw"
+out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a triage.yml that calls something else is still not coverage" \
+  "$([ $rc -eq 1 ] && [[ "$out" == *"no workflow calls"* ]] && echo yes || echo no)" "$out"
+
 # The five are checked whether or not the sweep's listing came back, so a spent
 # budget narrows this answer instead of silencing it — and says which it was.
 setup; : > "$GH_FIXTURES/repos"; rm -f "$GH_FIXTURES/review_kolonie-email"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a repository listing that failed narrows 5c rather than silencing it" \
   "$([[ "$out" == *"kolonie-email"* && "$out" == *"only the repositories"* ]] && echo yes || echo no)" "$out"
+
+# ## Run by hand, with no report file (`#285`)
+#
+# `board-self-check.yml` always passes one, so every case above passes one too
+# and this path was exercised by nothing. It is the path a person or an agent
+# takes — `AGENTS.md` §6 and `agents/board-health.md` both print the command
+# without an argument — and it answered a failing board with **exit 1 and not one
+# word on stdout**.
+#
+# That is the worst shape a check can have. A silent non-zero reads as the script
+# being broken rather than as the board being wrong, and the finding it had
+# already computed was written to `/dev/null` and thrown away. Found on
+# 2026-08-27 while diagnosing `#285`: the live board was failing 5b with two
+# issues missing, and running the documented command printed nothing at all.
+setup; echo "Kolonie-AI/kolonie-docs#999" >> "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" check 2>&1); rc=$?
+expect "a failing board run by hand still exits 1" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
+expect "and says what it found, rather than failing silently" \
+  "$([ -n "$out" ] && echo yes || echo no)" "[$out]"
+expect "and the finding is the one it computed, naming the issue" \
+  "$([[ "$out" == *"kolonie-docs#999"* ]] && echo yes || echo no)" "$out"
+
+setup
+out=$(bash "$SCRIPT" check 2>&1); rc=$?
+expect "and a healthy board run by hand is still one green sentence" \
+  "$([ $rc -eq 0 ] && [[ "$out" == *"pruning itself"* ]] && echo yes || echo no)" "$out"
 
 # The listing is read once for the whole run. 5b's read is what 5a's own header
 # spends its length on the cost of; a second caller asking again would undo it.
