@@ -89,6 +89,29 @@ out=$(bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "a leftover key reference fails" "1" "$rc"
 
 echo
+echo "the log store's own credential (#503)"
+# The write path into Loki brought a second endpoint and a second token into
+# this repository's environment. A guard list that grew without its test growing
+# is a guard nobody checked.
+SECRET_LOKI_URL="https://logs.example-not-a-real-host.test"
+SECRET_LOKI_TOKEN="loki-token-abcdefghijklmnop0123456789"
+
+rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
+printf 'LOKI_URL: %s\n' "$SECRET_LOKI_URL" > "$WORK/tree/workflow.yml"
+out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_PUSH_TOKEN="$SECRET_LOKI_TOKEN" \
+  bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+check "a committed store address fails" "1" "$rc"
+contains "names the variable" "LOKI_URL" "$out"
+absent "and never prints the value" "$SECRET_LOKI_URL" "$out"
+
+rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
+printf 'token = "%s"\n' "$SECRET_LOKI_TOKEN" > "$WORK/tree/config.toml"
+out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_PUSH_TOKEN="$SECRET_LOKI_TOKEN" \
+  bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+check "a committed push token fails" "1" "$rc"
+absent "and never prints the value" "$SECRET_LOKI_TOKEN" "$out"
+
+echo
 echo "a fork, where the secrets are not there"
 # The half that must not become a check firing on a correct configuration. A
 # pull request from a fork gets no secrets, and a failure there blocks every

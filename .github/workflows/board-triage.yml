@@ -241,8 +241,33 @@ jobs:
           done
 
           jq -s '{decisions: map(.decisions[]?)}' "$parts"/*.json > "$decisions"
-          echo "$(jq '.decisions | length' "$decisions") decision(s) in total"
+          decided=$(jq '.decisions | length' "$decisions")
+          echo "$decided decision(s) in total"
+          echo "count=$decided" >> "$GITHUB_OUTPUT"
           echo "decisions=$decisions" >> "$GITHUB_OUTPUT"
+
+      # `#503`: an Actions run used to leave its only trace in its own stdout,
+      # which made yesterday's repeated failure impossible to query beside the
+      # rest of the Colony. This emits one structured event when the ending
+      # `#502` measured happens: candidates existed and no model answered.
+      #
+      # It is analysis, not an alarm, and it does not replace `#502`'s red run.
+      # `loki-event.sh` exits 0 on every push failure, including an absent secret
+      # on a fork and a 5xx from the store, because a log store being down is not
+      # a finding about triage. The step still says what happened on stderr.
+      - name: Record a pass where no model answered
+        if: steps.decide.outcome == 'success' && steps.decide.outputs.count == '0'
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_PUSH_TOKEN: ${{ secrets.LOKI_PUSH_TOKEN }}
+        run: |
+          bash .github/scripts/loki-event.sh emit board-triage error \
+            repository="$GITHUB_REPOSITORY" \
+            run_id="$GITHUB_RUN_ID" \
+            workflow="$GITHUB_WORKFLOW" \
+            attempt="$GITHUB_RUN_ATTEMPT" \
+            reason="candidates existed and no model answered" \
+            candidates="${{ steps.candidates.outputs.waiting }}"
 
       - name: Label, link and move
         if: steps.decide.outputs.decisions != ''

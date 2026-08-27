@@ -97,6 +97,40 @@ which is where the field and its option ids live. It is worth knowing here becau
 the symptom looks like a triage failure: issues that sit in no column are not
 issues the pass declined to route, they are issues it never saw.
 
+## What a workflow leaves behind after the run log
+
+`.github/scripts/loki-event.sh` (`kolonie-docs#503`). One shared script, called
+from a workflow step, that pushes a structured event into the log store the
+Colony already runs — so the store holds both halves of what runs: the containers
+on the host, and the automation in Actions.
+
+Measured 2026-08-26 (`#502`): `board-triage.yml` ran every thirty minutes for a
+day, routed nothing on each pass, and reported success every time. The only
+record was stdout on a GitHub-hosted runner. Nothing collected it and nothing
+could query it.
+
+**This is not an alarm and does not replace a red run.** A line in Loki wakes
+nobody; `#502` is what makes a pass that cannot do its work fail visibly. This is
+where a failure is *analysed* — over days, across workflows, beside the container
+logs. `watch-agent.sh` reads the same store with `| json`, which is why the line
+is JSON.
+
+| | |
+|---|---|
+| **Labels** | `service` and `level`, and nothing else. `architecture/infrastructure.md` states the rule and the reason — *cardinality is how a Loki install dies* — and an Actions push invites exactly the wrong thing. Both values are closed sets in the script, so a typo is refused rather than minting a permanent stream |
+| **Everything else** | In the line, as JSON: repository, run id, workflow, attempt, the reason, whatever count the caller has. A `\| json` query filters on them without a label carrying them |
+| **What a refused label costs** | The event, and nothing else. It is named on stderr and the calling step is unaffected |
+| **When the store is down** | Nothing. Every push failure — 5xx, unreachable, absent credential — exits 0 with a sentence on stderr. A log store that is down is not a reason to lose a run, and it is not a finding about the workflow that was trying to report |
+| **A missing credential** | A named configuration gap on stderr, `watch-judge.py`'s policy for a missing key applied to the write side. A fork's pull request has no secrets and must not be told the workflow is broken |
+| **What is never printed** | The token, the store's address, and the store's response body. That last one is deliberate and is the same rule `watch-judge.py` states: an error body can echo the request back with the credential inside it, and this log is public. The status code is what a reader needs |
+| **Where the credential travels** | A `curl --config` file, never the argument list — `/proc/<pid>/cmdline` is readable by everything else on the runner for the life of the call |
+| **Credentials** | `LOKI_URL` and `LOKI_PUSH_TOKEN`, both secrets, both guarded by `no-gateway-leak.sh` on every `CI` run. The address is a secret and not merely the token, for the reason that section already gives: a rotated token costs a minute, and a hostname in a public repository's history cannot be taken back |
+| **Logic** | `.github/scripts/loki-event.sh`, tested against a stubbed `curl` in `.github/tests/loki-event.test.sh` — which asserts the unbounded-label rejection, the missing credential, the unreachable store and the 5xx, because those four are the whole of what makes it safe to call |
+
+**Who calls it today:** `board-triage.yml`, on the ending `#502` describes — a
+pass where candidates existed and no model answered. Adding a caller is a step
+and a name in `SERVICES`; adding a label is refused.
+
 ## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of

@@ -43,6 +43,12 @@ ROOT=${1:-.}
 GUARDED=(
   LLM_GATEWAY_BASE_URL
   LLM_GATEWAY_API_KEY_WORKER
+  # `#503` added a write path from Actions into the log store, so this repository
+  # now holds a second endpoint and a second token. Both are guarded for the
+  # reason in the header: the token can be rotated in a minute and the store's
+  # address, once in a public repository's history, cannot be taken back.
+  LOKI_URL
+  LOKI_PUSH_TOKEN
 )
 
 # And the literal strings a swap leaves behind. These are not secrets — they are
