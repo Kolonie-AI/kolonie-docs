@@ -320,14 +320,37 @@ check_coverage() {
         gaps+="        missing labels: ${missing% } — \`bash .github/scripts/board-triage.sh vocabulary\` names the set"$'\n'
     fi
 
-    listing=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null)
-    case "$listing" in
-      *inbound-triage.yml@*) : ;;
-      *) gaps+="        no workflow calls \`inbound-triage.yml\`, so an issue filed from outside gets no \`area:\` label and no reply — copy \`.github/workflows/triage.yml\` and set its \`area:\`"$'\n' ;;
-    esac
+    # **Ask `gh` whether it could read, rather than inferring it from the
+    # answer** — `#349`'s rule for the labels above, extended to the two probes
+    # below it by `#285`. They were the half still inferring, and they inferred
+    # the loudest possible wrong thing: a repository this credential cannot see
+    # was reported as having no triage workflow and no reviewer.
+    #
+    # Measured 2026-08-27, run 33041540890 on `main`. The board app's token could
+    # not reach `kolonie-concept-lab` or `kolonie-opencode-orchestrator` — the
+    # log carries `Resource not accessible by integration` twice — and 5c
+    # accused both of missing all three things. Both have `triage.yml` calling
+    # `inbound-triage.yml@main` and `review.yml` beside it. The finding was
+    # false and it is what made `#285` reopen.
+    #
+    # The two readings need separating because the repairs are opposites: a real
+    # gap is copying a file into another repository, and this is an
+    # installation's repository access. A 404 is still the gap — `--silent`
+    # cannot tell them apart, so the status is asked for explicitly.
+    local probe_rc probe_body
+    probe_body=$(gh api "repos/$ORG/$repo/contents/.github/workflows/triage.yml" --jq '.content' 2>/dev/null); probe_rc=$?
+    if [ "$probe_rc" -ne 0 ] && ! gh api "repos/$ORG/$repo" --silent >/dev/null 2>&1; then
+      gaps+="        its workflows could not be read — \`gh api repos/$ORG/$repo\` failed too, so this credential cannot see the repository at all; that is a reading and not a finding about it"$'\n'
+    else
+      listing=$(printf '%s' "$probe_body" | base64 -d 2>/dev/null)
+      case "$listing" in
+        *inbound-triage.yml@*) : ;;
+        *) gaps+="        no workflow calls \`inbound-triage.yml\`, so an issue filed from outside gets no \`area:\` label and no reply — copy \`.github/workflows/triage.yml\` and set its \`area:\`"$'\n' ;;
+      esac
 
-    if ! gh api "repos/$ORG/$repo/contents/.github/workflows/review.yml" --silent >/dev/null 2>&1; then
-      gaps+="        no reviewer: copy \`.github/workflows/review.yml\`"$'\n'
+      if ! gh api "repos/$ORG/$repo/contents/.github/workflows/review.yml" --silent >/dev/null 2>&1; then
+        gaps+="        no reviewer: copy \`.github/workflows/review.yml\`"$'\n'
+      fi
     fi
 
     [ -n "$gaps" ] && finding+="    $ORG/$repo"$'\n'"$gaps"
@@ -567,11 +590,31 @@ board_readable() {
 }
 
 cmd_check() {
-  local report="${1:-/dev/null}" status=0
+  local report owned=0 status=0
+
+  # The workflow passes a path because a later step files what this wrote. The
+  # documented by-hand command does not — `AGENTS.md` §6 and
+  # `agents/board-health.md` both print `board-self-check.sh check` on its own —
+  # and until `#285` that meant **write every finding to `/dev/null`**. A failing
+  # live board answered exit 1 and not one word on stdout, which reads as a
+  # broken script rather than as a board condition and throws away the answer it
+  # already paid to compute.
+  #
+  # A temporary report keeps the two callers on one path: the workflow still
+  # gets the durable file its next step needs, and a person gets the same words
+  # on stdout. `owned` is the distinction — never remove a path the caller
+  # supplied, and always remove one this function minted.
+  if [ -n "${1:-}" ]; then
+    report=$1
+  else
+    report=$(mktemp) || return 2
+    owned=1
+  fi
   : > "$report"
 
   if ! board_readable >> "$report"; then
     cat "$report"
+    [ "$owned" -eq 0 ] || rm -f "$report"
     return 2
   fi
   : > "$report"
@@ -590,6 +633,7 @@ cmd_check() {
   else
     cat "$report"
   fi
+  [ "$owned" -eq 0 ] || rm -f "$report"
   return "$status"
 }
 
@@ -690,7 +734,7 @@ cmd_resolve() {
 }
 
 case "${1:-check}" in
-  check)   shift || true; cmd_check "${1:-/dev/null}" ;;
+  check)   shift || true; cmd_check "$@" ;;
   report)  shift; cmd_report "$1" ;;
   resolve) cmd_resolve ;;
   *) echo "usage: board-self-check.sh check|report|resolve" >&2; exit 2 ;;
