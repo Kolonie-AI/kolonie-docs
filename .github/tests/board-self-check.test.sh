@@ -331,11 +331,11 @@ echo "5c — is the automation pointed at the repository (#333)"
 # were, before either had an issue: a repository whose issues reach the board
 # and whose labels do not exist, so a triage pass is billed for a decision it
 # then throws away.
-setup; grep -v '^agent:claude$' "$GH_FIXTURES/labels_kolonie-platform" > "$WORK/t" && mv "$WORK/t" "$GH_FIXTURES/labels_kolonie-platform"
+setup; grep -v '^queue:maintainer$' "$GH_FIXTURES/labels_kolonie-platform" > "$WORK/t" && mv "$WORK/t" "$GH_FIXTURES/labels_kolonie-platform"
 out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a missing label fails" "$([ $rc -eq 1 ] && echo yes || echo no)" "rc=$rc"
 expect "and names the repository and the label" \
-  "$([[ "$out" == *"kolonie-platform"* && "$out" == *"missing labels: agent:claude"* ]] && echo yes || echo no)" "$out"
+  "$([[ "$out" == *"kolonie-platform"* && "$out" == *"missing labels: queue:maintainer"* ]] && echo yes || echo no)" "$out"
 expect "and does not accuse the repositories that are fine" \
   "$([[ "$out" != *"kolonie-email"* ]] && echo yes || echo no)" "$out"
 

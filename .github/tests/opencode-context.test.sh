@@ -194,20 +194,20 @@ contains "a from:non-member item is marked the same way" "ARRIVED FROM OUTSIDE T
 
 # The two cases above both put the provenance label first, and that is exactly
 # why the marking could be broken without either of them noticing: the table
-# joins labels with `", "`, so `,$labels,` reads `,agent:claude, from:citizen,`
+# joins labels with `", "`, so `,$labels,` reads `,queue:maintainer, from:citizen,`
 # and the pattern `*,from:citizen,*` does not find `, from:citizen,` in it. Every
 # item whose provenance label did not sort first was announced as **written
 # inside the Colony** — the boundary this file's header describes, off for most
 # of what it covers. So the label goes second here, in both directions.
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "From a citizen" "A report." "agent:claude,from:citizen"
+issue Kolonie-AI/kolonie-docs 2 "From a citizen" "A report." "queue:maintainer,from:citizen"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
 contains "marked even when the provenance label is not the first one" "ARRIVED FROM OUTSIDE THE COLONY" "$out"
 
 case_setup
 issue Kolonie-AI/kolonie-docs 1 "Assigned" "See #2."
-issue Kolonie-AI/kolonie-docs 2 "Ours" "Written here." "agent:claude,p2"
+issue Kolonie-AI/kolonie-docs 2 "Ours" "Written here." "queue:maintainer,p2"
 out=$(bash "$SCRIPT" Kolonie-AI/kolonie-docs 1 2>/dev/null)
 absent "and an item from inside is still not marked" "ARRIVED FROM OUTSIDE THE COLONY" "$out"
 

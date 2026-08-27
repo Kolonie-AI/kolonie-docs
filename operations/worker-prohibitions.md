@@ -3,7 +3,7 @@
 **The list of things an unattended worker cannot be asked for, once**
 (`kolonie-docs#260`). It is read by a person deciding a route, by the worker's own
 prompt, which is built from it, and by the triage pass in `kolonie-docs#262`
-before it writes `agent:opencode` on anything.
+before it writes `queue:worker` on anything.
 
 ## Why it is a file rather than a paragraph in a prompt
 
@@ -34,7 +34,7 @@ opencode.json
 **This block is the source and it is machine-read.** `opencode-worker.sh
 prohibited-paths` returns it, the prompt the model is given is built from it, and
 `worker-rule-refusal` greps a refusal against it to decide whether
-`opencode:forbidden` applies. Adding a fifth is an edit here and nowhere else, and
+`worker:forbidden` applies. Adding a fifth is an edit here and nowhere else, and
 `.github/tests/opencode-worker.test.sh` fails if the prompt and the script stop
 agreeing with it.
 
@@ -71,7 +71,7 @@ well the issue is written.
 saying why it belongs. Every other condition here is one a run *cannot satisfy*;
 this one a run satisfies easily, which is exactly the danger. The triage pass
 enforces it as a route cap rather than as a refusal — an issue from outside that
-is not labelled `bug` caps at `agent:claude` — because what is missing is a
+is not labelled `bug` caps at `queue:maintainer` — because what is missing is a
 decision, and an attended run is where one gets made.
 
 **A dependency on a still-open issue is the one the queue can now answer by
@@ -102,14 +102,14 @@ closes and the issue becomes ordinary work. Nothing above it on this page does.
   rather than repeating it. That is the fix for the drift this file exists to
   prevent; the earlier arrangement had the same rule in the prompt, in the script
   and in `AGENTS.md`, and two of the three had already fallen behind.
-- **By `kolonie-docs#262`**, before it writes `agent:opencode` on anything.
+- **By `kolonie-docs#262`**, before it writes `queue:worker` on anything.
 
 ## What this must not become
 
 **Not a classifier.** Nothing here guesses from an issue's text whether it needs a
 live host. The list is read by something that can reason about a specific issue
 against specific rules, and **a rule it cannot apply confidently means
-`agent:claude`** rather than a coin toss — `AGENTS.md` §5 makes the same default
+`queue:maintainer`** rather than a coin toss — `AGENTS.md` §5 makes the same default
 for the same reason.
 
 **Not a place for preferences.** An entry belongs here when a run has demonstrated
@@ -124,7 +124,7 @@ should arrive the way these did — from a refusal that happened.
 ## How a line gets added
 
 **By a person, from a proposal** (`kolonie-docs#264`, live 2026-08-10). The hourly
-triage pass reads the refusals on every open issue carrying `opencode:failed`,
+triage pass reads the refusals on every open issue carrying `worker:failed`,
 compares each reason against this document, and when a reason has appeared on **two
 or more** issues and matches nothing here it comments on
 [the collecting issue](https://github.com/Kolonie-AI/kolonie-docs/issues/273) with

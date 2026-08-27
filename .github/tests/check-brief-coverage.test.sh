@@ -49,7 +49,7 @@ A rule about the board, which most work never touches.
 
 The reason that rule exists, which is a story about 2026-08-12.
 
-#### `agent:human` and `blocked:human` are not the same label twice
+#### `queue:operator` and `blocked:human` are not the same label twice
 
 See [the board](#the-board) for the rest of it.
 MD
@@ -71,7 +71,7 @@ MD
 
 A rule about the board, which most work never touches.
 
-#### `agent:human` and `blocked:human` are not the same label twice
+#### `queue:operator` and `blocked:human` are not the same label twice
 
 See [the board](board.md#the-board) for the rest of it.
 MD
@@ -148,7 +148,7 @@ out=$(run); rc=$?
 grep -q "not the same label twice" <<<"$out" && pass "and the heading is named" \
   || fail "the missing heading was not named"
 
-printf '# it was renamed\n\\#### `agent:human` and `blocked:human` are not the same label twice\n' \
+printf '# it was renamed\n\\#### `queue:operator` and `blocked:human` are not the same label twice\n' \
   > "$REPO/.github/coverage-retired.txt"
 git add -A >/dev/null
 out=$(run); rc=$?

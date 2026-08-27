@@ -56,8 +56,8 @@ name: Triage the board
 # ## What it may write, and where that is enforced
 #
 # **Not here.** `board-triage.sh` holds every guard — Inbox and Ready are the only
-# columns it reads, `agent:opencode` is refused on anything carrying
-# `blocked:human`, `opencode:forbidden` or an open blocker, a route is never
+# columns it reads, `queue:worker` is refused on anything carrying
+# `blocked:human`, `worker:forbidden` or an open blocker, a route is never
 # widened by a later pass, a priority is never set on an issue that arrived from
 # outside, and nothing is ever removed. They are in the script because
 # `.github/tests/board-triage.test.sh` can hold a script to account and cannot

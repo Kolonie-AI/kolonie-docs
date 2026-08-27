@@ -17,7 +17,7 @@ name: opencode worker
 # agents already collide. A schedule that takes exactly one item is strictly one
 # worker, whatever anybody does to the labels.
 #
-# `agent:opencode` is therefore **queue membership — not a status and not a
+# `queue:worker` is therefore **queue membership — not a status and not a
 # trigger**. The board column says what is happening to an issue; the label says
 # who is allowed to work it. Nothing here ever removes it.
 #
@@ -133,7 +133,7 @@ on:
 #
 # **A run that loses the tie retires quietly**: exit 0, nothing written on the
 # issue, its own claim comment deleted. It must not take the ordinary failure
-# path, which would remove `agent:opencode` and mark the issue `opencode:failed`
+# path, which would remove `queue:worker` and mark the issue `worker:failed`
 # for having been wanted by two runs at once.
 
 permissions:
@@ -313,7 +313,7 @@ jobs:
       #
       # Every other way a run can end is announced. A refusal, an empty commit, a
       # red check and a worker fault each write a comment, move the board and
-      # leave `opencode:failed` for the board to be filtered on. **A conflict was
+      # leave `worker:failed` for the board to be filtered on. **A conflict was
       # the exception**, and it is the ending where the issue looks *finished*:
       # the board says In Review, the pull request is open, auto-merge is waiting
       # for a merge GitHub can never perform, and nothing is moving.
@@ -395,7 +395,7 @@ jobs:
 
           ${files}
 
-          **The pull request has been closed and its branch deleted.** Nothing is lost: a closed pull request keeps its diff and its commits, and leaving the branch would mean the next attempt at this issue finds its own name taken. This issue is back in **Ready**, without \`agent:opencode\` and with \`opencode:failed\`, so a person decides whether it is worth another run rather than the worker deciding it by retrying.
+          **The pull request has been closed and its branch deleted.** Nothing is lost: a closed pull request keeps its diff and its commits, and leaving the branch would mean the next attempt at this issue finds its own name taken. This issue is back in **Ready**, without \`queue:worker\` and with \`worker:failed\`, so a person decides whether it is worth another run rather than the worker deciding it by retrying.
 
           No run resolves a conflict, and that is deliberate (\`kolonie-docs#257\`): the other change is in a commit the model has not read and was told not to widen its scope to. Found by $RUN_URL." \
               >/dev/null 2>&1 ||
@@ -404,8 +404,8 @@ jobs:
             # All three edits in one call, so no window shows an issue with no
             # route at all (`#255`, `#259`).
             gh issue edit "$issue" --repo "$repo" \
-              --remove-label agent:opencode \
-              --add-label opencode:failed --add-label agent:claude \
+              --remove-label queue:worker \
+              --add-label worker:failed --add-label queue:maintainer \
               >/dev/null 2>&1 ||
               echo "::warning::could not relabel $repo#$issue"
 
@@ -679,7 +679,7 @@ jobs:
           set -uo pipefail
           # `claim` prints `held` or `lost` since `#266`, and exits 0 for both:
           # losing a race is not a failure, and every non-zero exit here ends the
-          # run through the path that marks the issue `opencode:failed`. A
+          # run through the path that marks the issue `worker:failed`. A
           # non-zero exit still means what it always did — the board could not be
           # read or could not be written — and still stops the run.
           verdict=$(bash .github/scripts/opencode-worker.sh claim \
@@ -717,7 +717,7 @@ jobs:
           gh issue comment "${{ steps.queue.outputs.issue }}" --repo "${{ steps.queue.outputs.repo }}" --body \
             "Taken by the opencode worker (\`kolonie-docs#142\`), moved to **In Progress**: $RUN_URL
 
-          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, that pull request merges itself when the target's required check goes green and nobody has to press anything (\`kolonie-docs#232\`) — a red check leaves it open for a person. If the run fails, this issue goes back to **Ready**, loses \`agent:opencode\` and gains \`opencode:failed\`, with a comment saying which run failed and why."
+          This is an experiment with a stated end and no agent is watching it. If it opens a pull request, that pull request merges itself when the target's required check goes green and nobody has to press anything (\`kolonie-docs#232\`) — a red check leaves it open for a person. If the run fails, this issue goes back to **Ready**, loses \`queue:worker\` and gains \`worker:failed\`, with a comment saying which run failed and why."
 
       # ## The tie-break, and everything downstream hangs off it (`#266`)
       #
@@ -734,7 +734,7 @@ jobs:
       # already what the winner set it to — and stops. `held` is not written, so
       # every step below is skipped, including `Put it back` and `Say why on the
       # issue`: releasing an issue somebody else is working, or marking it
-      # `opencode:failed`, is precisely the harm `#266` exists to prevent.
+      # `worker:failed`, is precisely the harm `#266` exists to prevent.
       - name: Did I win the claim?
         id: held
         if: steps.claim.outputs.held
@@ -767,7 +767,7 @@ jobs:
           fi
 
           # **The failure mark clears when the issue is taken, not when it
-          # passes** (`#255`). `opencode:failed` answers *what did the worker try
+          # passes** (`#255`). `worker:failed` answers *what did the worker try
           # and not finish*, and an issue being tried again is exactly when that
           # stops being true — waiting for success would leave the mark on
           # something already in hand, and a filter that lies about the present
@@ -781,7 +781,7 @@ jobs:
           # to remove, and `gh` says so rather than failing. Losing the claim
           # over a cosmetic edit would be the reporting costing the work.
           gh issue edit "$issue" --repo "$repo" \
-            --remove-label opencode:failed >/dev/null 2>&1 || true
+            --remove-label worker:failed >/dev/null 2>&1 || true
 
           echo "mine=true" >> "$GITHUB_OUTPUT"
 
@@ -1398,7 +1398,7 @@ jobs:
             # abort is what destroys them — and they are the whole value of the
             # comment this failure writes. `kind=work` because the change
             # genuinely no longer applies: the issue goes back to Ready, loses
-            # `agent:opencode`, gains `opencode:failed`, and a person decides
+            # `queue:worker`, gains `worker:failed`, and a person decides
             # whether it is still worth doing.
             if ! git rebase origin/main; then
               conflicts=$(git diff --name-only --diff-filter=U | sed 's/^/  /')
@@ -1932,15 +1932,15 @@ jobs:
           # the comment is written either way and says which happened.
           # ## And a mark that survives the label coming off (`#255`)
           #
-          # Removing `agent:opencode` takes the issue out of the queue and leaves
+          # Removing `queue:worker` takes the issue out of the queue and leaves
           # nothing saying it was ever in it. An issue that was never tried and
           # one the worker took and abandoned then look identical on the board,
           # and the second is the more interesting of the two: somebody has
           # already spent a run learning something about it, and the comment
           # holding that is buried in a thread.
           #
-          # `opencode:failed` is that mark, and it is a filter more than a label:
-          # `label:opencode:failed` is *what did the worker try and not finish*.
+          # `worker:failed` is that mark, and it is a filter more than a label:
+          # `label:worker:failed` is *what did the worker try and not finish*.
           # Set here, cleared when the issue is taken again — see `Claim it`.
           #
           # **Both edits in one call.** Two would leave a window in which the
@@ -1954,25 +1954,25 @@ jobs:
           # possible implementation is a path this worker is forbidden to write
           # does not become possible by being retried, and the comment inviting a
           # retry is what produced three identical refusals on
-          # `kolonie-infra#107`. So that case gets `opencode:forbidden` as well,
+          # `kolonie-infra#107`. So that case gets `worker:forbidden` as well,
           # which `pick` excludes **whatever the queue label says** — a person
-          # putting `agent:opencode` back is no longer enough, and changing the
+          # putting `queue:worker` back is no longer enough, and changing the
           # issue is what it takes.
           # **And it gains a route, because losing one is not the same as having
-          # none.** `#259` asks that an issue carry exactly one `agent:` label at
-          # all times; an issue that has just lost `agent:opencode` and gained
+          # none.** `#259` asks that an issue carry exactly one `queue:` label at
+          # all times; an issue that has just lost `queue:worker` and gained
           # nothing violates that at the moment it most needs somebody to look.
           #
-          # `agent:claude` rather than a judgement about which of the four
+          # `queue:maintainer` rather than a judgement about which of the four
           # endings this was. They differ — a refusal usually wants the issue
           # rewritten, a red check may well pass on a second run, a worker fault
           # is not about the issue at all — and `#259`'s own rule for that spread
-          # is that **uncertain means `agent:claude`, because a person is
+          # is that **uncertain means `queue:maintainer`, because a person is
           # reachable there.** After a failure we are uncertain by definition, and
           # a Claude agent reading the comment decides in seconds whether to hand
           # it straight back.
-          labels=(--remove-label agent:opencode --add-label opencode:failed --add-label agent:claude)
-          [ -z "${FORBIDDEN:-}" ] || labels+=(--add-label opencode:forbidden)
+          labels=(--remove-label queue:worker --add-label worker:failed --add-label queue:maintainer)
+          [ -z "${FORBIDDEN:-}" ] || labels+=(--add-label worker:forbidden)
 
           if gh issue edit "$ISSUE" --repo "$REPO" "${labels[@]}" >/dev/null 2>&1; then
             removed=yes
@@ -1983,11 +1983,11 @@ jobs:
           {
             echo
             if [ "$removed" = yes ] && [ -n "${FORBIDDEN:-}" ]; then
-              echo "**This is not the worker's to do, and \`opencode:forbidden\` now says so.** The refusal above names \`${FORBIDDEN}\`, which this worker's own prompt forbids it to edit — a worker that could change its own permissions, schedule and guard rails in a run nobody is watching would be a worse thing than a queue that occasionally holds an issue it cannot take. The refusal is correct and a fourth attempt would produce the same words."
+              echo "**This is not the worker's to do, and \`worker:forbidden\` now says so.** The refusal above names \`${FORBIDDEN}\`, which this worker's own prompt forbids it to edit — a worker that could change its own permissions, schedule and guard rails in a run nobody is watching would be a worse thing than a queue that occasionally holds an issue it cannot take. The refusal is correct and a fourth attempt would produce the same words."
               echo
-              echo "So this one is **out of the queue until a person changes something**, and putting \`agent:opencode\` back is deliberately not enough: \`pick\` excludes \`opencode:forbidden\` whatever else the issue carries. What unblocks it is a decision — someone implements it by hand, or the issue is respecified as something that does not need that path, or the rule itself changes. Remove \`opencode:forbidden\` when one of those has happened. \`AGENTS.md\` §5 is where the entry condition is written down."
+              echo "So this one is **out of the queue until a person changes something**, and putting \`queue:worker\` back is deliberately not enough: \`pick\` excludes \`worker:forbidden\` whatever else the issue carries. What unblocks it is a decision — someone implements it by hand, or the issue is respecified as something that does not need that path, or the rule itself changes. Remove \`worker:forbidden\` when one of those has happened. \`AGENTS.md\` §5 is where the entry condition is written down."
             elif [ "$removed" = yes ]; then
-              echo "**The \`agent:opencode\` label has been removed and \`opencode:failed\` set**, so the worker will not take this again on its own and the board still says it was tried. That is not a verdict on the issue: put \`agent:opencode\` back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue. \`opencode:failed\` clears itself when the issue is taken again."
+              echo "**The \`queue:worker\` label has been removed and \`worker:failed\` set**, so the worker will not take this again on its own and the board still says it was tried. That is not a verdict on the issue: put \`queue:worker\` back once the reason above is dealt with — a clearer specification, a fix to the worker, or simply a judgement that it is worth another try — and it rejoins the queue. \`worker:failed\` clears itself when the issue is taken again."
             else
               echo "**The labels could not be edited**, so this issue is still queued and may be taken again on the next run, and the board does not record that it was tried. That is a defect in this worker rather than a decision about the issue, and \`kolonie-docs#142\` is where it goes."
             fi

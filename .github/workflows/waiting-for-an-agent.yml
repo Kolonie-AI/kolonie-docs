@@ -11,7 +11,7 @@ name: What is waiting for an agent or a person
 # description, and `.github/scripts/board-triage.sh` and
 # `architecture/automation.md` both carry the same string for the same reason.
 #
-# `agent:opencode` has a worker. `agent:claude` and `agent:human` have nobody —
+# `queue:worker` has a worker. `queue:maintainer` and `queue:operator` have nobody —
 # the label says a development agent or a person should do it, and until this
 # nothing told anyone one was waiting. That worked while the maintainer agent was
 # in the conversation when the label was applied, and stops working the moment
@@ -182,7 +182,7 @@ jobs:
 
           if [ -z "$number" ]; then
             # `gh issue create` prints the URL and has no `--json`, so the number
-            # comes off the end of it. **No `agent:` label and no priority**: the
+            # comes off the end of it. **No `queue:` label and no priority**: the
             # list is not itself work, and labelling it would put it on itself.
             url=$(gh issue create --repo "$GITHUB_REPOSITORY" \
               --title "$TITLE" --label area:docs \

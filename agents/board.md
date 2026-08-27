@@ -125,7 +125,7 @@ stays there until somebody moves it. There is nothing recorded to have gone away
 and guessing that a person has changed their mind is not a move a pass may make.
 
 **A package is what falls out of it.** `#259` says a package is what
-`agent:claude` is for, and a set of issues linked by dependency already is one —
+`queue:maintainer` is for, and a set of issues linked by dependency already is one —
 no second label and no second record.
 
 ### Five repositories are covered, and eight are not
@@ -211,7 +211,7 @@ the fix that leaves the next repository to break in the same way.
 A repository whose issues reach the board needs all five, and it needs them
 **before** the first issue is filed in it, not after the first pass fails:
 
-1. **The eight labels the triage pass writes** — the three `agent:` routes,
+1. **The eight labels the triage pass writes** — the three `queue:` routes,
    `from:non-member`, `decision`, `idea`, `p1` and `p2`, all defined in §5. `bash
    .github/scripts/board-triage.sh vocabulary` prints exactly that list, and is
    the copy to trust: `board-triage.sh` now creates a missing one before it

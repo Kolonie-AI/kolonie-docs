@@ -6,7 +6,7 @@
 # `kolonie-docs#142` turns on properties that a green run cannot show: that the
 # ordering is deterministic, that an issue in any column but Ready is not in the
 # queue, that a board write which fails stops the run *before* work starts, and
-# that nothing ever removes `agent:opencode`. Each is a branch that would look
+# that nothing ever removes `queue:worker`. Each is a branch that would look
 # fine in review and be wrong in production.
 #
 # Stubbed `gh`, for `board-self-check.test.sh`'s reason: it is the only way to
@@ -508,17 +508,17 @@ check "an empty queue picks nothing" "" "$out"
 contains "an empty queue says so, rather than being silent" "nothing queued" "$(cat "$WORK/err")"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p1"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2" "11|2026-08-02T00:00:00Z|queue:worker,p1"
 boarded "10:Ready" "11:Ready"
 check "p1 comes before an older p2" "$(q 11)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2" "11|2026-08-02T00:00:00Z|queue:worker,p2"
 boarded "10:Ready" "11:Ready"
 check "at the same priority the oldest goes first" "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2" "11|2026-08-02T00:00:00Z|queue:worker,p2"
 boarded "10:In Progress" "11:Ready"
 check "a repository with work in flight yields nothing, siblings included" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
@@ -526,53 +526,53 @@ check "a repository with work in flight yields nothing, siblings included" "" "$
 # not blocked by the first. Two runs in one repository is what every conflict was
 # made of; two runs in different ones share no history, no check and no merge.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" \
-       "11|2026-08-02T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2" \
+       "11|2026-08-02T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-website"
 boarded "10:In Progress" "11:Ready:Kolonie-AI/kolonie-website"
 check "and another repository is still open for work" \
   "$(q 11 Kolonie-AI/kolonie-website)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2" "11|2026-08-02T00:00:00Z|queue:worker,p2"
 boarded "10:Done" "11:Ready"
 check "a finished issue does not hold its repository" "$(q 11)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 boarded "10:Inbox"
 check "only Ready is the queue — Inbox is not" "" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,blocked:human" "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p1,blocked:human" "11|2026-08-02T00:00:00Z|queue:worker,p2"
 boarded "10:Ready" "11:Ready"
 check "blocked:human is out of the queue however it got the label" "$(q 11)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 boarded "10:Ready"
 out=$(bash "$SCRIPT" pick 2>/dev/null)
 check "exactly one issue is taken per run" "1" "$(grep -c . <<<"$out")"
 
-# `#250`: the one mark a person putting `agent:opencode` back does not undo.
+# `#250`: the one mark a person putting `queue:worker` back does not undo.
 # `kolonie-infra#107` was taken three times in eighty minutes and refused in the
 # same words each time, because nothing could say *this is not the worker's*.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:forbidden" \
-       "11|2026-08-02T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p1,worker:forbidden" \
+       "11|2026-08-02T00:00:00Z|queue:worker,p2"
 boarded "10:Ready" "11:Ready"
 check "an issue the worker may not implement is out of the queue" "$(q 11)" \
   "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:forbidden"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p1,worker:forbidden"
 boarded "10:Ready"
 check "even when it is the only thing queued and in Ready" "" \
   "$(bash "$SCRIPT" pick 2>/dev/null)"
 
-# `opencode:failed` is the reversible one and must stay reversible: it says
+# `worker:failed` is the reversible one and must stay reversible: it says
 # *tried and not finished*, and putting the queue label back is the whole design.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p1,opencode:failed"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p1,worker:failed"
 boarded "10:Ready"
 check "a merely failed issue is still takeable, which is the difference" "$(q 10)" \
   "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -631,7 +631,7 @@ echo "a board that is large, or from another repository (#142, 2026-08-07)"
 # The board here is padded past the ceiling with items nothing else matches, so
 # a `pick` that puts it on a command line cannot survive this case.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 {
   printf '{"items":['
   printf '{"id":"ITEM_10","status":"Ready","content":{"number":10,"repository":"Kolonie-AI/kolonie-docs"}}'
@@ -651,7 +651,7 @@ absent "nothing complains about the argument list" "Argument list too long" "$(c
 # repository's status was. `board_item_for` always matched the repository too —
 # the two disagreeing is how a worker takes an issue the board says is Blocked.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 cat > "$GH_FIXTURES/board" <<'BOARD'
 {"items":[
   {"id":"ITEM_OTHER","status":"Ready","content":{"number":10,"repository":"Kolonie-AI/kolonie-platform"}},
@@ -663,7 +663,7 @@ check "another repository's item does not put an issue in the queue" "" "$(bash 
 # And the same in the direction that matters for throughput: a Ready issue here
 # is not hidden by a Blocked item of the same number elsewhere.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 cat > "$GH_FIXTURES/board" <<'BOARD'
 {"items":[
   {"id":"ITEM_OTHER","status":"Blocked","content":{"number":10,"repository":"Kolonie-AI/kolonie-platform"}},
@@ -676,7 +676,7 @@ check "nor does it hide one" "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 # exit code separately from its output for exactly this distinction, and it can
 # only do that if the script draws it.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 : > "$GH_FIXTURES/board"
 out=$(bash "$SCRIPT" pick 2>"$WORK/err"); rc=$?
 check "an unreadable board fails rather than reading as an empty queue" "1" "$rc"
@@ -689,7 +689,7 @@ echo "the queue is the organisation, not this repository (#231)"
 # The defect `#231` names: the worker could only ever see the repository hosting
 # it, and the queue there was empty while labelled work sat in the other four.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-platform"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-platform"
 boarded "10:Ready:Kolonie-AI/kolonie-platform"
 check "an issue in another repository is in the queue" \
   "$(q 10 Kolonie-AI/kolonie-platform)" "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -698,9 +698,9 @@ check "an issue in another repository is in the queue" \
 # inside a repository would make the queue depend on which repository you asked
 # from, which is the property `#231` removes.
 case_setup
-issued "10|2026-08-03T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-docs" \
-       "20|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website" \
-       "30|2026-08-02T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-platform"
+issued "10|2026-08-03T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-docs" \
+       "20|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-website" \
+       "30|2026-08-02T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-platform"
 boarded "10:Ready:Kolonie-AI/kolonie-docs" \
         "20:Ready:Kolonie-AI/kolonie-website" \
         "30:Ready:Kolonie-AI/kolonie-platform"
@@ -711,8 +711,8 @@ check "the oldest across the whole organisation goes first" \
 # labelled this morning must not wait behind a p2 from last week, wherever
 # either of them lives.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website" \
-       "20|2026-08-05T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-website" \
+       "20|2026-08-05T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform"
 boarded "10:Ready:Kolonie-AI/kolonie-website" "20:Ready:Kolonie-AI/kolonie-platform"
 check "p1 beats an older p2 in a different repository" \
   "$(q 20 Kolonie-AI/kolonie-platform)" "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -720,8 +720,8 @@ check "p1 beats an older p2 in a different repository" \
 # Two repositories, same issue number, only one of them Ready. This is the case
 # that was latent while the search was single-repository and is live now.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-docs" \
-       "10|2026-08-02T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-platform"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-docs" \
+       "10|2026-08-02T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-platform"
 boarded "10:Blocked:Kolonie-AI/kolonie-docs" "10:Ready:Kolonie-AI/kolonie-platform"
 check "the same number in two repositories resolves to the Ready one" \
   "$(q 10 Kolonie-AI/kolonie-platform)" "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -730,8 +730,8 @@ check "the same number in two repositories resolves to the Ready one" \
 # taken rather than skipped — refusing it would leave it queued forever with
 # nothing saying why.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode" \
-       "11|2026-08-05T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker" \
+       "11|2026-08-05T00:00:00Z|queue:worker,p2"
 boarded "10:Ready" "11:Ready"
 out=$(bash "$SCRIPT" pick 2>"$WORK/err")
 check "an unprioritised issue sorts behind a newer p2" "$(q 11)" "$out"
@@ -739,7 +739,7 @@ contains "and the log names it rather than dropping it silently" \
   "carries neither p1 nor p2" "$(cat "$WORK/err")"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode"
+issued "10|2026-08-01T00:00:00Z|queue:worker"
 boarded "10:Ready"
 check "an unprioritised issue is still taken when it is all there is" \
   "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -749,10 +749,10 @@ check "an unprioritised issue is still taken when it is all there is" \
 # being right on its own. Deliberately laid out worst-first — the newest p1 is
 # last in the fixture and first out of the queue.
 case_setup
-issued "40|2026-08-01T00:00:00Z|agent:opencode" \
-       "30|2026-08-02T00:00:00Z|agent:opencode,p2" \
-       "20|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website" \
-       "10|2026-08-06T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+issued "40|2026-08-01T00:00:00Z|queue:worker" \
+       "30|2026-08-02T00:00:00Z|queue:worker,p2" \
+       "20|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-website" \
+       "10|2026-08-06T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform"
 boarded "40:Ready" "30:Ready" \
         "20:Ready:Kolonie-AI/kolonie-website" \
         "10:Ready:Kolonie-AI/kolonie-platform"
@@ -765,9 +765,9 @@ contains "and the unprioritised one is named, not silently last" \
 # The same queue with the p1 gone, to show the second and third tiers order
 # against each other and not merely against p1.
 case_setup
-issued "40|2026-08-01T00:00:00Z|agent:opencode" \
-       "30|2026-08-02T00:00:00Z|agent:opencode,p2" \
-       "20|2026-08-01T00:00:00Z|agent:opencode,p2|Kolonie-AI/kolonie-website"
+issued "40|2026-08-01T00:00:00Z|queue:worker" \
+       "30|2026-08-02T00:00:00Z|queue:worker,p2" \
+       "20|2026-08-01T00:00:00Z|queue:worker,p2|Kolonie-AI/kolonie-website"
 boarded "40:Ready" "30:Ready" "20:Ready:Kolonie-AI/kolonie-website"
 check "with no p1, the oldest p2 goes before a p2 and both before no priority" \
   "$(q 20 Kolonie-AI/kolonie-website)" "$(bash "$SCRIPT" pick 2>/dev/null)"
@@ -1205,7 +1205,7 @@ blocked_by() {
 }
 
 case_setup
-issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+issued "660|2026-08-01T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform"
 boarded "660:Ready:Kolonie-AI/kolonie-platform"
 blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
 out=$(bash "$SCRIPT" pick 2>"$WORK/err")
@@ -1216,7 +1216,7 @@ contains "and the log names what it waits for" "660 waits for Kolonie-AI/kolonie
 # merging and the issue went back to Ready; a closed blocker still unblocks,
 # because the field is either on `main` or it is not and the check says which.
 case_setup
-issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+issued "660|2026-08-01T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform"
 boarded "660:Ready:Kolonie-AI/kolonie-platform"
 blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|closed"
 check "a closed blocker does not block" "$(q 660 Kolonie-AI/kolonie-platform)" \
@@ -1225,7 +1225,7 @@ check "a closed blocker does not block" "$(q 660 Kolonie-AI/kolonie-platform)" \
 # Blocked or not blocked. An issue waiting on one open and one closed blocker is
 # waiting.
 case_setup
-issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform"
+issued "660|2026-08-01T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform"
 boarded "660:Ready:Kolonie-AI/kolonie-platform"
 blocked_by "Kolonie-AI/kolonie-platform|660" \
   "Kolonie-AI/kolonie-platform|659|closed" "Kolonie-AI/kolonie-docs|1|open"
@@ -1235,15 +1235,15 @@ check "one open blocker among closed ones is still a block" "" \
 # The queue does not stop at the blocked issue: it goes on to the next one in the
 # order it had already computed.
 case_setup
-issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform" \
-       "10|2026-08-02T00:00:00Z|agent:opencode,p1"
+issued "660|2026-08-01T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform" \
+       "10|2026-08-02T00:00:00Z|queue:worker,p1"
 boarded "660:Ready:Kolonie-AI/kolonie-platform" "10:Ready"
 blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
 check "the next candidate is taken instead" "$(q 10)" "$(bash "$SCRIPT" pick 2>/dev/null)"
 
 case_setup
-issued "660|2026-08-01T00:00:00Z|agent:opencode,p1|Kolonie-AI/kolonie-platform" \
-       "10|2026-08-02T00:00:00Z|agent:opencode,p1"
+issued "660|2026-08-01T00:00:00Z|queue:worker,p1|Kolonie-AI/kolonie-platform" \
+       "10|2026-08-02T00:00:00Z|queue:worker,p1"
 boarded "660:Ready:Kolonie-AI/kolonie-platform" "10:Ready"
 blocked_by "Kolonie-AI/kolonie-platform|660" "Kolonie-AI/kolonie-platform|659|open"
 blocked_by "Kolonie-AI/kolonie-docs|10" "Kolonie-AI/kolonie-docs|9|open"
@@ -1255,7 +1255,7 @@ contains "and says that is what happened" "every queued issue is waiting" "$(cat
 # that the worker stops taking blocked work, and a queue it cannot read is
 # unknown — which the workflow reports as an error rather than as a quiet hour.
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p1"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p1"
 boarded "10:Ready"
 echo yes > "$GH_FIXTURES/dependencies_fail"
 out=$(bash "$SCRIPT" pick 2>"$WORK/err"); rc=$?
@@ -1458,13 +1458,13 @@ check "a card with no clock is not guessed at" "-1" \
 # could not tell them apart. The filters are `pick`'s.
 case_setup
 boarded "10:In Progress@30" \
-  "11:Ready+agent:opencode" \
-  "12:Ready+agent:opencode,blocked:human" \
-  "13:Ready+agent:claude" \
-  "14:Ready+agent:opencode,opencode:forbidden" \
-  "15:Ready+agent:opencode!CLOSED" \
-  "16:Ready+agent:opencode:Kolonie-AI/kolonie-platform" \
-  "17:Inbox+agent:opencode"
+  "11:Ready+queue:worker" \
+  "12:Ready+queue:worker,blocked:human" \
+  "13:Ready+queue:maintainer" \
+  "14:Ready+queue:worker,worker:forbidden" \
+  "15:Ready+queue:worker!CLOSED" \
+  "16:Ready+queue:worker:Kolonie-AI/kolonie-platform" \
+  "17:Inbox+queue:worker"
 aged "Kolonie-AI/kolonie-docs|10|9"
 check "only what pick would actually take next is counted" "1" \
   "$(bash "$SCRIPT" forgotten-claims 2>/dev/null | cut -f5)"
@@ -1482,7 +1482,7 @@ echo "the escalated half, for a reader that is not the issue (#381)"
 # cannot read an issue at all. So `--escalated` answers from the board alone: no
 # issue clock, no `gh api repos/...`, and only cards past the threshold.
 case_setup
-boarded "10:In Progress@48" "11:In Progress@2" "12:Ready+agent:opencode"
+boarded "10:In Progress@48" "11:In Progress@2" "12:Ready+queue:worker"
 out=$(bash "$SCRIPT" forgotten-claims --escalated 2>/dev/null)
 contains "a card past a day is escalated" "Kolonie-AI/kolonie-docs	10	48	1" "$out"
 absent "and a fresh one is not" "	11	" "$out"
@@ -1571,7 +1571,7 @@ contains "and so does a file that is not there" "Kolonie-AI/kolonie-docs	10	9" "
 # variable on one step rather than on the job.
 case_setup
 boarded "10:In Progress"
-issued "10|2026-08-01T00:00:00Z|agent:opencode"
+issued "10|2026-08-01T00:00:00Z|queue:worker"
 check "an unset BOARD_FILE changes nothing about the queue" "" \
   "$(BOARD_FILE= bash "$SCRIPT" pick 2>/dev/null)"
 
@@ -2281,7 +2281,7 @@ echo
 echo "what it never does"
 
 case_setup
-issued "10|2026-08-01T00:00:00Z|agent:opencode,p2"
+issued "10|2026-08-01T00:00:00Z|queue:worker,p2"
 boarded "10:Ready"
 bash "$SCRIPT" pick >/dev/null 2>&1
 bash "$SCRIPT" claim Kolonie-AI/kolonie-docs 10 >/dev/null 2>&1
@@ -2402,7 +2402,7 @@ fi
 
 # `#251`: a failing issue leaves the queue rather than being retried forever.
 contains "a failed run takes the label off the issue it took" \
-  "--remove-label agent:opencode" "$wf"
+  "--remove-label queue:worker" "$wf"
 contains "and says so in the comment, as something a person reverses" \
   "back once the reason above is dealt with" "$wf"
 contains "a removal that failed is reported rather than swallowed" \
@@ -2427,11 +2427,11 @@ contains "and a commitless run under its own" \
 
 # `#255`: a failure leaves a mark the board can be filtered on.
 contains "a failed run sets the mark as it takes the queue label off" \
-  "--remove-label agent:opencode --add-label opencode:failed" "$wf"
+  "--remove-label queue:worker --add-label worker:failed" "$wf"
 contains "and both edits are one call, so no window shows neither" \
   "Both edits in one call" "$wf"
 contains "taking an issue clears the mark" \
-  "--remove-label opencode:failed" "$wf"
+  "--remove-label worker:failed" "$wf"
 contains "and clearing it cannot cost the claim" \
   ">/dev/null 2>&1 || true" "$wf"
 # The literal in the workflow carries backslash-escaped backticks, so this
@@ -2477,7 +2477,7 @@ absent "the claim comment no longer promises a review that does not happen" \
 # nothing about it may cost this run its issue.
 contains "the workflow sweeps its own stuck pull requests" "stale-pull-requests" "$wf_commands"
 contains "and gives the issue back to Ready with the failure mark" \
-  "--remove-label agent:opencode --add-label opencode:failed" "$wf_commands"
+  "--remove-label queue:worker --add-label worker:failed" "$wf_commands"
 contains "the branch answer is one and it is stated" "--delete-branch" "$wf_commands"
 contains "a sweep that cannot reach the API warns rather than failing" \
   "the stale-pull-request sweep could not read the API" "$wf"
@@ -2564,7 +2564,7 @@ contains "and the attribution says it did not read the diff" \
 contains "a refusal is checked against the worker's own rules" \
   "worker-rule-refusal" "$why_step"
 contains "and only a refusal is" '"$kind" = refused' "$why_step"
-contains "a worker-rule refusal marks the issue" "--add-label opencode:forbidden" "$wf_commands"
+contains "a worker-rule refusal marks the issue" "--add-label worker:forbidden" "$wf_commands"
 contains "and the comment says a fourth attempt would produce the same words" \
   "would produce the same words" "$wf"
 contains "and says what actually unblocks it" \
@@ -2576,7 +2576,7 @@ contains "the exclusion is in the queue filter, not in the search term" \
   'index($forbidden) | not' "$(cat "$SCRIPT")"
 # It is set and never cleared by the worker: every other mark here has a run
 # that clears it, and this one is a person's to remove.
-absent "the worker never clears it for you" "--remove-label opencode:forbidden" "$wf_commands"
+absent "the worker never clears it for you" "--remove-label worker:forbidden" "$wf_commands"
 
 refusal_guarded=$(grep -c 'kind" = work' <<<"$why_step")
 if [ "$refusal_guarded" -ge 1 ]; then
@@ -2601,11 +2601,11 @@ contains "pick reads which repositories are already in flight" \
 contains "and skips candidates from them" \
   'select(.repo as $r | $busy | index($r) | not)' "$(cat "$SCRIPT")"
 
-# `#259`: a failure must never leave an issue with no `agent:` label at all.
+# `#259`: a failure must never leave an issue with no `queue:` label at all.
 contains "a failed run routes the issue onward rather than orphaning it" \
-  "--add-label opencode:failed --add-label agent:claude" "$wf"
+  "--add-label worker:failed --add-label queue:maintainer" "$wf"
 contains "and the conflict sweep does the same" \
-  "--add-label opencode:failed --add-label agent:claude \\" "$wf"
+  "--add-label worker:failed --add-label queue:maintainer \\" "$wf"
 
 echo
 echo "board-add tells a failed call apart from an honest empty answer (#422)"

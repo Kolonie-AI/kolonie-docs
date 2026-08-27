@@ -206,7 +206,7 @@ jobs:
           #
           # It is not a cosmetic mislabel. `from:outside` is a member of
           # `OUTSIDE_PROVENANCE` in `board-triage.sh`, so it holds the priority
-          # guard (`:976`) and caps the route at `agent:claude` (`:1335`). The
+          # guard (`:976`) and caps the route at `queue:maintainer` (`:1335`). The
           # maintainer's own issues could not be prioritised by triage, and
           # `kolonie-platform#1141`–`#1144` were capped by a provenance rule
           # rather than by any judgement about the work.
@@ -276,7 +276,7 @@ jobs:
           # `from:citizen from:non-member from:outside`, and every author who
           # reaches this branch has already been given `from:outside` above — the
           # condition is the same one, so the two cannot come apart. The priority
-          # is held for a person and the route is capped at `agent:claude` from
+          # is held for a person and the route is capped at `queue:maintainer` from
           # the moment the issue is opened, including in the window before the
           # sweep runs.
           if [ "$has_push" = false ]; then
@@ -316,7 +316,7 @@ jobs:
           # **It is a state and `from:outside` is a fact, and neither replaces
           # the other.** That one is load-bearing inside `board-triage.sh`'s
           # `OUTSIDE_PROVENANCE`, which drives the priority guard and the
-          # `agent:claude` route cap, and it is removed by nothing. Merging the
+          # `queue:maintainer` route cap, and it is removed by nothing. Merging the
           # two is a separate decision and `#389` says in as many words that it
           # must not be taken as a tidy-up while implementing this.
           #

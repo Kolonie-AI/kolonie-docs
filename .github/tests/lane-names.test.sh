@@ -22,12 +22,13 @@
 #
 # ## What this slice does NOT assert, deliberately
 #
-# **Nothing here reads the new names yet.** #494 is names in the documentation
-# only; creating the labels and migrating live issues is #495, and teaching
-# triage to escalate is #496. So this asserts the documented lanes and says
-# nothing about `.github/`, whose scripts and workflows still operate the old
-# labels and must keep doing so until #495 moves the fleet. Asserting the new
-# names there would turn this repository red for a slice that has not run yet.
+# **#494 named the lanes in the documentation; #495 moved the fleet onto them.**
+# So the scripts and workflows now read the `queue:`/`worker:` names, and the
+# workflow assertion below is what holds them there. What still carries a
+# retired name on purpose is `agents/history/` — the record of what happened,
+# and a narrative that renamed itself would stop being one — and the one
+# historical sentence in `agents/routes.md` that keeps a closed issue
+# explicable.
 #
 # ## The rejection case
 #
@@ -142,6 +143,11 @@ echo
 echo "no opencode: prefix remains in labels.md"
 opencode_prefix=$(grep -oE 'opencode:[a-z]+' "$labels" 2>/dev/null | sort -u | tr '\n' ' ')
 check "labels.md has no opencode: label" "" "${opencode_prefix% }"
+
+echo
+echo "no workflow reads a retired lane or worker-outcome name"
+retired_workflow_hits=$(git -C "$ROOT" grep -lE 'agent:opencode|agent:claude|agent:human|opencode:failed|opencode:forbidden' -- '.github/workflows/*.yml' 2>/dev/null | sort | tr '\n' ' ')
+check "workflows use only queue: and worker: labels" "" "${retired_workflow_hits% }"
 
 echo
 echo "the retired names are still explicable"

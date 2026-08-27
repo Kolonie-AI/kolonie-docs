@@ -55,7 +55,7 @@
 #
 # ## What this never does
 #
-# **It never touches `agent:opencode`.** The label is queue membership and
+# **It never touches `queue:worker`.** The label is queue membership and
 # removing it is not a workflow's decision — `AGENTS.md` §5, and the same rule
 # `opencode-worker.sh` is written to.
 #
@@ -194,7 +194,7 @@ case "${1:-}" in
 
 The pull request is **closed and its branch is kept**: $(jq -r '.url' <<<"$view")
 
-Nothing about the issue changed. \`agent:opencode\` is untouched, so this is queued again and the next run starts a fresh attempt with the closed pull request available to it as context (\`#235\`)." ||
+Nothing about the issue changed. \`queue:worker\` is untouched, so this is queued again and the next run starts a fresh attempt with the closed pull request available to it as context (\`#235\`)." ||
       echo "warning: could not comment on $repo#$number, but it is back in Ready" >&2
 
     echo "$repo#$number returned to Ready; $repo#$pr closed" >&2

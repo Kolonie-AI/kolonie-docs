@@ -14,8 +14,8 @@
 #
 # ## Why this exists
 #
-# `agent:opencode` has a worker that comes and takes things. `agent:claude` and
-# `agent:human` have nobody: the label says a development agent or a person
+# `queue:worker` has a worker that comes and takes things. `queue:maintainer` and
+# `queue:operator` have nobody: the label says a development agent or a person
 # should do it, and until now nothing told anyone that one was waiting. That
 # worked while the maintainer agent was in the conversation when the label was
 # applied, and stops working the moment `kolonie-docs#262` applies it at 03:20 on
@@ -47,14 +47,14 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ORG=${ORG:-Kolonie-AI}
 
-# The two labels this reports on. `agent:opencode` is deliberately absent: it has
+# The two labels this reports on. `queue:worker` is deliberately absent: it has
 # a worker, and a list of things already being taken is the daily message nobody
 # opens.
-WAITING_LABELS=${WAITING_LABELS:-agent:claude agent:human}
+WAITING_LABELS=${WAITING_LABELS:-queue:maintainer queue:operator}
 
 # The columns that mean *somebody already has this*. Everything else — Inbox,
 # Ready, Blocked — is waiting for somebody, and a `blocked:human` issue
-# in Blocked is exactly what the `agent:human` half of this list is for.
+# in Blocked is exactly what the `queue:operator` half of this list is for.
 # Pipe separated rather than an array, because an array cannot come in from the
 # environment and every other setting in this file can.
 HELD_STATUSES=${HELD_STATUSES:-In Progress|In Review|Done}
@@ -65,7 +65,7 @@ HELD_STATUSES=${HELD_STATUSES:-In Progress|In Review|Done}
 SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 
 # The issue this list is published on. It is excluded from its own list, which
-# is not a special case worth avoiding — it carries no `agent:` label, and this
+# is not a special case worth avoiding — it carries no `queue:` label, and this
 # is belt and braces for the day somebody labels it.
 LIST_ISSUE=${LIST_ISSUE:-}
 
@@ -87,7 +87,7 @@ die() {
   exit "${2:-1}"
 }
 
-# Why this is not `agent:opencode`, in one clause (`#265`).
+# Why this is not `queue:worker`, in one clause (`#265`).
 #
 # **Read off the labels, and only off the labels.** Triage (`#262`) does not yet
 # record its reasoning anywhere a script can read, so the honest options were a
@@ -98,12 +98,12 @@ why_waiting() {
   local labels=$1 route=$2
   case " $labels " in
     *" blocked:human "*)      echo "waits on a person: one of the seven classes in AGENTS.md §5" ;;
-    *" opencode:forbidden "*) echo "the worker may not write it — its implementation is a path its own rules forbid" ;;
-    *" opencode:failed "*)    echo "the worker tried it and did not finish" ;;
+    *" worker:forbidden "*) echo "the worker may not write it — its implementation is a path its own rules forbid" ;;
+    *" worker:failed "*)    echo "the worker tried it and did not finish" ;;
     *" decision "*)           echo "a decision has to be made before code can be written" ;;
     *" idea "*)               echo "not specified well enough for an unattended run" ;;
     *)
-      if [ "$route" = "agent:human" ]; then
+      if [ "$route" = "queue:operator" ]; then
         echo "routed to a person"
       else
         echo "routed to a Claude agent, which is the safe default when triage is unsure"
@@ -271,7 +271,7 @@ extras() {
 entries() {
   local label board issues found
   # **One search per label, and not one search with two.** Measured 2026-08-10:
-  # `gh search issues --label agent:claude --label agent:human` returns **zero**,
+  # `gh search issues --label queue:maintainer --label queue:operator` returns **zero**,
   # because two `label:` qualifiers are an AND in GitHub's search syntax and no
   # issue carries both. A list that is empty for a reason nobody can see is the
   # failure this whole issue is about, so the labels are asked for one at a time
@@ -329,8 +329,8 @@ entries() {
       | select($held | index($status) | not)
       | $issue + {
           status: $status,
-          route: (if ($issue.labels | index("agent:human")) then "agent:human"
-                  else "agent:claude" end),
+          route: (if ($issue.labels | index("queue:operator")) then "queue:operator"
+                  else "queue:maintainer" end),
           rank: (if ($issue.labels | index("p1")) then 0
                  elif ($issue.labels | index("p2")) then 1
                  else 2 end) }
@@ -375,7 +375,7 @@ entries() {
 # The markdown, with a package as one entry (`#265`).
 #
 # **A package is not a second record.** `#261` made a dependency a relation the
-# machine can read, and `#259` says a package is what `agent:claude` is for — so
+# machine can read, and `#259` says a package is what `queue:maintainer` is for — so
 # a set of issues linked by dependency already *is* a package, and this only has
 # to notice. Issues linked to each other appear under one heading, blockers
 # first, because that is the order they will be worked in.
