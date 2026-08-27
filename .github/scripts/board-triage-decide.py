@@ -217,11 +217,19 @@ condition in one clause", "issues": ["owner/repo#123", "owner/repo#456"], \
 time: derive it from the reason and never from the issue numbers."""
 
 
-def nothing(path: str, field: str, why: str) -> int:
+def nothing(path: str, field: str, why: str, code: int = 0) -> int:
+    """Write an empty answer, say why, and exit with `code`.
+
+    **`code` is the whole of `#502`'s second half.** Zero still means *there was
+    nothing to decide, or the model decided nothing* — a pass that is genuinely
+    empty is the good case and stays green. `NO_ANSWER` means *there was
+    something to decide and no model answered*, which is not a quiet board and
+    must not read as one.
+    """
     print(why, file=sys.stderr)
     with open(path, "w", encoding="utf-8") as fh:
         json.dump({field: []}, fh)
-    return 0
+    return code
 
 
 def read_model_call(answer: object) -> dict:
@@ -279,24 +287,54 @@ def read_model_call(answer: object) -> dict:
 
 # `#262` asks for the strongest model available and gives the reason: the
 # dependency step is a judgement over the whole board at once. The name is a
-# setting, so the strongest model in six months is one variable away; the default
-# is what was strongest on 2026-08-10.
-DEFAULT_MODEL = "gpt-5.6-sol"
+# setting, so the strongest model in six months is one variable away.
+#
+# ## Why the default is a tier alias rather than a model name (`#502`)
+#
+# Measured 2026-08-26 against the configured gateway: `grok-4.5` and
+# `gpt-5.6-sol` — the two names this file used to know — answered **503**, while
+# `x-ai/grok-4.5`, `openai/gpt-5.6-sol` and `@preset/tier-1` answered 200.
+# `GET /v1/models` served the prefixed identifiers and neither bare one. A bare
+# name is therefore not a model that is temporarily unwell; it is a name the
+# gateway does not have, and asking it again on a schedule is a configuration
+# fault dressed as a provider hiccup.
+#
+# A tier alias is the one identifier that does not go stale when the vendor
+# behind it is replaced, which is exactly what `#262` wanted from a setting.
+DEFAULT_MODEL = "@preset/tier-1"
 
-# ## The second model is a second upstream account, and that is the whole point
+# ## The second model is a second upstream account, and it is configuration
 #
 # Measured 2026-08-12: the gateway's 502 and 503 are one exhausted upstream
 # account. `gpt-5.6-*` is served by a **single** ChatGPT credential shared by
 # nineteen API keys, so `cli-proxy-api`'s `max-retry-credentials` has nothing to
-# rotate to and answers 503 until the cooldown clears; `grok-4.5` has its own
-# account and its own quota. Asking the other one is the rotation the gateway
+# rotate to and answers 503 until the cooldown clears; a different vendor has its
+# own account and its own quota. Asking the other one is the rotation the gateway
 # cannot do for us, done here, over the same key and the same endpoint.
+#
+# **It is no longer inferred, and that is `#502`'s second correction.** This file
+# used to derive the second attempt as *the other of the two names it knew* —
+# and because both of those names were bare legacy identifiers the gateway had
+# stopped serving, the retry path could not reach a served model however many
+# times it was asked. Two unserved names through one healthy gateway is not a
+# fallback, it is the same deterministic failure twice. So the second account is
+# `TRIAGE_LLM_FALLBACK_MODEL` and nothing else: named, or not asked.
 #
 # **It is not a weaker model, deliberately.** The docstring above refuses to fall
 # back to a rule of thumb, and a small model routing the board unnoticed would be
 # that in a more expensive form: a wrong route looks exactly like a right one
-# until someone reads it. Both names here are models `#262` would accept.
-ACROSS_ACCOUNTS = "grok-4.5"
+# until someone reads it.
+DEFAULT_FALLBACK_MODEL = ""
+
+# What `route()` returns when the pass had something to decide and no model
+# answered it. `board-triage.yml` counts these across the chunks: every chunk
+# unanswered is a pass that routed nothing, and that pass must not be green.
+#
+# **It is not the same as an empty answer.** A model that answered and had
+# nothing to change is a decided board; a model that could not be reached is an
+# undecided one. Before `#502` both wrote an empty file and exited 0, which is
+# how a deterministic misconfiguration ran forty-eight times a day in green.
+NO_ANSWER = 3
 
 # ## A fast failure is retried and a slow one is not
 #
@@ -319,6 +357,67 @@ ACROSS_ACCOUNTS = "grok-4.5"
 # pass that is cut short there had nothing to write anyway.
 SLOW_FAILURE_SECONDS = 30
 RETRY_PAUSES = (3, 12)
+
+
+def served_models(endpoint: str, key: str) -> tuple:
+    """(ids-the-gateway-serves, why-not). Exactly one is non-empty.
+
+    `GET /v1/models` is the gateway's own answer to *what may I ask for*, and
+    `#502` is what happens without it: two names nobody serves, sent every half
+    hour through a healthy gateway, each answered 503 and each read as a
+    provider hiccup.
+
+    **A catalogue that cannot be read is a failure unless the configured name is
+    a tier alias.** Asking a vendor-shaped identifier without the catalogue would
+    recreate the exact failure this function exists to stop: a bare legacy name
+    sent because nothing established that the gateway serves it. Tier aliases
+    are the exception because they are resolved by the gateway and deliberately
+    do not appear in the served model list.
+    """
+    req = urllib.request.Request(
+        f"{endpoint}/models",
+        headers={"Authorization": f"Bearer {key}",
+                 "User-Agent": "Kolonie-AI/board-triage"})
+    try:
+        answer = json.load(urllib.request.urlopen(req, timeout=30))
+    except urllib.error.HTTPError as exc:
+        # The status and nothing else, for the reason `ask_once` gives: this log
+        # is public and a provider's error body can echo the request back.
+        return (), f"could not read the model catalogue: the gateway answered {exc.code}"
+    except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
+        return (), f"could not read the model catalogue: {type(exc).__name__}"
+
+    rows = answer.get("data") if isinstance(answer, dict) else None
+    if not isinstance(rows, list):
+        return (), "the model catalogue was not a list"
+
+    served = []
+    for row in rows:
+        name = row.get("id") if isinstance(row, dict) else None
+        if isinstance(name, str) and name.strip():
+            served.append(name.strip())
+    if not served:
+        return (), "the model catalogue named no model"
+    return tuple(served), ""
+
+
+def usable_models(wanted: list, served: tuple) -> tuple:
+    """(what-to-ask, what-the-gateway-does-not-serve).
+
+    Order is the caller's: the configured model first, then the fallback. A tier
+    alias is passed through unchecked — `@preset/tier-1` is resolved by the
+    gateway to whichever model currently backs that tier and is deliberately not
+    in the served catalogue, so requiring it there would refuse the one
+    identifier that cannot go stale.
+    """
+    unserved = []
+    usable = []
+    for name in wanted:
+        if name.startswith("@") or name in served:
+            usable.append(name)
+        else:
+            unserved.append(name)
+    return tuple(usable), tuple(unserved)
 
 
 def ask_once(endpoint: str, key: str, model: str, system: str, brief: str, budget: int) -> tuple:
@@ -411,19 +510,44 @@ def ask(system: str, brief: str, budget: int) -> tuple:
     endpoint = base if base.endswith("/v1") else f"{base}/v1"
 
     model = os.environ.get("TRIAGE_LLM_MODEL", "").strip() or DEFAULT_MODEL
-    # Unset picks the model that is not the one being used, because either name
-    # alone is served by one account and the point of the second call is that it is
-    # not that account. **The word that switches it off is `none`, not an empty
-    # string**: a workflow writing `${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}` hands
-    # this an empty string whenever the variable does not exist, and an empty
-    # string that means *off* would silently undo the whole change the first time
-    # someone wired the setting up.
+    # **Named or not asked** (`#502`). This used to infer the second attempt as
+    # the other of two hard-coded names, and both of them were identifiers the
+    # gateway had stopped serving — so the retry path could not reach a served
+    # model however many times it ran. `none` still switches it off explicitly;
+    # an empty string is nobody having set the variable, which is now the same
+    # thing as far as this file is concerned, because inferring a second name is
+    # what produced the failure.
     named = os.environ.get("TRIAGE_LLM_FALLBACK_MODEL", "").strip()
-    other = "" if named == "none" else named or (
-        ACROSS_ACCOUNTS if model == DEFAULT_MODEL else DEFAULT_MODEL)
+    other = "" if named == "none" else named or DEFAULT_FALLBACK_MODEL
+
+    wanted = [model] + ([other] if other and other != model else [])
+
+    # ## Ask for what the gateway says it serves
+    #
+    # A name the catalogue does not carry fails identically every pass, so it is
+    # dropped here with the reason rather than retried on a schedule. A tier
+    # alias is exempt, and an unreadable catalogue leaves only the aliases
+    # askable — `served_models` and `usable_models` both say why.
+    served, catalogue_why = served_models(endpoint, key)
+    if catalogue_why:
+        print(catalogue_why, file=sys.stderr)
+        aliases = [name for name in wanted if name.startswith("@")]
+        if not aliases:
+            return "", ("the model catalogue could not be read and no configured "
+                        "model is a tier alias"), empty
+        wanted = aliases
+    else:
+        usable, unserved = usable_models(wanted, served)
+        for name in unserved:
+            print(f"{name}: the gateway does not serve this model — not asked",
+                  file=sys.stderr)
+        if not usable:
+            return "", ("no configured model is served by the gateway"
+                        f" ({', '.join(wanted)})"), empty
+        wanted = list(usable)
 
     why, call = "nothing was asked", empty
-    for attempt_model in [model] + ([other] if other and other != model else []):
+    for attempt_model in wanted:
         pauses = list(RETRY_PAUSES)
         while True:
             began = time.monotonic()
@@ -458,7 +582,12 @@ def route(brief_path: str, out_path: str) -> int:
 
     text, why, call = ask(SYSTEM, brief, 16000)
     if why:
-        return nothing(out_path, "decisions", f"{why} — nothing was triaged this pass")
+        # `#502`: this chunk had candidates and got no answer. The empty file is
+        # still written, so the workflow's `jq -s` merge is unchanged and one bad
+        # chunk costs its own issues rather than the pass; the exit code is what
+        # stops the pass reporting success over it.
+        return nothing(out_path, "decisions",
+                       f"{why} — nothing was triaged this pass", NO_ANSWER)
 
     try:
         decided = json.loads(text)

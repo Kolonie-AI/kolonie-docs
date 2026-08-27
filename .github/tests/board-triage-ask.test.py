@@ -103,12 +103,30 @@ def gateway(script: list[str]):
     return ask_once
 
 
-def run(script: list[str], model: str | None = "gpt-5.6-sol",
-        fallback: str | None = None, credentials: bool = True) -> tuple:
+# ## The catalogue the gateway serves (`#502`)
+#
+# Measured 2026-08-26 against the configured gateway: `GET /v1/models` served the
+# prefixed identifiers and neither bare name, and the bare names answered 503
+# while the prefixed ones and the tier alias answered 200. This fixture is that
+# measurement, with no address, key or response body in it — the served ids are
+# the whole of what the loop needs to know.
+SERVED = ("x-ai/grok-4.5", "openai/gpt-5.6-sol")
+
+# What `served_models` is replaced with, per case: a tuple of served ids, or a
+# reason it could not be read.
+CATALOGUE: list = [SERVED, ""]
+
+decide.served_models = lambda endpoint, key: (CATALOGUE[0], CATALOGUE[1])  # noqa: ARG005
+
+
+def run(script: list[str], model: str | None = "openai/gpt-5.6-sol",
+        fallback: str | None = None, credentials: bool = True,
+        served: tuple = SERVED, catalogue_why: str = "") -> tuple:
     """Run one `ask()` against the script. Returns (answered, why, asked, slept, seconds)."""
     ASKED.clear()
     SLEPT.clear()
     CLOCK[0] = 1_000.0
+    CATALOGUE[0], CATALOGUE[1] = served, catalogue_why
     for name, value in (("TRIAGE_LLM_MODEL", model),
                         ("TRIAGE_LLM_FALLBACK_MODEL", fallback)):
         os.environ.pop(name, None)
@@ -132,29 +150,29 @@ def run(script: list[str], model: str | None = "gpt-5.6-sol",
 print("a failure that a second attempt could answer differently")
 
 answered, why, asked, slept, _ = run(["answer"])
-expect("one call when the first one answers", answered and asked == ["gpt-5.6-sol"], why)
+expect("one call when the first one answers", answered and asked == ["openai/gpt-5.6-sol"], why)
 expect("and it does not wait for anything", slept == [], str(slept))
 
-answered, why, asked, slept, _ = run(["fast", "answer"])
+answered, why, asked, slept, _ = run(["fast", "answer"], fallback="x-ai/grok-4.5")
 expect("a 502 is asked again, and the answer is used", answered, why)
 expect("and the same model is asked, because it is the configured one",
-       asked == ["gpt-5.6-sol"] * 2, str(asked))
+       asked == ["openai/gpt-5.6-sol"] * 2, str(asked))
 expect("after a pause, so a cooldown has a moment to clear",
        slept == [decide.RETRY_PAUSES[0]], str(slept))
 
-answered, why, asked, slept, _ = run(["fast", "fast", "answer"])
+answered, why, asked, slept, _ = run(["fast", "fast", "answer"], fallback="x-ai/grok-4.5")
 expect("twice, with the longer pause second", answered and slept == list(decide.RETRY_PAUSES),
        str(slept))
 
-answered, why, asked, slept, seconds = run(["fast"] * 3 + ["answer"])
+answered, why, asked, slept, seconds = run(["fast"] * 3 + ["answer"], fallback="x-ai/grok-4.5")
 expect("and then the other account, which is the point of the change",
-       answered and asked == ["gpt-5.6-sol"] * 3 + ["grok-4.5"], str(asked))
+       answered and asked == ["openai/gpt-5.6-sol"] * 3 + ["x-ai/grok-4.5"], str(asked))
 expect("the whole of it inside a minute, well under the workflow's twenty",
        seconds < 60, f"{seconds:.0f}s")
 
-answered, why, asked, slept, seconds = run(["fast"] * 6)
+answered, why, asked, slept, seconds = run(["fast"] * 6, fallback="x-ai/grok-4.5")
 expect("nothing answering at all is three tries each and then a reason",
-       not answered and asked == ["gpt-5.6-sol"] * 3 + ["grok-4.5"] * 3, str(asked))
+       not answered and asked == ["openai/gpt-5.6-sol"] * 3 + ["x-ai/grok-4.5"] * 3, str(asked))
 expect("and that reason is the last status, not a guess",
        why == "the gateway answered 502", why)
 expect("and it is still under a minute", seconds < 60, f"{seconds:.0f}s")
@@ -167,14 +185,14 @@ expect("and it is still under a minute", seconds < 60, f"{seconds:.0f}s")
 print()
 print("a failure where a second attempt is only more of the same")
 
-answered, why, asked, slept, _ = run(["slow", "answer"])
+answered, why, asked, slept, _ = run(["slow", "answer"], fallback="x-ai/grok-4.5")
 expect("a slow failure skips its retries and hands over at once",
-       answered and asked == ["gpt-5.6-sol", "grok-4.5"], str(asked))
+       answered and asked == ["openai/gpt-5.6-sol", "x-ai/grok-4.5"], str(asked))
 expect("without waiting, because a hundred seconds was the wait", slept == [], str(slept))
 
-answered, why, asked, slept, seconds = run(["slow", "slow"])
+answered, why, asked, slept, seconds = run(["slow", "slow"], fallback="x-ai/grok-4.5")
 expect("two slow failures are two calls and no more",
-       not answered and asked == ["gpt-5.6-sol", "grok-4.5"], str(asked))
+       not answered and asked == ["openai/gpt-5.6-sol", "x-ai/grok-4.5"], str(asked))
 # The expensive case, and the one the constants are chosen against: two hundred
 # seconds is one Cloudflare cut per account and no retries at all. It is bounded
 # rather than cheap — six such chunks would reach the workflow's twenty-minute
@@ -182,9 +200,9 @@ expect("two slow failures are two calls and no more",
 expect("and two slow failures cost two cuts, not two cuts and four retries",
        seconds <= 2 * 110, f"{seconds:.0f}s")
 
-answered, why, asked, slept, _ = run(["refused", "refused"])
+answered, why, asked, slept, _ = run(["refused", "refused"], fallback="x-ai/grok-4.5")
 expect("a 401 is never asked twice — a revoked key is not a rate limit",
-       not answered and asked == ["gpt-5.6-sol", "grok-4.5"], str(asked))
+       not answered and asked == ["openai/gpt-5.6-sol", "x-ai/grok-4.5"], str(asked))
 expect("and it says which status, so the run names a configuration fault",
        why == "the gateway answered 401", why)
 
@@ -201,41 +219,88 @@ expect("and says so rather than blaming the gateway",
 print()
 print("the second account")
 
-expect("the two names are different accounts upstream, which is why there are two",
-       decide.DEFAULT_MODEL != decide.ACROSS_ACCOUNTS,
-       f"{decide.DEFAULT_MODEL} / {decide.ACROSS_ACCOUNTS}")
+expect("the default primary is a tier alias, which no vendor rename can retire",
+       decide.DEFAULT_MODEL.startswith("@"), decide.DEFAULT_MODEL)
+expect("and no second name is inferred, because inferring one is what #502 measured",
+       decide.DEFAULT_FALLBACK_MODEL == "", repr(decide.DEFAULT_FALLBACK_MODEL))
 
-answered, why, asked, _, _ = run(["fast"] * 3 + ["answer"], model="grok-4.5")
-expect("configured the other way round, the fallback is the default model",
-       answered and asked[-1] == decide.DEFAULT_MODEL, str(asked))
+answered, why, asked, _, _ = run(["fast"] * 3 + ["answer"], model="x-ai/grok-4.5",
+                                 fallback="openai/gpt-5.6-sol")
+expect("configured the other way round, the fallback is the other served name",
+       answered and asked[-1] == "openai/gpt-5.6-sol", str(asked))
 
-answered, why, asked, _, _ = run(["fast"] * 3, fallback="gpt-5.6-sol")
+answered, why, asked, _, _ = run(["fast"] * 3, fallback="openai/gpt-5.6-sol", model="openai/gpt-5.6-sol")
 expect("a fallback equal to the primary is not a second account, so it is not asked",
-       not answered and asked == ["gpt-5.6-sol"] * 3, str(asked))
+       not answered and asked == ["openai/gpt-5.6-sol"] * 3, str(asked))
 
 answered, why, asked, _, _ = run(["fast"] * 3, fallback="none")
 expect("and `none` switches the second account off entirely",
-       not answered and asked == ["gpt-5.6-sol"] * 3, str(asked))
+       not answered and asked == ["openai/gpt-5.6-sol"] * 3, str(asked))
 
-# The trap this guards: a workflow writing `${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}`
-# hands the script an empty string whenever nobody has set the variable. If empty
-# meant *off*, wiring the setting up at all would quietly undo the change.
-answered, why, asked, _, _ = run(["fast"] * 3 + ["answer"], fallback="")
-expect("an empty setting is nobody having set it, not somebody switching it off",
-       answered and asked[-1] == "grok-4.5", str(asked))
+# **The inference this replaces** (`#502`). An unset fallback used to become the
+# other of two hard-coded bare names, and both had stopped being served — so the
+# retry path could not reach a working model however often it ran. Unset now asks
+# the configured model and stops.
+answered, why, asked, _, _ = run(["fast"] * 3, fallback="")
+expect("an unset fallback asks nobody else rather than inventing a second name",
+       not answered and asked == ["openai/gpt-5.6-sol"] * 3, str(asked))
 
-answered, why, asked, _, _ = run(["answer"], model="")
-expect("and an empty model is the default for the same reason",
+answered, why, asked, _, _ = run(["answer"], model="", served=decide.DEFAULT_MODEL and SERVED)
+expect("and an empty model is the default tier alias",
        answered and asked == [decide.DEFAULT_MODEL], str(asked))
 
 answered, why, asked, _, _ = run(["answer"], model=None)
 expect("an unset model is the default, as it was before any of this",
        answered and asked == [decide.DEFAULT_MODEL], str(asked))
 
-answered, why, asked, _, _ = run(["fast", "answer"], model="whatever-is-configured",
-                                 fallback="something-else")
+answered, why, asked, _, _ = run(["fast", "answer"], model="openai/gpt-5.6-sol",
+                                 fallback="x-ai/grok-4.5")
 expect("and both names are settings, so neither is spelt into the loop",
-       answered and asked[0] == "whatever-is-configured", str(asked))
+       answered and asked[0] == "openai/gpt-5.6-sol", str(asked))
+
+
+# ---------------------------------------------------------------------------
+# The catalogue: a model the gateway does not serve is never asked (#502).
+#
+# Measured 2026-08-26 through one healthy gateway: the two bare identifiers this
+# file used to know answered 503 on every attempt, while the served prefixed
+# names and the tier alias answered 200. A name that is absent from the
+# catalogue fails identically every pass, so asking it on a schedule turns a
+# configuration fault into a permanent quiet one.
+# ---------------------------------------------------------------------------
+
+print()
+print("the model identifiers the gateway actually serves")
+
+answered, why, asked, _, _ = run([], model="grok-4.5", fallback="gpt-5.6-sol")
+expect("neither legacy bare identifier is asked at all",
+       not answered and asked == [], str(asked))
+expect("and the reason names the configuration rather than blaming the gateway",
+       why.startswith("no configured model is served by the gateway"), why)
+
+answered, why, asked, _, _ = run(["answer"], model="x-ai/grok-4.5")
+expect("the served prefixed identifier is asked and answers",
+       answered and asked == ["x-ai/grok-4.5"], str(asked))
+
+answered, why, asked, _, _ = run(["answer"], model="@preset/tier-1")
+expect("a tier alias is asked even though the catalogue does not list it",
+       answered and asked == ["@preset/tier-1"], str(asked))
+
+answered, why, asked, _, _ = run(["answer"], model="grok-4.5", fallback="openai/gpt-5.6-sol")
+expect("an unserved primary is dropped and the served fallback still runs",
+       answered and asked == ["openai/gpt-5.6-sol"], str(asked))
+
+answered, why, asked, _, _ = run([], model="grok-4.5",
+                                 served=(), catalogue_why="could not read the model catalogue: the gateway answered 404")
+expect("an unreadable catalogue does not send a vendor-shaped name unverified",
+       not answered and asked == [], str(asked))
+expect("and says why nothing could be asked",
+       why == "the model catalogue could not be read and no configured model is a tier alias", why)
+
+answered, why, asked, _, _ = run(["answer"], model="@preset/tier-1",
+                                 served=(), catalogue_why="could not read the model catalogue: the gateway answered 404")
+expect("a tier alias remains askable when the catalogue cannot be read",
+       answered and asked == ["@preset/tier-1"], str(asked))
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +316,82 @@ expect("ask() still returns exactly (text, why, call), which is what route() unp
        len(shape) == 3, str(len(shape)))
 expect("and the third is the call `read_model_call` shape, for the run summary",
        isinstance(shape[2], dict) and set(shape[2]) == {"model", "tokens"}, str(shape[2]))
+
+
+# ---------------------------------------------------------------------------
+# What the pass reports when it could not ask (#502).
+#
+# The measurement this is written against, 2026-08-26: three undecided issues,
+# six 503s, `nothing was triaged this pass`, and a green run — forty-eight times
+# a day while Inbox grew. `route()` still writes an empty decisions file on every
+# ending, so one bad chunk costs its own issues and not the pass; the exit code
+# is what tells the workflow which of the two endings happened.
+# ---------------------------------------------------------------------------
+
+print()
+print("a pass that could not ask is not a pass that decided")
+
+import json as _json  # noqa: E402 — the cases below need it and nothing above does
+import tempfile  # noqa: E402
+
+
+def route_with(script: list[str], brief: str, **kwargs) -> tuple:
+    """Run `route()` over a brief. Returns (exit-code, decisions-written)."""
+    ASKED.clear()
+    CLOCK[0] = 1_000.0
+    CATALOGUE[0] = kwargs.get("served", SERVED)
+    CATALOGUE[1] = kwargs.get("catalogue_why", "")
+    os.environ["TRIAGE_LLM_MODEL"] = kwargs.get("model", "openai/gpt-5.6-sol")
+    os.environ.pop("TRIAGE_LLM_FALLBACK_MODEL", None)
+    os.environ["TRIAGE_LLM_API_KEY"] = "not-a-key"
+    os.environ["TRIAGE_LLM_BASE_URL"] = "https://gateway.invalid"
+    decide.ask_once = gateway(script)
+
+    with tempfile.TemporaryDirectory() as work:
+        brief_path = os.path.join(work, "brief.md")
+        out_path = os.path.join(work, "decisions.json")
+        with open(brief_path, "w", encoding="utf-8") as fh:
+            fh.write(brief)
+        code = decide.route(brief_path, out_path)
+        with open(out_path, encoding="utf-8") as fh:
+            written = _json.load(fh)
+    return code, written
+
+
+CANDIDATES = "# The board\n\n## Kolonie-AI/kolonie-docs#500\n\nSomething undecided.\n"
+
+# The reproduction: candidates existed, every attempt failed, nothing was routed.
+code, written = route_with(["fast"] * 3, CANDIDATES)
+expect("candidates and no answer exits non-zero, so the pass cannot report success",
+       code == decide.NO_ANSWER, f"exit {code}")
+expect("and it still writes an empty decisions file, so one chunk costs only its own issues",
+       written == {"decisions": []}, str(written))
+
+# The same ending by the route `#502` actually measured: names nobody serves.
+code, written = route_with([], CANDIDATES, model="grok-4.5")
+expect("an unserved model is the same ending — asked nothing, decided nothing, not green",
+       code == decide.NO_ANSWER and ASKED == [], f"exit {code}, asked {ASKED}")
+
+# A brief with nothing in it is the good case and must stay green — the workflow
+# gates this step on `waiting != '0'`, so this is the belt to that brace.
+code, written = route_with([], "# The board\n\nNothing is waiting.\n")
+expect("no candidates exits 0 and asks no model at all",
+       code == 0 and ASKED == [], f"exit {code}, asked {ASKED}")
+expect("and writes the empty decisions file the merge step expects",
+       written == {"decisions": []}, str(written))
+
+# A model that answered and had nothing to change is a decided board, not a
+# failure: the distinction the exit code exists to make.
+code, written = route_with(["answer"], CANDIDATES)
+expect("a model that answered with no decisions is green, because that is a quiet board",
+       code == 0, f"exit {code}")
+
+# And the retry path still completes normally, which is the tolerance `#502`
+# explicitly keeps: one transient 5xx followed by a successful retry.
+decide.ask_once = gateway(["fast", "answer"])
+code, written = route_with(["fast", "answer"], CANDIDATES)
+expect("one transient failure then an answer is an ordinary successful pass",
+       code == 0, f"exit {code}")
 
 
 print()
