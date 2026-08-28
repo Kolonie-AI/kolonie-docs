@@ -151,13 +151,28 @@ done
 
 echo
 echo "the mint is the Publisher App, pinned, on the seven and not this repository"
-# Same SHA `kolonie-claude` `skill.yml` already uses. Listing `kolonie-docs`
-# as an installation repository would fail the mint: the App is not installed
-# here. The secrets are readable here so this workflow can mint; the token is
-# then spent on the seven.
-PIN=fee1f7d63c2ff003460e3d139729b119787bc349
-contains "the mint action is pinned to the SHA skill.yml already uses" \
-  "actions/create-github-app-token@$PIN" "$(cat "$WORKFLOW")"
+# Listing `kolonie-docs` as an installation repository would fail the mint:
+# the App is not installed here. The secrets are readable here so this
+# workflow can mint; the token is then spent on the seven.
+#
+# `#533`. Live run 33156687252 succeeded and still warned that checkout@v4
+# and create-github-app-token@v2.2.2 (`fee1f7d6…`) declare Node.js 20 while
+# the runner forces Node.js 24. The pins below are the current releases
+# whose `action.yml` says `using: node24`. Matching `kolonie-claude`
+# `skill.yml` is no longer the constraint — that file still uses the Node 20
+# SHA this issue is retiring.
+CHECKOUT_PIN=3d3c42e5aac5ba805825da76410c181273ba90b1
+TOKEN_PIN=bcd2ba49218906704ab6c1aa796996da409d3eb1
+contains "checkout is pinned to the Node 24 release" \
+  "actions/checkout@$CHECKOUT_PIN" "$(cat "$WORKFLOW")"
+contains "the mint action is pinned to the Node 24 release" \
+  "actions/create-github-app-token@$TOKEN_PIN" "$(cat "$WORKFLOW")"
+if grep -E '^[[:space:]]*uses:[[:space:]]+actions/checkout@v4([^0-9]|$)|^[[:space:]]*uses:[[:space:]]+actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349' "$WORKFLOW" >/dev/null; then
+  echo "  FAIL a Node 20 pin is still in the workflow"
+  FAILURES+=("a Node 20 pin is still in the workflow")
+else
+  echo "  ok   no Node 20 checkout or app-token pin remains"
+fi
 contains "the mint reads SKILL_PUBLISHER_APP_ID" \
   "secrets.SKILL_PUBLISHER_APP_ID" "$(cat "$WORKFLOW")"
 contains "the mint reads SKILL_PUBLISHER_APP_PRIVATE_KEY" \
