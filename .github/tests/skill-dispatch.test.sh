@@ -167,7 +167,16 @@ contains "checkout is pinned to the Node 24 release" \
   "actions/checkout@$CHECKOUT_PIN" "$(cat "$WORKFLOW")"
 contains "the mint action is pinned to the Node 24 release" \
   "actions/create-github-app-token@$TOKEN_PIN" "$(cat "$WORKFLOW")"
-if grep -E '^[[:space:]]*uses:[[:space:]]+actions/checkout@v4([^0-9]|$)|^[[:space:]]*uses:[[:space:]]+actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349' "$WORKFLOW" >/dev/null; then
+# Checkout is a YAML list item (`- uses:`). A guard that only matches a bare
+# `uses:` line would miss `checkout@v4` and print ok — measured against #534.
+NODE20_PIN_RX='^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+(actions/checkout@v4([^0-9]|$)|actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349)'
+if printf '      - uses: actions/checkout@v4\n' | grep -E "$NODE20_PIN_RX" >/dev/null; then
+  echo "  ok   the Node 20 guard matches a YAML list-item checkout pin"
+else
+  echo "  FAIL the Node 20 guard does not match a YAML list-item checkout pin"
+  FAILURES+=("the Node 20 guard does not match a YAML list-item checkout pin")
+fi
+if grep -E "$NODE20_PIN_RX" "$WORKFLOW" >/dev/null; then
   echo "  FAIL a Node 20 pin is still in the workflow"
   FAILURES+=("a Node 20 pin is still in the workflow")
 else
