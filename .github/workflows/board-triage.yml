@@ -70,14 +70,18 @@ name: Triage the board
 # decided issue still needs is the Ready ↔ Inbox move, and that turns on two facts
 # rather than a judgement, so `sweep` makes it every pass for nothing.
 #
-# ## Two credentials, and neither can do the other's half
+# ## Three credentials, and none can do another's half
 #
 # Since `#270` the board is moved by the `kolonie-opencode` **GitHub App**, which
 # holds Organization projects and Metadata and nothing else: it reads the board and
-# moves a card, and it cannot label an issue or write a comment. The labels, the
-# comments and the dependency links go through `WORKER_REPO_TOKEN`, which reaches
-# the five repositories that carry board issues — `github.token` reaches only this
-# one. `board-triage.sh` takes both and uses the app for exactly one call.
+# moves a card, and it cannot label an issue or write a comment. Since `#536` the
+# labels, the comments and the dependency links go through the `kolonie-triage`
+# **GitHub App**, which holds Issues write and Metadata read on the Board
+# repository set — `WORKER_REPO_TOKEN` is the worker's commit identity and is
+# not this pass's issue-write credential. `github.token` reaches only this
+# repository. `board-triage.sh` takes the issue token as `GH_TOKEN`, the board
+# token as `BOARD_TOKEN`, and an optional `PROVENANCE_TOKEN` for the membership
+# lookup only.
 
 on:
   # The fallback, not the cadence. `kolonie-board-triage-dispatch.timer` on the
@@ -114,6 +118,18 @@ jobs:
         with:
           app-id: ${{ secrets.BOARD_APP_ID }}
           private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      # The issues as the triage app rather than as a person (`#536`): Issues
+      # write and Metadata read on the Board repository set, including
+      # `kolonie-concept-lab`. Minted per run, expires in an hour. `#533`'s
+      # pin — the current Node 24 release, not `v2` which still declares Node 20.
+      - name: Become the triage app
+        id: issue_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.TRIAGE_APP_ID }}
+          private-key: ${{ secrets.TRIAGE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - uses: actions/checkout@v4
@@ -180,7 +196,7 @@ jobs:
       # down costs the pass its judgement and not its bookkeeping.
       - name: Move the cards the facts decide
         env:
-          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.issue_token.outputs.token }}
           BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
         run: |
           set -uo pipefail
@@ -309,10 +325,13 @@ jobs:
       - name: Label, link and move
         if: steps.decide.outputs.decisions != ''
         env:
-          # The issues, in five repositories.
-          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          # The issues, on every repository the sweep admits.
+          GH_TOKEN: ${{ steps.issue_token.outputs.token }}
           # The board, for the one call that moves a card.
           BOARD_TOKEN: ${{ steps.board_token.outputs.token }}
+          # Membership only. The personal token stays the worker's commit
+          # identity; it is not this pass's issue-write credential (`#536`).
+          PROVENANCE_TOKEN: ${{ secrets.WORKER_REPO_TOKEN }}
         run: |
           set -uo pipefail
           bash .github/scripts/board-triage.sh apply \
@@ -340,7 +359,7 @@ jobs:
         id: proposals
         if: ${{ !cancelled() }}
         env:
-          GH_TOKEN: ${{ secrets.WORKER_REPO_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.issue_token.outputs.token }}
           # **The triage pass is its own service and takes its own key**
           # (`#493`). D-122 §3 in `kolonie-platform` is the reason: a runaway
           # loop in one service must not take the cap for the others with it,

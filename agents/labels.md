@@ -75,10 +75,12 @@ the routing table below, what may be done to it *at all*.
 issue that arrived from outside the organisation carries it, and — where the
 workflow could decide *which kind* of outside — one child beside it:
 `from:citizen` for a support ticket, `from:non-member` for an author the
-membership endpoint answered `404` for. **The umbrella alone is a legitimate
-state, not a half-labelled one**: it is `#389`'s inconclusive case, where the
-token could not settle membership and a wrong permanent fact about a colleague
-would be worse than no fact at all.
+membership endpoint answered `404` for. **200 or 204 is a member, 404 is
+outside, anything else is unknown** (`#536`): a 403, a 401 or an empty status
+leaves the child unset. **The umbrella alone is a legitimate state, not a
+half-labelled one**: it is `#389`'s inconclusive case, where the token could
+not settle membership and a wrong permanent fact about a colleague would be
+worse than no fact at all.
 
 **Parent and children are not mutually exclusive, deliberately.** Making them so
 would mean every reader testing three labels instead of one, for ever;

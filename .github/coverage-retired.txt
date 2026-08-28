@@ -204,6 +204,13 @@ and `agent:human` have nobody, so a routed issue used to be labelled and then
   `onboarding/agent-guide.md` already tells an arriving agent about lost keys.
   Anything else would make the erasure path the account-takeover path.
 
+# kolonie-docs#536. The triage credentials were split: the old line said one board
+# app token read the board and WORKER_REPO_TOKEN wrote labels and comments. That
+# is no longer true after the triage App became the issue-write credential and
+# WORKER_REPO_TOKEN became provenance-only; the replacement is the current
+# three-credential row in architecture/automation.md.
+| **Credentials** | The `kolonie-opencode` app token to read the board and move cards, and `WORKER_REPO_TOKEN` for the labels and comments it writes across the five board repositories. `github.token` can do neither |
+
 # kolonie-docs#502. Both lines state something that was measured false on
 # 2026-08-26 and is now the opposite of what the code does. The first names a
 # bare model identifier as the configured model: through one healthy gateway

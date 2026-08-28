@@ -8,7 +8,7 @@
 #   board-triage.sh cases-brief [cases.json]          # -> the same, over the routing cases (#289)
 #   board-triage.sh apply <candidates.json> <decisions.json>  # -> the labels, links and moves
 #   board-triage.sh sweep <candidates.json>           # -> the Ready <-> Blocked moves that need no model (#289, #412)
-#   board-triage.sh provenance <login>                # -> member | outside
+#   board-triage.sh provenance <login>                # -> member | outside | unknown
 #   board-triage.sh refusals                          # -> the issues the worker tried and did not finish
 #   board-triage.sh proposal-brief <refusals.json>    # -> what the model reads to propose a rule (#264)
 #   board-triage.sh propose <proposals.json>          # -> publishes the proposals a person may accept
@@ -66,18 +66,21 @@ ROOT=$(cd "$HERE/../.." && pwd)
 ORG=${ORG:-Kolonie-AI}
 SEARCH_LIMIT=${SEARCH_LIMIT:-200}
 
-# ## Two credentials, because the board and the issues are two permissions
+# ## Three credentials, because the board, the issues and membership are three
 #
 # Since `#270` the board is moved by the `kolonie-opencode` GitHub App, which holds
 # Organization projects and Metadata and **nothing else** — it cannot label an
-# issue or write a comment. The labels, the comments and the dependency links need
-# a credential that reaches the five repositories carrying board issues, which is
-# `WORKER_REPO_TOKEN`.
+# issue or write a comment. Since `#536` the labels, the comments and the
+# dependency links go through the `kolonie-triage` GitHub App, which holds Issues
+# write and Metadata read on the Board repository set. `WORKER_REPO_TOKEN` is
+# the worker's commit identity and is not this pass's issue-write credential.
 #
 # So `GH_TOKEN` is the issue credential and `BOARD_TOKEN`, when set, is used for
-# the one call that moves a card. Unset means *the same token does both*, which is
+# the one call that moves a card. `PROVENANCE_TOKEN`, when set, is used for the
+# membership lookup only. Unset means *the same token does both*, which is
 # what the tests do and what a person running this by hand wants.
 BOARD_TOKEN=${BOARD_TOKEN:-}
+PROVENANCE_TOKEN=${PROVENANCE_TOKEN:-}
 
 # The card move, with whichever credential can make it.
 move_card() {
@@ -398,9 +401,23 @@ refused() {
   note "$1"
 }
 
-# Is this login in the organisation? `member | outside`, and nothing else —
-# including when GitHub cannot be asked, which answers `outside` for no issue at
-# all because the caller treats an unreadable answer as *leave the labels alone*.
+# Is this login in the organisation? `member | outside | unknown`.
+#
+# **Three answers, not two** (`#536`). Mapping any non-zero `gh` exit to
+# `outside` is how `kolonie-concept-lab#10` received `from:non-member` on
+# 2026-08-28 for an organisation member: the token could not ask, and a 403
+# became a forged outsider label. `unknown` adds no `from:non-member`; the
+# route is still written.
+#
+# **`memberships/` rather than `members/`.** The members endpoint answers 404
+# for both "not a member" and "you may not know", which is the ambiguous
+# permission-hiding response this lookup must not use. `memberships/` answers
+# 200 (or 204), 404, or 403, which is the split this function exists to make.
+#
+# **`PROVENANCE_TOKEN` is the credential this call uses**, when set. Issue
+# writes go through `GH_TOKEN` (the `kolonie-triage` App); this lookup is a
+# different permission. Unset means the same token does both, which is what
+# the tests do and what a person running this by hand wants.
 #
 # ## Why membership rather than `authorAssociation`
 #
@@ -412,11 +429,17 @@ refused() {
 provenance() {
   local login=$1
   [ -n "$login" ] || { echo "unknown"; return 0; }
-  if gh api "orgs/$ORG/members/$login" --silent >/dev/null 2>&1; then
-    echo "member"
+  local line=""
+  if [ -n "${PROVENANCE_TOKEN:-}" ]; then
+    line=$(GH_TOKEN=$PROVENANCE_TOKEN gh api "orgs/$ORG/memberships/$login" -i 2>/dev/null | head -n1) || true
   else
-    echo "outside"
+    line=$(gh api "orgs/$ORG/memberships/$login" -i 2>/dev/null | head -n1) || true
   fi
+  case "$line" in
+    *' 200'*|*' 204'*) echo "member" ;;
+    *' 404'*)          echo "outside" ;;
+    *)                 echo "unknown" ;;
+  esac
 }
 
 # ## Getting on the board at all (`#332`)
@@ -971,6 +994,12 @@ apply_one() {
         # `#262` refuses. `kolonie-platform#686` is the issue that makes the
         # creating paths label themselves.
         note "$repo#$number carries no from: label and its author is inside the organisation, which does not say which kind — left for kolonie-platform#686"
+        ;;
+      unknown)
+        # `#536`: a 403/401/empty status is the token being unable to ask, not
+        # an outsider. Guessing `from:non-member` here is the one direction
+        # that label must not be wrong in.
+        note "$repo#$number: membership is not answerable, so from:non-member is not guessed — left unset"
         ;;
     esac
   fi
