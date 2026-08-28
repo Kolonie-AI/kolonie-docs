@@ -90,7 +90,16 @@ on:
     - cron: "*/30 * * * *"
   # What the host's timer calls. Everything about which issues get decided lives
   # in `board-triage.sh`; a dispatch carries no input and decides nothing.
+  # `prove_loki` is the one exception: it emits one event and queries the
+  # bounded stream so `#503`'s live criterion can be met without waiting for a
+  # real unanswered pass. Off by default; a scheduled run never sets it.
   workflow_dispatch:
+    inputs:
+      prove_loki:
+        description: Emit one board-triage event and query service="board-triage". Off by default.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -321,6 +330,26 @@ jobs:
             attempt="$GITHUB_RUN_ATTEMPT" \
             reason="candidates existed and no model answered" \
             candidates="${{ steps.candidates.outputs.waiting }}"
+
+      # `#503` live criterion: one emit + one LogQL query, opt-in on dispatch.
+      # Scheduled runs never set the input. Prints status codes and a hit count;
+      # never a URL, token, or response body.
+      - name: Prove the Loki write path
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.prove_loki }}
+        env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
+        run: |
+          set -uo pipefail
+          bash .github/scripts/loki-event.sh emit board-triage warn \
+            repository="$GITHUB_REPOSITORY" \
+            run_id="$GITHUB_RUN_ID" \
+            workflow="$GITHUB_WORKFLOW" \
+            attempt="$GITHUB_RUN_ATTEMPT" \
+            reason="prove_loki dispatch" \
+            candidates=0
+          sleep 2
+          bash .github/scripts/loki-event.sh prove board-triage
 
       - name: Label, link and move
         if: steps.decide.outputs.decisions != ''

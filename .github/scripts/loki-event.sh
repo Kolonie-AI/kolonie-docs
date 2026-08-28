@@ -4,6 +4,7 @@
 # Usage:
 #   loki-event.sh emit <service> <level> [key=value ...] [--label k=v ...]
 #   loki-event.sh body <service> <level> [key=value ...]   # build it, push nothing
+#   loki-event.sh prove <service>                         # query the stream, print a count
 #
 #   LOKI_URL=…  LOKI_TOKEN=…  bash .github/scripts/loki-event.sh \
 #     emit board-triage error reason="candidates existed and no model answered" \
@@ -267,10 +268,61 @@ cmd_emit() {
   esac
 }
 
+cmd_prove() {
+  local service=${1:-}
+  if ! in_list "$service" "${SERVICES[@]}"; then
+    echo "loki-event: '$service' is not one of the services that may write: ${SERVICES[*]}." >&2
+    echo "            prove queries the same closed set emit writes." >&2
+    return 0
+  fi
+
+  local missing=()
+  [ -n "${LOKI_URL:-}" ] || missing+=(LOKI_URL)
+  [ -n "${LOKI_TOKEN:-}" ] || missing+=(LOKI_TOKEN)
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "loki-event: ${missing[*]} is not set, so the stream was not queried — a configuration" >&2
+    echo "            gap, not a finding about $service." >&2
+    return 0
+  fi
+
+  local conf body status rc hits
+  conf=$(mktemp)
+  body=$(mktemp)
+  # shellcheck disable=SC2064 — both paths are wanted now, not at trap time.
+  trap "rm -f '$conf' '$body'" RETURN
+  printf 'user = "%s:%s"\n' "${LOKI_USER:-watch}" "$LOKI_TOKEN" > "$conf"
+
+  status=$(curl -sS --max-time 20 -o "$body" -w '%{http_code}' \
+    --config "$conf" -G \
+    --data-urlencode "query={service=\"$service\"}" \
+    --data-urlencode "limit=5" \
+    "${LOKI_URL%/}/loki/api/v1/query_range" 2>/dev/null)
+  rc=$?
+
+  if [ "$rc" -ne 0 ]; then
+    echo "loki-event: the log store could not be reached (curl exit $rc); prove asked nothing." >&2
+    return 0
+  fi
+
+  if ! [[ "$status" =~ ^[0-9]{3}$ ]]; then
+    echo "loki-event: the log store answered without a status code; prove read nothing." >&2
+    return 0
+  fi
+  if [ "$status" != "200" ]; then
+    echo "loki-event: the log store answered $status; prove read nothing." >&2
+    return 0
+  fi
+
+  hits=$(jq '[.data.result[]?.values[]?] | length' "$body" 2>/dev/null) || hits=0
+  echo "loki-event: prove queried service=$service; hits=$hits status=200"
+  return 0
+}
+
 case "${1:-}" in
   emit) shift; cmd_emit "$@" ;;
   body) shift; cmd_body "$@" ;;
+  prove) shift; cmd_prove "$@" ;;
   *)
-    echo "loki-event.sh: one of emit, body — see the header." >&2
+    echo "loki-event.sh: one of emit, body, prove — see the header." >&2
     exit 2 ;;
 esac

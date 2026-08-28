@@ -50,6 +50,7 @@ cat > "$WORK/bin/curl" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$CURL_LOG"
 _discards_body=0
+_output=
 for _i in $(seq 1 $#); do
   eval "_a=\${$_i}"
   case "$_a" in
@@ -62,6 +63,7 @@ for _i in $(seq 1 $#); do
       [ -f "$_f" ] && cat "$_f" >> "$CURL_CONFIG" ;;
     -o|--output)
       eval "_f=\${$((_i + 1))}"
+      _output=$_f
       [ "$_f" = /dev/null ] && _discards_body=1 ;;
   esac
 done
@@ -70,8 +72,14 @@ done
 # that. Honouring `-o /dev/null` is what makes the assertion about the script
 # rather than about the stub — real curl discards it there, so the only way the
 # body can be printed is if the script never asked for it to be discarded.
-if [ -n "${CURL_ECHO_BODY:-}" ] && [ "$_discards_body" = 0 ]; then
-  printf '%s' "$CURL_ECHO_BODY"
+if [ -n "${CURL_ECHO_BODY:-}" ]; then
+  if [ "$_discards_body" = 0 ]; then
+    if [ -n "${_output:-}" ] && [ "$_output" != /dev/null ]; then
+      printf '%s' "$CURL_ECHO_BODY" > "$_output"
+    else
+      printf '%s' "$CURL_ECHO_BODY"
+    fi
+  fi
 fi
 printf '%s' "${CURL_STATUS:-204}"
 exit "${CURL_RC:-0}"
@@ -257,9 +265,8 @@ check "and nothing was pushed" "" "$(cat "$CURL_LOG")"
 
 echo
 echo "what is committed"
-# The store's address is configuration, not a constant here. `watch-agent.sh`
-# carries a default because it predates this rule; a new file must not add a
-# second copy of a host name to the repository.
+# The store's address is configuration, not a constant. A hostname committed
+# as a default is a secret the leak guard fails CI over.
 absent "no host name is defaulted into the script" "https://" "$(grep -v '^#' "$SCRIPT")"
 
 echo
@@ -271,6 +278,24 @@ contains "and reuses the reader credential" "LOKI_TOKEN" "$(cat "$TRIAGE")"
 absent "rather than a second push credential" "LOKI_PUSH_TOKEN" "$(cat "$TRIAGE")"
 contains "runs after the deliberate red step" "!cancelled()" "$(cat "$TRIAGE")"
 contains "only for the no-model-answer ending" "steps.decide.outputs.unanswered == steps.decide.outputs.chunks" "$(cat "$TRIAGE")"
+contains "and offers a dispatch-only prove path" "prove_loki" "$(cat "$TRIAGE")"
+contains "which is off by default" "default: false" "$(cat "$TRIAGE")"
+
+echo
+echo "prove queries the bounded stream and prints counts, never bodies"
+case_setup
+CURL_STATUS=200
+CURL_ECHO_BODY='{"status":"success","data":{"resultType":"streams","result":[{"stream":{"service":"board-triage","level":"warn"},"values":[["1","secret-line"]]}]}}'
+export CURL_STATUS CURL_ECHO_BODY
+out=$(LOKI_URL="$FAKE_URL" LOKI_USER="$FAKE_USER" LOKI_TOKEN="$FAKE_TOKEN" \
+  bash "$SCRIPT" prove board-triage 2>&1); rc=$?
+check "prove exits 0 when the stream answers" "0" "$rc"
+contains "and names a hit count" "hits=" "$out"
+absent "without the store address" "$FAKE_URL" "$out"
+absent "without the token" "$FAKE_TOKEN" "$out"
+absent "and without the raw line" "secret-line" "$out"
+contains "querying the bounded service" 'query={service="board-triage"}' "$(cat "$CURL_LOG")"
+absent "the prove credential is not in argv" "$FAKE_TOKEN" "$(cat "$CURL_LOG")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then

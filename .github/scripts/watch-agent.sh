@@ -88,7 +88,7 @@
 # throws no errors.
 set -uo pipefail
 
-LOKI_URL="${LOKI_URL:-https://logs.kolonie.ai}"
+LOKI_URL="${LOKI_URL:-}"
 LOKI_USER="${LOKI_USER:-watch}"
 
 # One title per silent service, and the service name is the whole of the dedupe
@@ -128,11 +128,18 @@ loki() {
 # and the last of those is the one where filing "every service is silent" would
 # be both true and useless.
 loki_reachable() {
+  if [ -z "${LOKI_URL:-}" ]; then
+    echo "Loki did not answer: LOKI_URL is not set. Neither question was asked."
+    echo
+    echo "This is a configuration gap and not a finding — a store that cannot be"
+    echo "read reports every service as silent, which would be true and useless."
+    return 2
+  fi
   local ready
   ready=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' \
             -u "$LOKI_USER:${LOKI_TOKEN:-}" "$LOKI_URL/loki/api/v1/labels" 2>/dev/null)
   [ "$ready" = "200" ] && return 0
-  echo "Loki did not answer: HTTP ${ready:-no response} at $LOKI_URL. Neither question was asked."
+  echo "Loki did not answer: HTTP ${ready:-no response}. Neither question was asked."
   echo
   echo "This is a configuration gap and not a finding — a store that cannot be"
   echo "read reports every service as silent, which would be true and useless."

@@ -127,6 +127,7 @@ jobs:
       - name: Read yesterday
         id: gather
         env:
+          LOKI_URL: ${{ secrets.LOKI_URL }}
           LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
           # A service that has certainly not logged in the last day, because it
           # has never existed. `watch-agent.sh` appends it while it is still
