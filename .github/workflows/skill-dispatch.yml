@@ -129,18 +129,23 @@ jobs:
       # block cannot be exercised by anything: the ending measured on
       # 2026-08-25 — no readable token, no dispatch attempt, conclusion success —
       # is only assertable if the logic is callable from a test.
-      - uses: actions/checkout@v4
+      # `#533`. Live run 33156687252 succeeded and still warned that
+      # `actions/checkout@v4` declared Node.js 20 while the runner forced
+      # Node.js 24. Pin the release whose `action.yml` says `using: node24`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: The dispatch logic is tested before it is trusted
         run: bash .github/tests/skill-dispatch.test.sh
 
       # One short-lived token, scoped to the seven runtimes the App is
       # installed on. This repository is not one of them: it holds the secrets
-      # so it can mint, then dispatches into the seven (`#531`). The pin is
-      # the same SHA `kolonie-claude` `skill.yml` already uses.
+      # so it can mint, then dispatches into the seven (`#531`). `#533`
+      # moves the pin off `v2.2.2` (`fee1f7d6…`, Node 20) onto the current
+      # Node 24 release. Matching `kolonie-claude` `skill.yml` is no longer
+      # the constraint — that file still uses the SHA this issue retires.
       - name: Become the skill publisher App
         id: publisher_token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.SKILL_PUBLISHER_APP_ID }}
           private-key: ${{ secrets.SKILL_PUBLISHER_APP_PRIVATE_KEY }}
