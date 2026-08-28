@@ -49,8 +49,7 @@ contains "the mint reads TRIAGE_APP_ID" "secrets.TRIAGE_APP_ID" "$workflow"
 contains "the mint reads TRIAGE_APP_PRIVATE_KEY" "secrets.TRIAGE_APP_PRIVATE_KEY" "$workflow"
 contains "the mint is named Become the triage app" "Become the triage app" "$workflow"
 
-# `v2` on this mint would be the Node 20 pin `#533` retired. The board mint
-# still uses `@v2` and that is a sibling finding, not this issue.
+# `v2` on this mint would be the Node 20 pin `#533` retired.
 NODE20_ISSUE_MINT_RX='id: issue_token[[:space:]]+uses:[[:space:]]+actions/create-github-app-token@(v2|fee1f7d63c2ff003460e3d139729b119787bc349)'
 if printf '%s\n' "$workflow" | tr '\n' ' ' | grep -E "$NODE20_ISSUE_MINT_RX" >/dev/null; then
   echo "  FAIL the issue mint is still a Node 20 pin"
@@ -58,6 +57,40 @@ if printf '%s\n' "$workflow" | tr '\n' ' ' | grep -E "$NODE20_ISSUE_MINT_RX" >/d
 else
   echo "  ok   the issue mint is not a Node 20 pin"
   pass=$((pass + 1))
+fi
+
+echo
+echo "the board mint is pinned to the same Node 24 release (#537)"
+board_block=$(awk '
+  $0 ~ /^[[:space:]]*- name: Become the board app$/ { in_step=1 }
+  in_step && $0 ~ /^[[:space:]]*- name:/ && $0 !~ /Become the board app/ { exit }
+  in_step { print }
+' "$WORKFLOW")
+contains "the board mint action is pinned to the Node 24 release" \
+  "actions/create-github-app-token@$TOKEN_PIN" "$board_block"
+contains "the board mint still reads BOARD_APP_ID" "secrets.BOARD_APP_ID" "$board_block"
+contains "the board mint still reads BOARD_APP_PRIVATE_KEY" \
+  "secrets.BOARD_APP_PRIVATE_KEY" "$board_block"
+contains "the board mint still carries the board_token id" "id: board_token" "$board_block"
+contains "the board mint still names the owner" \
+  "owner: \${{ github.repository_owner }}" "$board_block"
+
+# `v2` on this mint would be the Node 20 pin `#533` retired; `#537` is that pin.
+NODE20_BOARD_MINT_RX='id: board_token[[:space:]]+uses:[[:space:]]+actions/create-github-app-token@(v2|fee1f7d63c2ff003460e3d139729b119787bc349)'
+if printf '%s\n' "$workflow" | tr '\n' ' ' | grep -E "$NODE20_BOARD_MINT_RX" >/dev/null; then
+  echo "  FAIL the board mint is still a Node 20 pin"
+  FAILURES+=("the board mint is still a Node 20 pin")
+else
+  echo "  ok   the board mint is not a Node 20 pin"
+  pass=$((pass + 1))
+fi
+if printf 'id: board_token\n        uses: actions/create-github-app-token@v2\n' \
+  | tr '\n' ' ' | grep -E "$NODE20_BOARD_MINT_RX" >/dev/null; then
+  echo "  ok   the board Node 20 guard matches an @v2 board mint"
+  pass=$((pass + 1))
+else
+  echo "  FAIL the board Node 20 guard does not match an @v2 board mint"
+  FAILURES+=("the board Node 20 guard does not match an @v2 board mint")
 fi
 
 echo
