@@ -59,13 +59,17 @@ case "$url" in
   # generic cases — a stub that answered the hourly error fixture to a question
   # about gateway fallbacks would have every assertion below passing on the
   # wrong numbers.
-  */query_range) if [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallback_peak" 2>/dev/null
+  */query_range) if [[ "$* " == *"board-triage"* || "$* " == *"opencode-worker"* ]]; then
+                   if [[ "$* " == *"step=86400"* ]]; then cat "$FIX/actions_history" 2>/dev/null
+                   else cat "$FIX/actions_hourly" 2>/dev/null; fi
+                 elif [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallback_peak" 2>/dev/null
                  elif [[ "$* " == *"step=86400"* ]]; then cat "$FIX/history" 2>/dev/null
                  else cat "$FIX/hourly" 2>/dev/null; fi ;;
   # `#328` added a third instant query that also names the fallback event; it is
   # told apart by the `reason=\"status\"` filter, and it is matched **before**
   # the general fallback case for the reason the block above gives.
-  */query)       if [[ "$* " == *"model.route.fallback"* && "$* " == *"reason%3D%22status%22"* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
+  */query)       if [[ "$* " == *"board-triage"* || "$* " == *"opencode-worker"* ]]; then cat "$FIX/actions_today" 2>/dev/null
+                 elif [[ "$* " == *"model.route.fallback"* && "$* " == *"reason%3D%22status%22"* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
                  elif [[ "$* " == *"model.route.fallback"* && "$* " == *'reason="status"'* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
                  elif [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallbacks" 2>/dev/null
                  elif [[ "$* " == *"model.route.refused"* ]]; then cat "$FIX/refusals" 2>/dev/null
@@ -123,6 +127,8 @@ setup() {
   printf '{"data":{"result":[]}}\n' > "$FIX/fallback_statuses"
   printf '{"data":{"result":[]}}\n' > "$FIX/refusals"
   printf '{"data":{"result":[]}}\n' > "$FIX/fallback_peak"
+  printf '{"data":{"result":[]}}\n' > "$FIX/actions_today"
+  printf '{"data":{"result":[]}}\n' > "$FIX/actions_history"
   : > "$FIX/existing"
 }
 
@@ -138,6 +144,12 @@ expect "the numbers name the service and its count" \
 expect "nothing is silent" "$([ ! -s "$WORK/out/silent.txt" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
 expect "the 7-day history was actually asked for" \
   "$(grep -q 'step=86400' "$CURL_LOG" && echo yes || echo no)"
+expect "the Actions lane is a section of its own" \
+  "$(grep -q '^### GitHub Actions events' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(grep '^### ' "$WORK/out/numbers.md")"
+expect "and with no Actions events it is clearly empty" \
+  "$(grep -A3 '^### GitHub Actions events' "$WORK/out/numbers.md" | grep -qi 'none' && echo yes || echo no)" \
+  "$(sed -n '/GitHub Actions events/,+6p' "$WORK/out/numbers.md")"
 
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
 expect "decide exits 0 — nothing to file" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
@@ -764,6 +776,78 @@ setup
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 expect "nothing is fabricated without the switch" \
   "$([ "$(bash "$SCRIPT" decide "$WORK/out" >/dev/null; echo $?)" -eq 0 ] && echo yes || echo no)"
+
+echo
+echo "GitHub Actions events are a separate lane (#504)"
+
+setup
+printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"value":[1785840000,"12"]}]}}\n' > "$FIX/actions_today"
+printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"values":[[1785235200,"3"],[1785321600,"4"],[1785840000,"12"]]}]}}\n' > "$FIX/actions_history"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "a repeated no-work event is named" \
+  "$(grep -q 'board-triage' "$WORK/out/numbers.md" && grep -q 'candidates existed and no model answered' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/GitHub Actions events/,+12p' "$WORK/out/numbers.md")"
+expect "with yesterday's count" \
+  "$(grep -q '| `board-triage` | warn | `candidates existed and no model answered` | 12 |' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/GitHub Actions events/,+12p' "$WORK/out/numbers.md")"
+expect "and the history beside it" \
+  "$(grep -q '2026-07-27: 3' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/GitHub Actions events/,+20p' "$WORK/out/numbers.md")"
+expect "the Actions query does not widen the container selector" \
+  "$(grep 'board-triage' "$CURL_LOG" | grep -q 'job="containers"' && echo no || echo yes)"
+expect "and it aggregates rather than shipping lines" \
+  "$(grep 'board-triage' "$CURL_LOG" | grep -q 'sum by' && echo yes || echo no)" \
+  "$(grep 'board-triage' "$CURL_LOG" | head -5)"
+
+setup
+printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"value":[1785840000,"12"]},{"metric":{"service":"board-triage","level":"error","reason":"the pass was red"},"value":[1785840000,"1"]}]}}\n' > "$FIX/actions_today"
+printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"values":[[1785235200,"3"],[1785840000,"12"]]}]}}\n' > "$FIX/actions_history"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the new error category is a row of its own" \
+  "$(grep -q 'the pass was red' "$WORK/out/numbers.md" && grep -q 'candidates existed and no model answered' "$WORK/out/numbers.md" && echo yes || echo no)" \
+  "$(sed -n '/GitHub Actions events/,+20p' "$WORK/out/numbers.md")"
+expect "and the numbers contain no raw event line" \
+  "$(grep -q 'run_id' "$WORK/out/numbers.md" && echo no || echo yes)"
+
+setup
+printf '{"data":["api","website","verifier-runner","board-triage"]}\n' > "$FIX/services_7d"
+printf '{"data":["api","website","verifier-runner"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "an Actions service is not reported silent" \
+  "$(grep -qx 'board-triage' "$WORK/out/silent.txt" && echo no || echo yes)" \
+  "$(cat "$WORK/out/silent.txt")"
+
+expect "the judge is still forbidden from asking for log lines" \
+  "$(grep -q 'You are not given log lines' "$JUDGE" && echo yes || echo no)"
+expect "and it is taught red vs green-but-no-work" \
+  "$(grep -q 'green-but-no-work' "$JUDGE" && grep -q 'red run' "$JUDGE" && echo yes || echo no)"
+expect "the emitter and the reader share one closed service set" \
+  "$(python3 -c '
+import re, pathlib
+root = pathlib.Path("'"$ROOT"'")
+em = (root/".github/scripts/loki-event.sh").read_text()
+wa = (root/".github/scripts/watch-agent.sh").read_text()
+ma = re.search(r"^SERVICES=\((.*)\)", em, re.M)
+mb = re.search(r"^ACTIONS_SERVICES=\((.*)\)", wa, re.M)
+if not ma or not mb:
+    print("no")
+else:
+    print("yes" if ma.group(1).split() == mb.group(1).split() else "no")
+')"
+
+setup
+printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"value":[1785840000,"12"]}]}}\n' > "$FIX/actions_today"
+env -u OPENROUTER_API_KEY_WATCH bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the numbers still name the Actions event without a model" \
+  "$(grep -q 'candidates existed and no model answered' "$WORK/out/numbers.md" && echo yes || echo no)"
+out=$(env -u OPENROUTER_API_KEY_WATCH python3 "$JUDGE" "$WORK/out" 2>"$WORK/judge.err"); judge_rc=$?
+expect "a missing key does not fail the judge" \
+  "$([ "$judge_rc" -eq 0 ] && echo yes || echo no)" "rc=$judge_rc"
+expect "and writes no judgement" \
+  "$([ ! -s "$WORK/out/judgement.md" ] && echo yes || echo no)"
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "and files nothing" \
+  "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
 echo "the store address is not a committed default (#503)"
