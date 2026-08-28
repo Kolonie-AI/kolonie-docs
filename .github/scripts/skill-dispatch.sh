@@ -1,13 +1,19 @@
 #!/bin/bash
 # Ask the seven runtime repositories to regenerate their `SKILL.md` now.
 #
-# Usage: SKILL_SYNC_TOKEN=… bash .github/scripts/skill-dispatch.sh
+# Usage: SKILL_PUBLISHER_TOKEN=… bash .github/scripts/skill-dispatch.sh
 #
 # The Colony-facing half of every `SKILL.md` lives once, in `onboarding/skill/`.
 # The seven regenerate against it on a cron at `17 6 * * *`; this asks them to do
 # it now instead of tomorrow morning. `#359` is why the fast path exists: a tool
 # withdrawn at 15:26 left six of the seven documenting a tool that answered
 # `-32602 Tool not found` until the next morning.
+#
+# The token is a short-lived Publisher App installation token, minted by
+# `skill-dispatch.yml` from `SKILL_PUBLISHER_APP_ID` /
+# `SKILL_PUBLISHER_APP_PRIVATE_KEY`. It is not a user PAT. `#531` is why: the
+# PAT returned HTTP 403 on every dispatch, and tying a shared system to one
+# person's account is the failure `#501` already measured on the seven.
 #
 # ## Why this is a script and not the workflow's own `run:` block
 #
@@ -62,27 +68,27 @@ summary() {
 }
 
 # `GITHUB_TOKEN` reaches this repository and no other, so dispatching a workflow
-# in `kolonie-claude` needs a credential that spans them. Scoping that secret is
-# a credential decision and belongs to a maintainer (`agents/routes.md`); this
-# script never asks for a token value and never prints one.
-if [ -z "${SKILL_SYNC_TOKEN:-}" ]; then
-  echo "::error::the shared skill body moved and the seven were not told; SKILL_SYNC_TOKEN is not readable from this repository."
+# in `kolonie-claude` needs a credential that spans them. The Publisher App is
+# that credential (`#531`): minted per run, installed on the seven, never a
+# user PAT. This script never asks for a token value and never prints one.
+if [ -z "${SKILL_PUBLISHER_TOKEN:-}" ]; then
+  echo "::error::the shared skill body moved and the seven were not told; SKILL_PUBLISHER_TOKEN is empty (the Publisher App token was not minted)."
   summary <<'MD'
 ### The seven were not told
 
 The shared skill body moved and this workflow could not dispatch `skill.yml`
-anywhere, because `SKILL_SYNC_TOKEN` is not readable here.
+anywhere, because no Publisher App installation token was handed to it.
 
 **They are on their cron.** Each of the seven regenerates at `17 6 * * *` and
 opens a pull request if the body has moved, so nothing is lost — only delayed,
 by up to a day. That is the state `#359` measured.
 
-**One setting closes it.** `SKILL_SYNC_TOKEN` is an organisation secret; adding
-`kolonie-docs` to its selected-repositories list is the whole change. The token
-also needs `actions: write` on the seven — `workflow_dispatch` is a different
-permission from the `contents` and `pull-requests` writes it already uses.
+**What closes it.** `skill-dispatch.yml` mints a short-lived installation token
+as the Kolonie Skill Publisher App from `SKILL_PUBLISHER_APP_ID` /
+`SKILL_PUBLISHER_APP_PRIVATE_KEY`, then this script asks the seven. An empty
+token here means that mint did not happen.
 
-`#359` is closed on the promise that this fast path works. No readable token
+`#359` is closed on the promise that this fast path works. No minted token
 means **0 of 7** were dispatched, so this run is red rather than reporting that
 promise green.
 MD
@@ -91,7 +97,7 @@ fi
 
 asked=0
 for repo in "${REPOS[@]}"; do
-  if GH_TOKEN="$SKILL_SYNC_TOKEN" gh workflow run skill.yml \
+  if GH_TOKEN="$SKILL_PUBLISHER_TOKEN" gh workflow run skill.yml \
        --repo "Kolonie-AI/$repo" --ref main; then
     echo "::notice::$repo was asked to regenerate"
     asked=$((asked + 1))

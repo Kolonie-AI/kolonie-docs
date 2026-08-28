@@ -39,14 +39,17 @@ name: Push the shared skill body to the seven
 # arrangement as `board-triage.yml`'s schedule behind the host timer: the fast
 # path is an optimisation over a clock that still works on its own.
 #
-# ## Why a token, and why neither empty ending is green (`#500`)
+# ## Why a token, and why neither empty ending is green (`#500`, `#531`)
 #
 # `GITHUB_TOKEN` reaches this repository and no other, so dispatching a workflow
-# in `kolonie-claude` needs a credential that spans them. `SKILL_SYNC_TOKEN` is
-# the one that already does — the seven use it to open the sync pull request —
-# and on 2026-08-15 its selected-repositories list was the seven plus
-# `kolonie-dns`, **not this repository**, so this workflow cannot read it yet.
-# Scoping it is a credential decision and belongs to a maintainer (`agents/routes.md`).
+# in `kolonie-claude` needs a credential that spans them. That credential is a
+# short-lived installation token as the organisation-owned **Kolonie Skill
+# Publisher** App, minted here from `SKILL_PUBLISHER_APP_ID` /
+# `SKILL_PUBLISHER_APP_PRIVATE_KEY`. The App is installed on the seven runtimes
+# and not on this repository; minting here, dispatching there, is the whole of
+# `#531`. A user PAT is not read anywhere on this path — `#501` already retired
+# that shape inside each runtime's `skill.yml` when the account was suspended,
+# and this workflow was the remaining reader.
 #
 # The two states are still told apart, which is the same distinction
 # `kolonie-platform#971` is about one repository over. What `#500` changes is
@@ -115,9 +118,6 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Empty when the secret is not scoped to this repository, which is the
-      # state the header describes and the step below reports.
-      SKILL_SYNC_TOKEN: ${{ secrets.SKILL_SYNC_TOKEN }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       # The seven live in `skill-dispatch.sh`, beside the loop that reads them,
       # rather than here. They were in both places for as long as the logic was
@@ -134,5 +134,27 @@ jobs:
       - name: The dispatch logic is tested before it is trusted
         run: bash .github/tests/skill-dispatch.test.sh
 
+      # One short-lived token, scoped to the seven runtimes the App is
+      # installed on. This repository is not one of them: it holds the secrets
+      # so it can mint, then dispatches into the seven (`#531`). The pin is
+      # the same SHA `kolonie-claude` `skill.yml` already uses.
+      - name: Become the skill publisher App
+        id: publisher_token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.SKILL_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.SKILL_PUBLISHER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            kolonie-skill
+            kolonie-claude
+            kolonie-codex
+            kolonie-hermes
+            kolonie-kilo
+            kolonie-openclaw
+            kolonie-antigravity
+
       - name: Ask them
+        env:
+          SKILL_PUBLISHER_TOKEN: ${{ steps.publisher_token.outputs.token }}
         run: bash .github/scripts/skill-dispatch.sh
