@@ -221,12 +221,14 @@ case "$1 $2" in
   # before anything dispatches on them — a stub that read `$2` matched every POST
   # against its catch-all and answered success to writes it was meant to refuse.
   "api"*)
-    path=""; method="GET"; expression=""; next=""
+    path=""; method="GET"; expression=""; next=""; include=0
     shift   # the literal `api`
     for arg in "$@"; do
       case "$arg" in
         --method) next=method ;;
         --jq)     next=jq ;;
+        -i|--include) include=1; next="" ;;
+        --silent) next="" ;;
         -*)       next="" ;;
         *)
           case "$next" in
@@ -238,11 +240,31 @@ case "$1 $2" in
       esac
     done
     case "$path" in
-      # Membership: 204 for a member, 404 for anybody else. `--silent` is what
-      # the script passes and the exit status is the whole answer.
-      orgs/*/members/*)
+      # Membership: `members/` answers 204, `memberships/` answers 200, and
+      # either answers 404 for an outsider — when the fixture does not override
+      # the status. `#536` is the override: a 403/401/empty lookup must be
+      # distinguishable from a 404, so the fixture can name the status per login.
+      orgs/*/members/*|orgs/*/memberships/*)
         login=${path##*/}
-        grep -qxF "$login" "$GH_FIXTURES/members" 2>/dev/null || { echo "HTTP 404" >&2; exit 1; } ;;
+        code=""
+        if [ -f "$GH_FIXTURES/membership_status" ]; then
+          code=$(awk -v l="$login" '$1 == l { print $2; exit }' "$GH_FIXTURES/membership_status")
+        fi
+        if [ -z "$code" ]; then
+          if grep -qxF "$login" "$GH_FIXTURES/members" 2>/dev/null; then
+            case "$path" in */memberships/*) code=200 ;; *) code=204 ;; esac
+          else
+            code=404
+          fi
+        fi
+        if [ "$include" = 1 ] && [ "$code" != "empty" ]; then
+          echo "HTTP/2 $code"
+        fi
+        case "$code" in
+          200|204) exit 0 ;;
+          empty) exit 1 ;;
+          *) echo "HTTP $code" >&2; exit 1 ;;
+        esac ;;
       */dependencies/blocked_by)
         key=${path#repos/}; key=${key%/dependencies/blocked_by}
         fixture="$GH_FIXTURES/blocked_${key//\//_}"
@@ -851,7 +873,70 @@ run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
 log=$(cat "$GH_LOG")
 absent "a machine is never labelled from:non-member" "from:non-member" "$log"
 absent "and its membership is not even asked about" "members/github-actions" "$log"
+absent "nor is memberships asked about a machine" "memberships/github-actions" "$log"
 contains "and the run says whose job that provenance is" "kolonie-platform#686" "$(cat "$WORK/stderr")"
+
+echo
+echo "a membership lookup that cannot answer is not from:non-member (#536)"
+
+# The forbidden assignment, measured 2026-08-28 on kolonie-concept-lab#10:
+# provenance() asked GET orgs/Kolonie-AI/members/<login> and mapped any non-zero
+# gh exit to outside, so a 403 (token cannot ask) became from:non-member on an
+# organisation member. A membership call that is not 200/204 (member) or 404
+# (outside) must leave the labels untouched and still write the route.
+case_setup
+printf '%s\n' "colleague 403" > "$GH_FIXTURES/membership_status"
+searched "$(issue 900 'a colleague wrote this' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a membership 403 does not add from:non-member" "--add-label from:non-member" "$log"
+contains "and the route is still written" "--add-label queue:maintainer" "$log"
+contains "and membership is asked at memberships/, not members/" \
+  "api orgs/Kolonie-AI/memberships/colleague" "$log"
+absent "and members/ is not asked" "api orgs/Kolonie-AI/members/colleague" "$log"
+
+case_setup
+printf '%s\n' "colleague 401" > "$GH_FIXTURES/membership_status"
+searched "$(issue 900 'a colleague wrote this' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "a membership 401 does not add from:non-member" "--add-label from:non-member" "$log"
+contains "and the route is still written on 401" "--add-label queue:maintainer" "$log"
+
+case_setup
+printf '%s\n' "colleague empty" > "$GH_FIXTURES/membership_status"
+searched "$(issue 900 'a colleague wrote this' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+log=$(cat "$GH_LOG")
+absent "an empty membership status does not add from:non-member" "--add-label from:non-member" "$log"
+contains "and the route is still written when status is empty" "--add-label queue:maintainer" "$log"
+
+# The two answers that remain decisive. Explicit so the 403 split cannot quietly
+# swallow a real 404 or a real 200.
+case_setup
+searched "$(issue 900 'an outsider wrote this' '' "stranger")"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+contains "a membership 404 still adds from:non-member" \
+  "--add-label from:non-member" "$(cat "$GH_LOG")"
+
+case_setup
+searched "$(issue 900 'a colleague wrote this' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+absent "a membership 200 still does not add from:non-member" \
+  "from:non-member" "$(cat "$GH_LOG")"
+
+case_setup
+printf '%s\n' "colleague 204" > "$GH_FIXTURES/membership_status"
+searched "$(issue 900 'a colleague wrote this' '')"
+boarded "900|Inbox|"
+run_apply "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null
+absent "a membership 204 still does not add from:non-member" \
+  "from:non-member" "$(cat "$GH_LOG")"
 
 echo
 echo "a dependency is recorded as the relation the queue reads (#261)"
@@ -957,18 +1042,22 @@ log=$(cat "$GH_LOG")
 absent "an issue already routed, prioritised and in Ready is left alone" "issue edit" "$log"
 absent "and a triage that changed nothing says nothing (#262)" "issue comment" "$log"
 
-# `#270`: the board is moved by an app that cannot label an issue, and the labels
-# need a token that reaches five repositories. A pass wired the other way round
-# fails with a 403 on whichever half is wrong, hours later.
+# `#270` / `#536`: the board is moved by an app that cannot label an issue, the
+# labels go through the triage app, and membership is a third credential. A pass
+# wired the other way round fails with a 403 on whichever half is wrong, hours later.
 case_setup
 searched "$(issue 900 'two credentials' '')"
 boarded "900|Inbox|"
-GH_TOKEN=issues BOARD_TOKEN=board bash "$SCRIPT" candidates > "$WORK/candidates.json" 2>/dev/null
-GH_TOKEN=issues BOARD_TOKEN=board bash "$SCRIPT" apply "$WORK/candidates.json" \
+GH_TOKEN=issues BOARD_TOKEN=board PROVENANCE_TOKEN=prove \
+  bash "$SCRIPT" candidates > "$WORK/candidates.json" 2>/dev/null
+GH_TOKEN=issues BOARD_TOKEN=board PROVENANCE_TOKEN=prove \
+  bash "$SCRIPT" apply "$WORK/candidates.json" \
   "$(decided 900 "queue:maintainer" "" "" "" true)" >/dev/null 2>&1
 log=$(cat "$GH_LOG")
 contains "the card is moved as the board app" "as=board project item-edit" "$log"
-contains "and the label is written as the repository token" "as=issues issue edit" "$log"
+contains "and the label is written as the issue app" "as=issues issue edit" "$log"
+contains "and membership is asked as the provenance token" "as=prove api orgs/" "$log"
+absent "and membership is not asked as the issue token" "as=issues api orgs/" "$log"
 
 # Measured the expensive way: the first live pass put `queue:operator` on nine issues
 # that already carried `queue:maintainer` and left both on — so the pass enforcing
