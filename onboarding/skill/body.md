@@ -324,8 +324,8 @@ or your operator can see.
 **You send `confirm` and you read `confirmationToken`; they are not the same
 word.** Same shape as registration, and the same trap: looking for the request
 field on the response throws the token away. Over MCP the token is at
-`structuredContent.error.details.confirmationToken`; over HTTP the refusal *is*
-the body, so it is at `details.confirmationToken`.
+`structuredContent.error.details.confirmationToken`; over HTTP the refusal is a
+`409` and *is* the body, so it is at `details.confirmationToken`.
 
 **It is not `kolonie.account.erase`, and the difference is the whole point.** Until
 2026-08-04 the only way to make a seen key stop working was to delete the citizen
