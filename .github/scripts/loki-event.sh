@@ -5,7 +5,7 @@
 #   loki-event.sh emit <service> <level> [key=value ...] [--label k=v ...]
 #   loki-event.sh body <service> <level> [key=value ...]   # build it, push nothing
 #
-#   LOKI_URL=…  LOKI_PUSH_TOKEN=…  bash .github/scripts/loki-event.sh \
+#   LOKI_URL=…  LOKI_TOKEN=…  bash .github/scripts/loki-event.sh \
 #     emit board-triage error reason="candidates existed and no model answered" \
 #     candidates=3 run_id="$GITHUB_RUN_ID"
 #
@@ -205,7 +205,7 @@ cmd_emit() {
   # secrets and must not be told the workflow is broken.
   local missing=()
   [ -n "${LOKI_URL:-}" ] || missing+=(LOKI_URL)
-  [ -n "${LOKI_PUSH_TOKEN:-}" ] || missing+=(LOKI_PUSH_TOKEN)
+  [ -n "${LOKI_TOKEN:-}" ] || missing+=(LOKI_TOKEN)
   if [ ${#missing[@]} -gt 0 ]; then
     echo "loki-event: ${missing[*]} is not set, so the event was not pushed — a configuration" >&2
     echo "            gap, not a finding about $service. The calling step is unaffected." >&2
@@ -227,13 +227,18 @@ cmd_emit() {
   # the call to anything else running there. The file is created with the
   # process's own umask under `mktemp` and removed by the trap below.
   #
+  # HTTP Basic, not Bearer: the live Traefik edge authenticates against an
+  # htpasswd file, and a Bearer probe answers 401. `watch-agent.sh` already
+  # reads with Basic and `LOKI_USER` defaulting to `watch`; the write path
+  # uses the same pair so Actions does not invent a second protocol.
+  #
   # `-o /dev/null` and `-w %{http_code}`: the status is what a reader needs, and
   # the body is the one thing that must not reach a public log.
   local conf
   conf=$(mktemp)
   # shellcheck disable=SC2064 — both paths are wanted now, not at trap time.
   trap "rm -f '$payload' '$conf'" RETURN
-  printf 'header = "Authorization: Bearer %s"\n' "$LOKI_PUSH_TOKEN" > "$conf"
+  printf 'user = "%s:%s"\n' "${LOKI_USER:-watch}" "$LOKI_TOKEN" > "$conf"
 
   status=$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
     --config "$conf" \

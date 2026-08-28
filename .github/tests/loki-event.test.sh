@@ -37,6 +37,7 @@ trap 'rm -rf "$WORK"' EXIT
 # Not a real host, and it never has to be: the stub answers before any name is
 # resolved. The value is here so the assertions can prove it is never printed.
 FAKE_URL="https://logs.example-not-a-real-host.test"
+FAKE_USER="watch"
 FAKE_TOKEN="loki-token-abcdefghijklmnop0123456789"
 
 mkdir -p "$WORK/bin"
@@ -110,13 +111,13 @@ absent() {
 }
 
 emit() {
-  LOKI_URL="$FAKE_URL" LOKI_PUSH_TOKEN="$FAKE_TOKEN" bash "$SCRIPT" "$@"
+  LOKI_URL="$FAKE_URL" LOKI_USER="$FAKE_USER" LOKI_TOKEN="$FAKE_TOKEN" bash "$SCRIPT" "$@"
 }
 
 echo "the body it builds"
 
 case_setup
-body=$(LOKI_URL="$FAKE_URL" LOKI_PUSH_TOKEN="$FAKE_TOKEN" \
+body=$(LOKI_URL="$FAKE_URL" LOKI_USER="$FAKE_USER" LOKI_TOKEN="$FAKE_TOKEN" \
   bash "$SCRIPT" body board-triage error \
     repository=Kolonie-AI/kolonie-docs run_id=33013176705 \
     workflow="Triage the board" attempt=1 \
@@ -157,7 +158,7 @@ contains "and names the closed set" "service" "$out"
 check "and nothing was pushed" "" "$(cat "$CURL_LOG")"
 
 case_setup
-out=$(LOKI_URL="$FAKE_URL" LOKI_PUSH_TOKEN="$FAKE_TOKEN" \
+out=$(LOKI_URL="$FAKE_URL" LOKI_USER="$FAKE_USER" LOKI_TOKEN="$FAKE_TOKEN" \
   bash "$SCRIPT" body board-triage error --label sha=2b878d1 2>&1); rc=$?
 check "the builder refuses outright, so a caller can be tested on it" "2" "$rc"
 contains "naming the label" "sha" "$out"
@@ -205,7 +206,17 @@ absent "nor the store's address" "$FAKE_URL" "$out"
 # which is the second assertion: "not in argv" is trivially satisfiable by not
 # sending it at all.
 absent "and the credential is not in curl's argument list" "$FAKE_TOKEN" "$(cat "$CURL_LOG")"
-contains "but it does reach the store" "$FAKE_TOKEN" "$(cat "$CURL_CONFIG")"
+contains "but the Basic credential reaches curl's config" "user =" "$(cat "$CURL_CONFIG")"
+contains "with the configured user" "$FAKE_USER" "$(cat "$CURL_CONFIG")"
+contains "and token" "$FAKE_TOKEN" "$(cat "$CURL_CONFIG")"
+absent "Bearer auth is not sent" "Bearer" "$(cat "$CURL_CONFIG")"
+absent "nor an Authorization header" "Authorization:" "$(cat "$CURL_CONFIG")"
+
+case_setup
+out=$(env -u LOKI_USER LOKI_URL="$FAKE_URL" LOKI_TOKEN="$FAKE_TOKEN" \
+  bash "$SCRIPT" emit board-triage warn reason="default user" 2>&1); rc=$?
+check "an unset user still passes" "0" "$rc"
+contains "and defaults to the live reader" "watch" "$(cat "$CURL_CONFIG")"
 
 echo
 echo "the store is down"
@@ -233,13 +244,13 @@ echo "the credential is not configured"
 # configuration gap on stderr, not a crash and not silence.
 
 case_setup
-out=$(env -u LOKI_PUSH_TOKEN LOKI_URL="$FAKE_URL" bash "$SCRIPT" emit board-triage error 2>&1); rc=$?
+out=$(env -u LOKI_TOKEN LOKI_URL="$FAKE_URL" bash "$SCRIPT" emit board-triage error 2>&1); rc=$?
 check "the calling step passes" "0" "$rc"
-contains "and the gap is named" "LOKI_PUSH_TOKEN" "$out"
+contains "and the gap is named" "LOKI_TOKEN" "$out"
 check "and nothing was pushed" "" "$(cat "$CURL_LOG")"
 
 case_setup
-out=$(env -u LOKI_URL LOKI_PUSH_TOKEN="$FAKE_TOKEN" bash "$SCRIPT" emit board-triage error 2>&1); rc=$?
+out=$(env -u LOKI_URL LOKI_TOKEN="$FAKE_TOKEN" bash "$SCRIPT" emit board-triage error 2>&1); rc=$?
 check "a missing store address is the same" "0" "$rc"
 contains "and named" "LOKI_URL" "$out"
 check "and nothing was pushed" "" "$(cat "$CURL_LOG")"
@@ -256,7 +267,10 @@ echo "board-triage.yml calls it on the ending #502 describes"
 TRIAGE="$ROOT/.github/workflows/board-triage.yml"
 contains "the workflow calls the shared script" "loki-event.sh" "$(cat "$TRIAGE")"
 contains "as the board-triage service" "board-triage" "$(cat "$TRIAGE")"
-contains "and takes the push credential from a secret" "LOKI_PUSH_TOKEN" "$(cat "$TRIAGE")"
+contains "and reuses the reader credential" "LOKI_TOKEN" "$(cat "$TRIAGE")"
+absent "rather than a second push credential" "LOKI_PUSH_TOKEN" "$(cat "$TRIAGE")"
+contains "runs after the deliberate red step" "!cancelled()" "$(cat "$TRIAGE")"
+contains "only for the no-model-answer ending" "steps.decide.outputs.unanswered == steps.decide.outputs.chunks" "$(cat "$TRIAGE")"
 
 echo
 if [ ${#FAILURES[@]} -eq 0 ]; then
