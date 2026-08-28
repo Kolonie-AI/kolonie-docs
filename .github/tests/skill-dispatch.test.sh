@@ -16,8 +16,9 @@
 # every invocation so the count is exhaustive rather than a reading of the
 # script.
 #
-# No token value is used anywhere here: `SKILL_SYNC_TOKEN` is set to a literal
-# placeholder, because what the script branches on is whether it is empty.
+# No token value is used anywhere here: `SKILL_PUBLISHER_TOKEN` is set to a
+# literal placeholder, because what the script branches on is whether it is
+# empty.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -85,7 +86,7 @@ echo "an unreadable token is 0 of 7, and that is red"
 # The reproduction. Measured 2026-08-25, run 32908682526: the secret was not
 # readable here, nothing was asked, the annotation was a warning, and the
 # conclusion was success. `#359` is closed; that ending is a broken fast path.
-unset SKILL_SYNC_TOKEN
+unset SKILL_PUBLISHER_TOKEN
 run
 check "no token exits non-zero" 1 "$RC"
 check "and asks nobody, rather than trying without a credential" 0 "$DISPATCHES"
@@ -95,7 +96,7 @@ echo
 echo "a wired-up path that reached nobody is red"
 # The reproduction. This is the ending that was conclusion `success` on
 # 2026-08-25 while Colony-facing text stayed stale in seven repositories.
-export SKILL_SYNC_TOKEN=not-a-token
+export SKILL_PUBLISHER_TOKEN=not-a-token
 GH_FAIL=all run
 check "0 of 7 exits non-zero" 1 "$RC"
 check "and every runtime was attempted before that was decided" 7 "$DISPATCHES"
@@ -132,6 +133,51 @@ case "$absent_log" in
     echo "  FAIL nothing is merged"; FAILURES+=("nothing is merged") ;;
   *) echo "  ok   nothing is merged" ;;
 esac
+
+echo
+echo "the user-PAT path is gone (#531)"
+# The remaining reader of `SKILL_SYNC_TOKEN` after `#501` retired it from the
+# seven. A leftover reference would dispatch with the PAT that returned HTTP
+# 403 on every attempt, measured 2026-08-28.
+WORKFLOW="$ROOT/.github/workflows/skill-dispatch.yml"
+for path in "$SCRIPT" "$WORKFLOW"; do
+  if grep -q SKILL_SYNC_TOKEN "$path"; then
+    echo "  FAIL $path still names SKILL_SYNC_TOKEN"
+    FAILURES+=("$path still names SKILL_SYNC_TOKEN")
+  else
+    echo "  ok   $(basename "$path") does not name SKILL_SYNC_TOKEN"
+  fi
+done
+
+echo
+echo "the mint is the Publisher App, pinned, on the seven and not this repository"
+# Same SHA `kolonie-claude` `skill.yml` already uses. Listing `kolonie-docs`
+# as an installation repository would fail the mint: the App is not installed
+# here. The secrets are readable here so this workflow can mint; the token is
+# then spent on the seven.
+PIN=fee1f7d63c2ff003460e3d139729b119787bc349
+contains "the mint action is pinned to the SHA skill.yml already uses" \
+  "actions/create-github-app-token@$PIN" "$(cat "$WORKFLOW")"
+contains "the mint reads SKILL_PUBLISHER_APP_ID" \
+  "secrets.SKILL_PUBLISHER_APP_ID" "$(cat "$WORKFLOW")"
+contains "the mint reads SKILL_PUBLISHER_APP_PRIVATE_KEY" \
+  "secrets.SKILL_PUBLISHER_APP_PRIVATE_KEY" "$(cat "$WORKFLOW")"
+for repo in kolonie-skill kolonie-claude kolonie-codex kolonie-hermes \
+            kolonie-kilo kolonie-openclaw kolonie-antigravity; do
+  contains "mint lists $repo" "$repo" "$(cat "$WORKFLOW")"
+done
+# `repositories:` is a YAML block of the seven. Naming this repository there
+# would ask the App for an installation it does not have.
+if awk '
+  $0 ~ /^[[:space:]]*repositories:[[:space:]]*\|[[:space:]]*$/ { in_block=1; next }
+  in_block && $0 ~ /^[[:space:]]+[^[:space:]]/ { print; next }
+  in_block { exit }
+' "$WORKFLOW" | grep -q kolonie-docs; then
+  echo "  FAIL mint lists kolonie-docs as an App installation repository"
+  FAILURES+=("mint lists kolonie-docs")
+else
+  echo "  ok   mint does not list kolonie-docs as an App installation repository"
+fi
 
 echo
 if [ ${#FAILURES[@]} -gt 0 ]; then
