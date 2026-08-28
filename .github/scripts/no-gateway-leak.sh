@@ -48,7 +48,7 @@ GUARDED=(
   # reason in the header: the token can be rotated in a minute and the store's
   # address, once in a public repository's history, cannot be taken back.
   LOKI_URL
-  LOKI_PUSH_TOKEN
+  LOKI_TOKEN
 )
 
 # And the literal strings a swap leaves behind. These are not secrets — they are

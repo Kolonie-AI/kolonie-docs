@@ -309,10 +309,10 @@ jobs:
       # on a fork and a 5xx from the store, because a log store being down is not
       # a finding about triage. The step still says what happened on stderr.
       - name: Record a pass where no model answered
-        if: steps.decide.outcome == 'success' && steps.decide.outputs.count == '0'
+        if: ${{ !cancelled() && steps.decide.outcome == 'success' && steps.decide.outputs.chunks != '0' && steps.decide.outputs.unanswered == steps.decide.outputs.chunks }}
         env:
           LOKI_URL: ${{ secrets.LOKI_URL }}
-          LOKI_PUSH_TOKEN: ${{ secrets.LOKI_PUSH_TOKEN }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
         run: |
           bash .github/scripts/loki-event.sh emit board-triage error \
             repository="$GITHUB_REPOSITORY" \

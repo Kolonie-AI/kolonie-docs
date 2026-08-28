@@ -98,7 +98,7 @@ SECRET_LOKI_TOKEN="loki-token-abcdefghijklmnop0123456789"
 
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 printf 'LOKI_URL: %s\n' "$SECRET_LOKI_URL" > "$WORK/tree/workflow.yml"
-out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_PUSH_TOKEN="$SECRET_LOKI_TOKEN" \
+out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_TOKEN="$SECRET_LOKI_TOKEN" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "a committed store address fails" "1" "$rc"
 contains "names the variable" "LOKI_URL" "$out"
@@ -106,7 +106,7 @@ absent "and never prints the value" "$SECRET_LOKI_URL" "$out"
 
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 printf 'token = "%s"\n' "$SECRET_LOKI_TOKEN" > "$WORK/tree/config.toml"
-out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_PUSH_TOKEN="$SECRET_LOKI_TOKEN" \
+out=$(LOKI_URL="$SECRET_LOKI_URL" LOKI_TOKEN="$SECRET_LOKI_TOKEN" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "a committed push token fails" "1" "$rc"
 absent "and never prints the value" "$SECRET_LOKI_TOKEN" "$out"
@@ -118,7 +118,7 @@ echo "a fork, where the secrets are not there"
 # outside contribution for a reason nobody outside can act on.
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 echo 'nothing to see' > "$WORK/tree/readme.md"
-out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER -u LOKI_URL -u LOKI_TOKEN bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "passes" "0" "$rc"
 contains "and says it skipped rather than passing quietly" "skip: LLM_GATEWAY_BASE_URL is not set" "$out"
 
@@ -133,6 +133,12 @@ out=$(LLM_GATEWAY_BASE_URL="e" LLM_GATEWAY_API_KEY_WORKER="$SECRET_KEY" \
   bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "fails rather than matching everything" "1" "$rc"
 contains "and says why" "shorter than 10 characters" "$out"
+
+echo
+echo "CI hands the log-store secrets to the leak check"
+CI="$(cd "$(dirname "$0")/../.." && pwd)/.github/workflows/ci.yml"
+contains "the store address is in the leak-check env" "LOKI_URL: \${{ secrets.LOKI_URL }}" "$(cat "$CI")"
+contains "and the reader credential too" "LOKI_TOKEN: \${{ secrets.LOKI_TOKEN }}" "$(cat "$CI")"
 
 echo
 echo "this repository as it stands"
