@@ -41,6 +41,13 @@ false; do not manufacture a trend from one point.
 
 You are not given log lines and you must not ask for any. Judge the numbers.
 
+The numbers may include a GitHub Actions events table, separate from the \
+container counts. A red run and a green-but-no-work event are distinct: the \
+first is a workflow that failed, the second is a workflow that finished without \
+doing the work it exists to do. Presence of either is not automatically \
+abnormal; a departure from that table's own history, or a rare severe event, is. \
+Do not fold Actions counts into the production-container judgement.
+
 Abnormal means: a rate that has clearly departed from the preceding week, a new \
 error slug that was not appearing before, or an error that is rare and severe on \
 its face. It does not mean the presence of errors. A system with a steady handful \

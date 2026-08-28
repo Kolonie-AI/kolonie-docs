@@ -132,6 +132,13 @@ is JSON.
 pass where candidates existed and no model answered. Adding a caller is a step
 and a name in `SERVICES`; adding a label is refused.
 
+**Who reads it:** `watch-agent.sh` (`kolonie-docs#504`). A separate Actions lane
+queries only the closed `service` set the write path will emit, aggregates by
+`service`, `level` and the JSON `reason`, and puts yesterday plus the same
+history window into `numbers.md`. The container queries are not widened. The
+judge is shown the table, never the lines, and is taught that a red run and a
+green-but-no-work event are distinct; presence is not automatically abnormal.
+
 ## The opencode worker
 
 **An experiment with a stated end** (`kolonie-docs#142`), not a permanent part of

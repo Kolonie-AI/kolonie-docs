@@ -91,6 +91,12 @@ set -uo pipefail
 LOKI_URL="${LOKI_URL:-}"
 LOKI_USER="${LOKI_USER:-watch}"
 
+# The closed set `loki-event.sh` will write. The Actions lane queries only these
+# streams; adding a writer is a name in both lists, and a typo here cannot mint
+# a container query. Kept beside the credential so a reader sees the bound
+# before any query is built (`#504`).
+ACTIONS_SERVICES=(board-triage opencode-worker skill-dispatch watch-agent red-on-main board-self-check)
+
 # One title per silent service, and the service name is the whole of the dedupe
 # key (`#165`). The old fixed string is why there was one issue forever; a title
 # naming the thing that is wrong is what makes each finding closeable.
@@ -302,6 +308,35 @@ q_service_values() {
     | jq -r '.data // [] | .[]' 2>/dev/null | grep -v '^$' | sort -u
 }
 
+# Drop the Actions writers. Silent-service detection is about production
+# containers; a board-triage that had nothing to fail on is allowed to be quiet
+# (`#504`).
+actions_drop() {
+  grep -vxF -f <(printf '%s\n' "${ACTIONS_SERVICES[@]}") || :
+}
+
+actions_selector() {
+  local IFS='|'
+  printf '%s' "${ACTIONS_SERVICES[*]}"
+}
+
+# --- query A: Actions events, yesterday and the same history window -----------
+# A separate lane, not a widening of `job="containers"`. The push path labels
+# only `service` and `level`; `reason` lives in the JSON line, which is the
+# low-cardinality field the model is shown. Aggregated inside Loki, so no raw
+# line ever reaches `numbers.md` (`#504`).
+q_actions_today() {
+  loki /loki/api/v1/query \
+    "query=sum by (service, level, reason) (count_over_time({service=~\"$(actions_selector)\"} | json [24h]))" \
+    "time=$NOW"
+}
+
+q_actions_history() {
+  loki /loki/api/v1/query_range \
+    "query=sum by (service, level, reason) (count_over_time({service=~\"$(actions_selector)\"} | json [24h]))" \
+    "start=$WEEK_AGO" "end=$NOW" "step=86400"
+}
+
 # --- services that were removed on purpose ------------------------------------
 # **A retired service and a dead one are the same measurement.** Both logged last
 # week and nothing yesterday, and no query distinguishes them, because the
@@ -381,7 +416,8 @@ cmd_gather() {
 
   # Silence first: it is the one answer that owes nothing to the model, and
   # writing it before anything else means a later failure cannot lose it.
-  comm -23 <(q_service_values "$WEEK_AGO" "$NOW") <(q_service_values "$DAY_AGO" "$NOW") \
+  comm -23 <(q_service_values "$WEEK_AGO" "$NOW" | actions_drop) \
+           <(q_service_values "$DAY_AGO" "$NOW" | actions_drop) \
     > "$dir/quiet.txt"
 
   # The split is written to the directory rather than inferred later from what is
@@ -473,6 +509,14 @@ cmd_gather() {
   loki /loki/api/v1/query_range \
     'query=sum by (service, level) (count_over_time({job="containers", level=~"error|warn"}[24h]))' \
     "start=$WEEK_AGO" "end=$NOW" "step=86400" > "$dir/history.json"
+
+  q_actions_today > "$dir/actions-today.json"
+  q_actions_history > "$dir/actions-history.json"
+  jq -r '.data.result // [] | .[]
+         | select((.value[1] | tonumber) > 0)
+         | [(.metric.service // "«unlabelled»"), (.metric.level // ""),
+            (.metric.reason // "«no reason»"), (.value[1] | tonumber | floor)]
+         | @tsv' "$dir/actions-today.json" 2>/dev/null | sort -k4 -rn > "$dir/actions-today.tsv" || :
 
   {
     echo "### Errors and warnings per service, last 24 hours"
@@ -645,6 +689,32 @@ cmd_gather() {
               ([.values[] | "\((.[0] - $step) | gmtime | strftime("%Y-%m-%d")): \(.[1])"] | join(" · "))]
            | @tsv' "$dir/history.json" 2>/dev/null \
       | sort | awk -F'\t' '{printf "| `%s` | %s | %s |\n", $1, $2, $3}'
+
+    echo
+    echo "### GitHub Actions events"
+    echo
+    if [ -s "$dir/actions-today.tsv" ]; then
+      echo "A separate lane from the container counts above. A red run and a"
+      echo "green-but-no-work event are distinct; presence is not automatically"
+      echo "abnormal. Judge these against their own history, not against production."
+      echo
+      echo "| service | level | reason | yesterday |"
+      echo "|---|---|---|---:|"
+      awk -F'\t' '{printf "| `%s` | %s | `%s` | %s |\n", $1, $2, $3, $4}' "$dir/actions-today.tsv"
+      echo
+      echo "The same counts per day, over as much history as the store holds:"
+      echo
+      echo "| service | level | reason | count per day, oldest first |"
+      echo "|---|---|---|---|"
+      jq -r --argjson step 86400 '.data.result // [] | .[]
+             | [(.metric.service // "«unlabelled»"), (.metric.level // ""),
+                (.metric.reason // "«no reason»"),
+                ([.values[] | "\((.[0] - $step) | gmtime | strftime("%Y-%m-%d")): \(.[1])"] | join(" · "))]
+             | @tsv' "$dir/actions-history.json" 2>/dev/null \
+        | sort | awk -F'\t' '{printf "| `%s` | %s | `%s` | %s |\n", $1, $2, $3, $4}'
+    else
+      echo "None."
+    fi
   } > "$dir/numbers.md"
 
   cat "$dir/numbers.md"
