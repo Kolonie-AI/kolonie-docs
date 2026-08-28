@@ -32,6 +32,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
+export LOKI_URL="${LOKI_URL:-https://logs.example.invalid}"
 export VISIBILITY_POLL=0 VISIBILITY_ATTEMPTS=4
 # Every window in the script is relative to this, so the fixtures do not have to
 # know what day it is.
@@ -469,6 +470,17 @@ out=$(bash "$SCRIPT" gather "$WORK/out"); rc=$?
 expect "gather exits 2" "$([ $rc -eq 2 ] && echo yes || echo no)" "rc=$rc"
 expect "and says what answered" "$([[ "$out" == *"401"* ]] && echo yes || echo no)" "$out"
 expect "and files nothing" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
+expect "and does not print the store address" \
+  "$([[ "$out" != *"https://"* ]] && echo yes || echo no)" "$out"
+
+echo
+echo "a missing store address is the same gap (#503)"
+
+setup
+out=$(env -u LOKI_URL bash "$SCRIPT" gather "$WORK/out"); rc=$?
+expect "gather exits 2 without an address" "$([ $rc -eq 2 ] && echo yes || echo no)" "rc=$rc"
+expect "and names the variable" "$([[ "$out" == *"LOKI_URL"* ]] && echo yes || echo no)" "$out"
+expect "and files nothing" "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
 echo
 echo "errors, which are the larger half (#236)"
@@ -752,6 +764,14 @@ setup
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 expect "nothing is fabricated without the switch" \
   "$([ "$(bash "$SCRIPT" decide "$WORK/out" >/dev/null; echo $?)" -eq 0 ] && echo yes || echo no)"
+
+echo
+echo "the store address is not a committed default (#503)"
+
+expect "no host name is defaulted into the script" \
+  "$(grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE 'https://' && echo no || echo yes)"
+expect "the gather step is handed LOKI_URL as a secret" \
+  "$(grep -q 'LOKI_URL: ${{ secrets.LOKI_URL }}' "$ROOT/.github/workflows/watch-agent.yml" && echo yes || echo no)"
 
 echo
 echo "no threshold exists anywhere in this agent"

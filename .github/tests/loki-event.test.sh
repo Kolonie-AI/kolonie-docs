@@ -265,9 +265,8 @@ check "and nothing was pushed" "" "$(cat "$CURL_LOG")"
 
 echo
 echo "what is committed"
-# The store's address is configuration, not a constant here. `watch-agent.sh`
-# carries a default because it predates this rule; a new file must not add a
-# second copy of a host name to the repository.
+# The store's address is configuration, not a constant. A hostname committed
+# as a default is a secret the leak guard fails CI over.
 absent "no host name is defaulted into the script" "https://" "$(grep -v '^#' "$SCRIPT")"
 
 echo
