@@ -73,14 +73,14 @@ gateway that is down costs the pass its judgement and not its bookkeeping.
 | | |
 |---|---|
 | **The model** | The strongest on the gateway, and the reason is the dependency step: noticing that a new issue reads something one of forty-odd open ones creates is a judgement over the whole board at once. It is also what decides whether a citizen's words reach code. A setting (`TRIAGE_LLM_MODEL`), so the strongest model in six months is one variable away. **The value must be an identifier `GET /v1/models` serves, or a tier alias** — `board-triage-decide.py` drops anything else before asking and says so. Measured 2026-08-26 (`#502`): the bare names it used to default to answered 503 through a healthy gateway while the served prefixed identifiers and `@preset/tier-1` answered 200, so a bare default was a deterministic failure every half hour |
-| **The second account** | `TRIAGE_LLM_FALLBACK_MODEL`, and **named or not asked**. It used to be inferred as the other of two hard-coded names; since both had stopped being served, the retry path could not reach a working model however often it ran (`#502`). `none` switches it off explicitly |
+| **The second gateway** | Primary `LLM_GATEWAY_*`, then `LLM_GATEWAY_FALLBACK_*`, same tier string, through the shared Actions transport (`#546`). An unconfigured half is absent; a successful fallback is one Loki event with `service=board-triage` and a reason class. Names, swap order and a fourth tier are below; `D-141` is why there is a gateway at all |
 | **What the model is given** | The board, the routing table quoted out of `AGENTS.md` §5, and `operations/worker-prohibitions.md`. **No copy of either rule lives in the prompt** — a third copy is the one that goes stale |
 | **Chunked, six at a time** | Measured 2026-08-10: 38 candidates and 47 open issues is a 154 KB brief and the gateway answers **524**, a proxy timeout. Six candidates against the *same whole-board index* is 54 KB and answers in about fifty seconds. Only the candidates are chunked; the dependency judgement always sees every open issue |
 | **What it may write** | Labels, GitHub dependency relations, one comment, and the Status field for **Ready and Inbox only**. `opencode-worker.sh move` refuses the other columns: In Progress and In Review belong to whoever holds them, and a triage pass that could write them could take work off an agent that has it |
 | **What overrules the model** | Every rule with a cost, in `board-triage.sh` and not in the prompt: a candidate comes from Inbox or Ready or is skipped; an unrecognised or absent route becomes `queue:maintainer`; `queue:worker` is refused on `blocked:human`, `worker:forbidden` or an open blocker; a priority is never set on an issue that arrived from outside (`blocked:human` class 6); nothing is ever removed. The route ratchet — a pass tightens a route and only a person loosens it — stays as a second line and no longer fires, because since `#289` a routed issue is not a candidate at all |
 | **The routing cases** | `.github/tests/board-triage-cases.json`: eight issues the pass has to get right, each with the route it should produce and the one sentence that decides it. CI holds the half that needs no provider — which cases are briefed, that the brief quotes the routing table and the prohibitions, that each expected route is applied unchanged, that `worker:forbidden` overrules any answer. `board-triage.sh cases-brief` builds the same brief from the file so the judgement half can be run by hand against a live model, touching no board |
 | **`from:non-member`** | From organisation membership (`GET orgs/Kolonie-AI/memberships/<login>`), which the opener cannot supply and the model is not asked about (`kolonie-platform#686`). 200 or 204 is a member, 404 is outside, anything else is unknown and leaves the labels untouched (`#536`). Membership rather than `authorAssociation`, which reads `NONE` for a colleague who has never touched that repository |
-| **When it cannot ask** | It writes no decisions **per chunk**, so one chunk that failed costs its own issues and not the pass, and the retries and the second account run first. What changed with `#502` is the exit code: a chunk that had something to decide and got no answer exits 3, and the workflow refuses the pass where **every** chunk ended that way. `watch-judge.py`'s exit-0 policy does not transfer here, and the reason is that the Watch Agent has a deterministic half that has already produced findings before any model is asked — triage has none, so *no model answered* means nothing at all was decided. Measured 2026-08-26: three undecided issues, six 503s, and forty-eight green passes a day while Inbox grew |
+| **When it cannot ask** | It writes no decisions **per chunk**, so one chunk that failed costs its own issues and not the pass, and the second gateway is asked first. What changed with `#502` is the exit code: a chunk that had something to decide and got no answer exits 3, and the workflow refuses the pass where **every** chunk ended that way. `watch-judge.py`'s exit-0 policy does not transfer here, and the reason is that the Watch Agent has a deterministic half that has already produced findings before any model is asked — triage has none, so *no model answered* means nothing at all was decided. Measured 2026-08-26: three undecided issues, six 503s, and forty-eight green passes a day while Inbox grew |
 | **Credentials** | Three, and none does another's half (`#536`). The `kolonie-opencode` app token reads the board and moves cards. The `kolonie-triage` app token writes labels, comments and dependency links on the Board repository set it is installed on. `WORKER_REPO_TOKEN` is the worker's commit identity and, when passed as `PROVENANCE_TOKEN`, the membership lookup only — it is not this pass's issue-write credential. `github.token` can do none of the three |
 | **What it proposes** | A prohibition the list does not carry (`#264`). It reads the refusals on every open `worker:failed` issue, and a reason that has appeared on **two or more** with no match in `operations/worker-prohibitions.md` becomes one comment on a collecting issue, labelled `queue:operator`: the reason, the issues, the wording. **It proposes and stops** — accepting one is a person editing the document, because a worker that could widen its own constraints has none. Each proposal carries a key, so a rejected one is not proposed again |
 | **Logic** | `.github/scripts/board-triage.sh` and `.github/scripts/board-triage-decide.py`, tested against a stubbed `gh` in `.github/tests/board-triage.test.sh` — which asserts what happens when the model answers *wrongly*, since its judgement cannot be tested and every place the script overrules it can |
@@ -128,9 +128,12 @@ is JSON.
 | **Credentials** | `LOKI_URL` and `LOKI_TOKEN`, both secrets, both guarded by `no-gateway-leak.sh` on every `CI` run. The write path uses HTTP Basic with `LOKI_USER` defaulting to `watch`, matching `watch-agent.sh` and the live Traefik edge; no second authentication protocol or credential is introduced. The address is a secret and not merely the token, for the reason that section already gives: a rotated token costs a minute, and a hostname in a public repository's history cannot be taken back |
 | **Logic** | `.github/scripts/loki-event.sh`, tested against a stubbed `curl` in `.github/tests/loki-event.test.sh` — which asserts the unbounded-label rejection, the missing credential, the unreachable store and the 5xx, because those four are the whole of what makes it safe to call |
 
-**Who calls it today:** `board-triage.yml`, on the ending `#502` describes — a
-pass where candidates existed and no model answered. Adding a caller is a step
-and a name in `SERVICES`; adding a label is refused.
+**Who calls it today:** `board-triage.yml` on the ending `#502` describes — a
+pass where candidates existed and no model answered — and, since the two-gateway
+slices, any Actions caller that fell back (`service=` plus a reason class).
+Adding a caller is a step and a name in `SERVICES`; adding a label is refused.
+A container fallback is a different event (`model.route.fallback`); the Watch
+Agent's Actions lane (`#504`) is what counts the Actions half.
 
 **Who reads it:** `watch-agent.sh` (`kolonie-docs#504`). A separate Actions lane
 queries only the closed `service` set the write path will emit, aggregates by
@@ -197,7 +200,11 @@ rejected alternative for each rule, and this one carries none of them.
 Two gateways, described identically and configured independently. `<SERVICE>` is
 one of `VERIFIER`, `MODERATION`, `TRIAGE`, `REVIEWER`, `DOCTOR`, `WORKER` — the
 same six tokens for keys and models, so a service named in one place and not the
-other is a compile error rather than a variable nothing reads.
+other is a compile error rather than a variable nothing reads. The Actions
+callers that share the scheme (board-triage, reviewer, worker, watch-judge)
+ask the same pair through `.github/scripts/actions-gateway.py`; which tier each
+service asks for is `SERVICE_TIERS` in `packages/core/src/llm/tier.ts`, not a
+list on this page.
 
 | | Primary | Fallback |
 |---|---|---|
