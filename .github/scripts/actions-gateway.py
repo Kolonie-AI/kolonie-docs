@@ -421,11 +421,153 @@ def emit_fallback(service: str, reason: str) -> None:
     subprocess.run(cmd, check=False)
 
 
+def why_unusable_stream(raw: bytes) -> str | None:
+    """Return why a 2xx body is not an OpenAI-compatible SSE stream."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return "the stream was not UTF-8"
+    saw_data = False
+    saw_choice = False
+    for line in text.splitlines():
+        if not line.startswith("data:"):
+            continue
+        saw_data = True
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            return "the stream carried malformed JSON"
+        if not isinstance(event, dict):
+            return "the stream carried a non-object event"
+        choices = event.get("choices")
+        if isinstance(choices, list) and choices:
+            saw_choice = True
+    if not saw_data:
+        return "the reply was not an SSE stream"
+    if not saw_choice:
+        return "the stream carried no choices"
+    return None
+
+
+def post_stream(
+    gateway: dict,
+    body: dict,
+    timeout: float = DEFAULT_TIMEOUT,
+    transport=None,
+    user_agent: str = DEFAULT_USER_AGENT,
+) -> dict:
+    """One streaming attempt, classified on the same four classes.
+
+    A streamed answer cannot be judged by parsing it: an SSE body is not one
+    JSON object, and `why_unusable` would call a perfectly good stream
+    `malformed` and fall back on every successful request. So the verdict here
+    is the transport's — a 2xx carrying bytes is an answer, and everything else
+    is one of the shared classes.
+    """
+    payload = json.dumps(body).encode()
+    headers = {
+        "Authorization": f"Bearer {gateway['api_key']}",
+        "Content-Type": "application/json",
+        "User-Agent": user_agent,
+    }
+    send = transport or urllib_transport
+    try:
+        status, raw = send(chat_url(gateway["base_url"]), headers, payload, timeout)
+    except BaseException as exc:  # noqa: BLE001 — classification is the point
+        reason, detail = classify_exception(exc)
+        return {"ok": False, "why": detail, "reason": reason, "status": 0, "raw": b""}
+    if isinstance(raw, str):
+        raw = raw.encode()
+    elif not isinstance(raw, bytes):
+        raw = json.dumps(raw).encode()
+    if status >= 300 or (isinstance(status, int) and status and status < 200):
+        return {
+            "ok": False,
+            "why": f"the gateway answered {status}",
+            "reason": "status",
+            "status": status,
+            "raw": raw,
+        }
+    unusable = why_unusable_stream(raw)
+    if unusable:
+        return {
+            "ok": False,
+            "why": unusable,
+            "reason": "malformed",
+            "status": status,
+            "raw": raw,
+        }
+    return {"ok": True, "why": "", "reason": "", "status": status, "raw": raw}
+
+
+def stream_completions(
+    pair: dict,
+    body: dict,
+    timeout: float = DEFAULT_TIMEOUT,
+    transport=None,
+    user_agent: str = DEFAULT_USER_AGENT,
+) -> dict:
+    """Primary, then fallback once, for a streamed request.
+
+    The same order and the same four classes as `chat_completions`; what
+    differs is only how an answer is recognised. The request body — model
+    string included — is passed through untouched, because the point of the
+    second gateway is that it is asked the identical question.
+    """
+    order = [(name, pair[name]) for name in ("primary", "fallback") if pair.get(name)]
+    if not order:
+        return {
+            "ok": False,
+            "why": "no gateway credentials — nothing was asked for",
+            "route": "none",
+            "status": 0,
+            "raw": b"",
+        }
+    last = {"why": "nothing was asked", "reason": "", "status": 0, "raw": b""}
+    last_reason = ""
+    for name, gw in order:
+        attempt = post_stream(gw, body, timeout=timeout, transport=transport, user_agent=user_agent)
+        if attempt["ok"]:
+            result = {
+                "ok": True,
+                "why": "",
+                "route": name,
+                "status": attempt["status"],
+                "raw": attempt["raw"],
+            }
+            if name == "fallback" and last_reason:
+                result["reason"] = last_reason
+            return result
+        last = attempt
+        last_reason = attempt.get("reason") or ""
+    result = {
+        "ok": False,
+        "why": last.get("why") or "nothing was asked",
+        "route": "none",
+        "status": last.get("status") or 0,
+        # **The upstream's own body is dropped on the failing path.** It can
+        # echo the request back, and an error body from a provider is the one
+        # place a key or a host reaches a log that OpenCode will print.
+        "raw": b"",
+    }
+    if last_reason:
+        result["reason"] = last_reason
+    return result
+
+
 class LocalProxy:
     """An OpenAI-compatible localhost front for the same two-gateway order.
 
     OpenCode sees one origin. This process owns primary/fallback, so a 524
     cannot become a second `opencode run`.
+
+    Both shapes go through it: a streamed request is judged by its transport
+    and a non-streamed one by its body, because an SSE stream is not one JSON
+    object and classifying it as `malformed` would fall back on every healthy
+    request.
     """
 
     def __init__(self, pair: dict, timeout: float = DEFAULT_TIMEOUT, user_agent: str = DEFAULT_USER_AGENT) -> None:
@@ -433,6 +575,7 @@ class LocalProxy:
         self.timeout = timeout
         self.user_agent = user_agent
         self.fallbacks: list[dict] = []
+        self.unanswered: list[dict] = []
         self.origin = ""
         self._server = None
         self._thread = None
@@ -449,24 +592,45 @@ class LocalProxy:
                 except json.JSONDecodeError:
                     self.send_error(400)
                     return
-                result = chat_completions(
-                    proxy.pair, body, timeout=proxy.timeout, user_agent=proxy.user_agent
-                )
+
+                streaming = bool(body.get("stream"))
+                if streaming:
+                    result = stream_completions(
+                        proxy.pair, body, timeout=proxy.timeout, user_agent=proxy.user_agent
+                    )
+                    answered = result.get("ok")
+                    payload = result.get("raw") or b""
+                    content_type = "text/event-stream"
+                else:
+                    result = chat_completions(
+                        proxy.pair, body, timeout=proxy.timeout, user_agent=proxy.user_agent
+                    )
+                    answered = bool(result.get("text"))
+                    payload = result.get("raw") or b""
+                    if isinstance(payload, str):
+                        payload = payload.encode()
+                    if not payload and result.get("body") is not None:
+                        payload = json.dumps(result["body"]).encode()
+                    content_type = "application/json"
+
                 if result.get("route") == "fallback" and result.get("reason"):
                     proxy.fallbacks.append({"reason": result["reason"]})
-                payload = result.get("raw") or b""
-                if isinstance(payload, str):
-                    payload = payload.encode()
-                status = result.get("status") or (200 if result.get("text") else 502)
-                if result.get("text") and status >= 400:
+                elif not answered and result.get("reason"):
+                    proxy.unanswered.append({"reason": result["reason"]})
+
+                status = result.get("status") or (200 if answered else 502)
+                if answered and status >= 400:
                     status = 200
-                if not payload and result.get("body") is not None:
-                    payload = json.dumps(result["body"]).encode()
-                if not payload and not result.get("text"):
+                if not answered:
                     status = 502
+                    # Its own words, never the upstream's: a provider's error
+                    # body can echo the request back, and OpenCode prints what
+                    # it is handed.
                     payload = b'{"error":{"message":"no gateway answered"}}'
+                    content_type = "application/json"
+
                 self.send_response(status)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)

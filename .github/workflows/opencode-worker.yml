@@ -892,8 +892,9 @@ jobs:
         id: work
         if: steps.held.outputs.mine
         env:
-          # All three reach opencode by `{env:…}` substitution in the committed
-          # `opencode.json`, so none is ever written into this file (`#207`).
+          # The primary pair and the model setting are read from secrets. The
+          # committed config stays model-free and endpoint-free; its derived
+          # copy is pointed at the local proxy immediately before OpenCode runs.
           #
           # **The base URL is a secret and not merely the key.** It names a
           # private gateway, and a committed hostname is a target that stays in
@@ -902,6 +903,20 @@ jobs:
           # day the secret is missing — the run should fail loudly instead.
           LLM_GATEWAY_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_API_KEY_WORKER }}
           LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          # **The second gateway (`#548`).** Independently configured, same
+          # tier, and it reaches opencode through the local proxy rather than
+          # through `opencode.json` — the proxy owns the routing so that a
+          # primary `524` cannot become a second `opencode run` over the files
+          # the first one already wrote. Its own key rather than the triage or
+          # reviewer one (D-122 §3): a runaway loop in one service must not
+          # take the cap for the others with it. Unset means primary-only and
+          # today's fail-loud behaviour.
+          LLM_GATEWAY_FALLBACK_API_KEY_WORKER: ${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_WORKER }}
+          LLM_GATEWAY_FALLBACK_BASE_URL: ${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}
+          # Where a run that used the second gateway is recorded — once for the
+          # run, with a reason class and a count, never once per request.
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
           # **The model is a setting, not a constant.** Change the secret and
           # the next scheduled run uses it; nothing here or in `opencode.json`
           # names one. The gateway serves its whole catalogue on the same key,
@@ -1199,8 +1214,9 @@ jobs:
           # rather than unset-and-restore, because the restore is the half that
           # gets lost when somebody adds an early `exit` above it.
           #
-          # What the model genuinely needs is the gateway, and the gateway is
-          # what it keeps.
+          # The model genuinely needs the tier name. The proxy keeps the gateway
+          # pair, replaces the placeholder key, and removes the pair from the
+          # model process's environment.
           #
           # **This is not a fix for the injection boundary and does not touch
           # it** (`#235`): the assigned issue is still the only instruction,
@@ -1215,8 +1231,25 @@ jobs:
           # which dies inside opencode itself — the gateway, the tool, a
           # permission it was refused — can say the last of what it printed
           # instead of leaving a link (`#245`).
+          # ## Fallback lives below OpenCode, at the HTTP request (`#548`)
+          #
+          # Restarting `opencode run` after a primary `524` is not a retry, it
+          # is a second worker over state the first one created. So the second
+          # gateway is asked at the chat request instead — the same body, the
+          # same tier — and OpenCode sees one local origin that never moves.
+          #
+          # `env -u GH_TOKEN` outside the runner means the proxy process never
+          # receives the repository token (`#246`). The second one is the old
+          # delivery boundary kept explicit: the model does not receive it
+          # either. The proxy logs no request body.
           model_log="$RUNNER_TEMP/opencode-model.log"
-          if ! env -u GH_TOKEN opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$prompt" 2>&1 | tee "$model_log"; then
+          route_out="$SCRATCH/route.json"
+          if ! env -u GH_TOKEN python3 ../.github/scripts/worker-gateway-proxy.py \
+                --config "$SCRATCH/runtime.json" \
+                --route-out "$route_out" \
+                -- \
+                env -u GH_TOKEN opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$prompt" \
+                2>&1 | tee "$model_log"; then
             fail worker "opencode's own run did not finish. That is the model, the gateway or the tool — not a verdict on the change" "$model_log"
           fi
 
