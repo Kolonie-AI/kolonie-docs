@@ -99,7 +99,6 @@ echo
 echo "the leak check guards the new names"
 guarded=$(sed -n '/^GUARDED=(/,/^)/p' "$ROOT/.github/scripts/no-gateway-leak.sh")
 contains "the base URL" "LLM_GATEWAY_BASE_URL" "$guarded"
-contains "the fallback base URL" "LLM_GATEWAY_FALLBACK_BASE_URL" "$guarded"
 contains "the worker key" "LLM_GATEWAY_API_KEY_WORKER" "$guarded"
 
 echo

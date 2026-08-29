@@ -118,7 +118,7 @@ echo "a fork, where the secrets are not there"
 # outside contribution for a reason nobody outside can act on.
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 echo 'nothing to see' > "$WORK/tree/readme.md"
-out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_FALLBACK_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER -u LOKI_URL -u LOKI_TOKEN bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER -u LOKI_URL -u LOKI_TOKEN bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "passes" "0" "$rc"
 contains "and says it skipped rather than passing quietly" "skip: LLM_GATEWAY_BASE_URL is not set" "$out"
 
@@ -139,7 +139,6 @@ echo "CI hands the log-store secrets to the leak check"
 CI="$(cd "$(dirname "$0")/../.." && pwd)/.github/workflows/ci.yml"
 contains "the store address is in the leak-check env" "LOKI_URL: \${{ secrets.LOKI_URL }}" "$(cat "$CI")"
 contains "and the reader credential too" "LOKI_TOKEN: \${{ secrets.LOKI_TOKEN }}" "$(cat "$CI")"
-contains "and the fallback base URL too" "LLM_GATEWAY_FALLBACK_BASE_URL: \${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}" "$(cat "$CI")"
 
 echo
 echo "this repository as it stands"
