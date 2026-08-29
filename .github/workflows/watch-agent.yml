@@ -170,11 +170,20 @@ jobs:
       - name: Ask whether it is normal
         if: steps.gather.outputs.skip != 'true'
         env:
-          # Its own key, so the Watch Agent's spend is separable from every other
-          # model caller's (kolonie-infra#70). Optional by design — see the
-          # workflow comment above and watch-judge.py's docstring.
-          OPENROUTER_API_KEY_WATCH: ${{ secrets.OPENROUTER_API_KEY_WATCH }}
-          MODEL: deepseek/deepseek-v4-flash
+          # Its own key pair, so the Watch Agent's spend is separable from
+          # every other model caller's (D-122 §3 / D-141). Optional by
+          # design — see the workflow comment above and watch-judge.py's
+          # docstring. Unset means today's no-model path: the numbers stand
+          # and no judgement is written.
+          LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
+          LLM_GATEWAY_API_KEY_WATCH: ${{ secrets.LLM_GATEWAY_API_KEY_WATCH }}
+          LLM_GATEWAY_FALLBACK_BASE_URL: ${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}
+          LLM_GATEWAY_FALLBACK_API_KEY_WATCH: ${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_WATCH }}
+          # A successful fallback is recorded once, with a reason class,
+          # never a prompt or a host. Presence of that event in tomorrow's
+          # Actions table is not automatically abnormal (`#504`).
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
         run: python3 .github/scripts/watch-judge.py "$RUNNER_TEMP/watch"
 
       # The narrative, in the run's own output (`#165`). Written whether or not
