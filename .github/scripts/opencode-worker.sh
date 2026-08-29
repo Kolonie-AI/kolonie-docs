@@ -729,7 +729,10 @@ EXCERPT_CHARS=${EXCERPT_CHARS:-2000}
 # reintroduces the variable. An app token is also `ghs_`-shaped and so caught by
 # the shape rules below, but the value match is the one that does not depend on
 # GitHub keeping its prefixes.
-GUARDED_SECRETS=${GUARDED_SECRETS:-LLM_GATEWAY_API_KEY_WORKER LLM_GATEWAY_BASE_URL LLM_GATEWAY_MODEL_WORKER GH_TOKEN GITHUB_TOKEN WORKER_REPO_TOKEN BOARD_TOKEN BOARD_READ_TOKEN BOARD_WRITE_TOKEN}
+# `#548` added the second gateway and the log store to the `Work it` step's
+# environment, so both are values this run now holds and both are guarded for
+# the same reason the first pair is.
+GUARDED_SECRETS=${GUARDED_SECRETS:-LLM_GATEWAY_API_KEY_WORKER LLM_GATEWAY_BASE_URL LLM_GATEWAY_MODEL_WORKER LLM_GATEWAY_FALLBACK_API_KEY_WORKER LLM_GATEWAY_FALLBACK_BASE_URL LOKI_URL LOKI_TOKEN GH_TOKEN GITHUB_TOKEN WORKER_REPO_TOKEN BOARD_TOKEN BOARD_READ_TOKEN BOARD_WRITE_TOKEN}
 
 # **GitHub masks a secret's value in a log. It does not mask it in a comment.**
 # That is the whole reason this is more than a `tail`: the excerpt is being moved
