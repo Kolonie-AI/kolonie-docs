@@ -114,9 +114,12 @@ contains "the key is named in the refusal" "LLM_GATEWAY_API_KEY_WORKER" "$guard"
 
 echo
 echo "the triage pass reads the shared names too"
+transport=$(cat "$ROOT/.github/scripts/actions-gateway.py")
 decide=$(cat "$ROOT/.github/scripts/board-triage-decide.py")
-contains "the key" "LLM_GATEWAY_API_KEY_TRIAGE" "$decide"
-contains "the base URL" "LLM_GATEWAY_BASE_URL" "$decide"
+contains "the key" "LLM_GATEWAY_API_KEY_" "$transport"
+contains "the base URL" "LLM_GATEWAY_BASE_URL" "$transport"
+contains "the fallback base URL" "LLM_GATEWAY_FALLBACK_BASE_URL" "$transport"
+contains "the fallback key prefix" "LLM_GATEWAY_FALLBACK_API_KEY_" "$transport"
 
 # `#502`. This file greps for retired *variable names*; the outage it was written
 # after was a retired *model value*, sent every half hour through a healthy

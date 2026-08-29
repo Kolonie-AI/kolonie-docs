@@ -32,12 +32,20 @@ columns are writable, when `queue:worker` is refused, whether a priority may be
 set, how many refusals a proposal needs — is enforced by `board-triage.sh`, in code
 with tests. This file's whole job is to turn a board into an opinion.
 """
+import importlib.util
 import json
 import os
+import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
+from pathlib import Path
+
+_GATEWAY_SPEC = importlib.util.spec_from_file_location(
+    "actions_gateway", Path(__file__).with_name("actions-gateway.py")
+)
+assert _GATEWAY_SPEC is not None and _GATEWAY_SPEC.loader is not None
+gateway = importlib.util.module_from_spec(_GATEWAY_SPEC)
+sys.modules["actions_gateway"] = gateway
+_GATEWAY_SPEC.loader.exec_module(gateway)
 
 SYSTEM = """You are the Colony's triage worker. You are shown the Kolonie AI \
 board — every open issue, and the subset of them sitting in Inbox or Ready with no \
@@ -232,59 +240,6 @@ def nothing(path: str, field: str, why: str, code: int = 0) -> int:
     return code
 
 
-def read_model_call(answer: object) -> dict:
-    """What the call cost: `{"model": str, "tokens": {...} | None}`.
-
-    A port of `readModelCall()` in kolonie-platform
-    (`packages/core/src/llm/read-model-call.ts`), and the two properties worth
-    porting are both about restraint.
-
-    **It cannot throw.** A record of what a call cost must never be able to veto
-    the call — routing six issues is the work, and the accounting line under it is
-    not worth losing them for. Every field is read through an `isinstance` and a
-    shape this does not recognise leaves the field out.
-
-    **And it invents nothing.** A missing `usage` block is ordinary rather than a
-    fault (`kolonie-platform#716`: the gateway wraps a CLI subscription that bills
-    nothing per token), so the absence is reported as an absence. A zero written
-    where nothing was measured would be indistinguishable from a measured zero in
-    a log query, which is the one thing this must not produce.
-    """
-    record = {"model": "", "tokens": None}
-    if not isinstance(answer, dict):
-        return record
-
-    model = answer.get("model")
-    if isinstance(model, str):
-        record["model"] = model.strip()
-
-    usage = answer.get("usage")
-    if not isinstance(usage, dict):
-        return record
-
-    def count(*names: str):
-        for name in names:
-            value = usage.get(name)
-            # `bool` is an `int` in Python and `True` is not one token.
-            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-                return value
-        return None
-
-    # Two vocabularies reach this gateway — OpenAI's `prompt_tokens` and the
-    # `input_tokens` an Anthropic-shaped response carries — and the pass should not
-    # lose the count to whichever provider is behind it today.
-    prompt = count("prompt_tokens", "input_tokens")
-    completion = count("completion_tokens", "output_tokens")
-    total = count("total_tokens")
-    if total is None and prompt is not None and completion is not None:
-        total = prompt + completion
-    if total is None:
-        return record
-
-    record["tokens"] = {"prompt": prompt, "completion": completion, "total": total}
-    return record
-
-
 # `#262` asks for the strongest model available and gives the reason: the
 # dependency step is a judgement over the whole board at once. The name is a
 # setting, so the strongest model in six months is one variable away.
@@ -303,29 +258,6 @@ def read_model_call(answer: object) -> dict:
 # behind it is replaced, which is exactly what `#262` wanted from a setting.
 DEFAULT_MODEL = "@preset/tier-1"
 
-# ## The second model is a second upstream account, and it is configuration
-#
-# Measured 2026-08-12: the gateway's 502 and 503 are one exhausted upstream
-# account. `gpt-5.6-*` is served by a **single** ChatGPT credential shared by
-# nineteen API keys, so `cli-proxy-api`'s `max-retry-credentials` has nothing to
-# rotate to and answers 503 until the cooldown clears; a different vendor has its
-# own account and its own quota. Asking the other one is the rotation the gateway
-# cannot do for us, done here, over the same key and the same endpoint.
-#
-# **It is no longer inferred, and that is `#502`'s second correction.** This file
-# used to derive the second attempt as *the other of the two names it knew* —
-# and because both of those names were bare legacy identifiers the gateway had
-# stopped serving, the retry path could not reach a served model however many
-# times it was asked. Two unserved names through one healthy gateway is not a
-# fallback, it is the same deterministic failure twice. So the second account is
-# `TRIAGE_LLM_FALLBACK_MODEL` and nothing else: named, or not asked.
-#
-# **It is not a weaker model, deliberately.** The docstring above refuses to fall
-# back to a rule of thumb, and a small model routing the board unnoticed would be
-# that in a more expensive form: a wrong route looks exactly like a right one
-# until someone reads it.
-DEFAULT_FALLBACK_MODEL = ""
-
 # What `route()` returns when the pass had something to decide and no model
 # answered it. `board-triage.yml` counts these across the chunks: every chunk
 # unanswered is a pass that routed nothing, and that pass must not be green.
@@ -336,241 +268,36 @@ DEFAULT_FALLBACK_MODEL = ""
 # how a deterministic misconfiguration ran forty-eight times a day in green.
 NO_ANSWER = 3
 
-# ## A fast failure is retried and a slow one is not
-#
-# Measured 2026-08-12 in Loki and in the run logs: the 502/503 a cooled-down
-# account produces comes back in **one to three seconds** — a support-triage call
-# succeeded at 07:35:44 and the next one failed at 07:35:45 — and the window
-# clears inside a minute, so asking again costs almost nothing and usually works.
-# A 524 is the opposite: Cloudflare cuts the connection at about a hundred
-# seconds, and asking the same model the same brief again buys another hundred
-# seconds of the same answer. So a slow failure skips the retries and spends what
-# is left on the other account instead, which is both cheaper and likelier.
-#
-# Both models get the same two retries, so the arithmetic worth knowing is the
-# worst case for one chunk: three fast failures on each account is six calls and
-# thirty seconds of waiting — under a minute, and it is the case that actually
-# happens. A chunk that fails *slowly* on both accounts spends about two hundred
-# seconds instead, one Cloudflare cut each, and six of those would reach the
-# workflow's twenty-minute timeout. That is accepted rather than guarded: it needs
-# every chunk to hang on both accounts, which is the gateway being down, and a
-# pass that is cut short there had nothing to write anyway.
-SLOW_FAILURE_SECONDS = 30
-RETRY_PAUSES = (3, 12)
-
-
-def served_models(endpoint: str, key: str) -> tuple:
-    """(ids-the-gateway-serves, why-not). Exactly one is non-empty.
-
-    `GET /v1/models` is the gateway's own answer to *what may I ask for*, and
-    `#502` is what happens without it: two names nobody serves, sent every half
-    hour through a healthy gateway, each answered 503 and each read as a
-    provider hiccup.
-
-    **A catalogue that cannot be read is a failure unless the configured name is
-    a tier alias.** Asking a vendor-shaped identifier without the catalogue would
-    recreate the exact failure this function exists to stop: a bare legacy name
-    sent because nothing established that the gateway serves it. Tier aliases
-    are the exception because they are resolved by the gateway and deliberately
-    do not appear in the served model list.
-    """
-    req = urllib.request.Request(
-        f"{endpoint}/models",
-        headers={"Authorization": f"Bearer {key}",
-                 "User-Agent": "Kolonie-AI/board-triage"})
-    try:
-        answer = json.load(urllib.request.urlopen(req, timeout=30))
-    except urllib.error.HTTPError as exc:
-        # The status and nothing else, for the reason `ask_once` gives: this log
-        # is public and a provider's error body can echo the request back.
-        return (), f"could not read the model catalogue: the gateway answered {exc.code}"
-    except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
-        return (), f"could not read the model catalogue: {type(exc).__name__}"
-
-    rows = answer.get("data") if isinstance(answer, dict) else None
-    if not isinstance(rows, list):
-        return (), "the model catalogue was not a list"
-
-    served = []
-    for row in rows:
-        name = row.get("id") if isinstance(row, dict) else None
-        if isinstance(name, str) and name.strip():
-            served.append(name.strip())
-    if not served:
-        return (), "the model catalogue named no model"
-    return tuple(served), ""
-
-
-def usable_models(wanted: list, served: tuple) -> tuple:
-    """(what-to-ask, what-the-gateway-does-not-serve).
-
-    Order is the caller's: the configured model first, then the fallback. A tier
-    alias is passed through unchecked — `@preset/tier-1` is resolved by the
-    gateway to whichever model currently backs that tier and is deliberately not
-    in the served catalogue, so requiring it there would refuse the one
-    identifier that cannot go stale.
-    """
-    unserved = []
-    usable = []
-    for name in wanted:
-        if name.startswith("@") or name in served:
-            usable.append(name)
-        else:
-            unserved.append(name)
-    return tuple(usable), tuple(unserved)
-
-
-def ask_once(endpoint: str, key: str, model: str, system: str, brief: str, budget: int) -> tuple:
-    """(answer-text, why-not, call, worth-asking-again).
-
-    Exactly one of the first two is non-empty. `call` is what `read_model_call`
-    made of the response, and it is empty on every path that did not get one. The
-    fourth is whether the failure was the kind that a second attempt could answer
-    differently — a 4xx that is not a rate limit never is.
-    """
-    empty = {"model": "", "tokens": None}
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": brief}],
-        "response_format": {"type": "json_object"},
-        "stream": False,
-        # Large enough that a model which thinks before answering does not run out
-        # mid-JSON: a truncated answer returns content: null and loses the whole
-        # call rather than part of it.
-        "max_tokens": budget,
-        "temperature": 0.1,
-    }).encode()
-
-    # **The `User-Agent` is not decoration.** Measured 2026-08-10 against the
-    # gateway: the identical request answers 200 with a named agent and **403**
-    # with urllib's default `Python-urllib/3.x`, which something in front of the
-    # gateway refuses. Without this header every pass would report a 403 that
-    # looks exactly like a revoked key.
-    req = urllib.request.Request(
-        f"{endpoint}/chat/completions", data=body,
-        headers={"Authorization": f"Bearer {key}",
-                 "Content-Type": "application/json",
-                 "User-Agent": "Kolonie-AI/board-triage"})
-    try:
-        answer = json.load(urllib.request.urlopen(req, timeout=300))
-    except urllib.error.HTTPError as exc:
-        # The status and nothing else. This log is public, and a provider's error
-        # body can echo the request back with the key inside it.
-        #
-        # A 5xx is the gateway or its upstream and may well answer differently in
-        # three seconds; a 429 is a rate limit, which is the same thing said
-        # politely. Every other 4xx is this file's own request being wrong — a
-        # revoked key, a model name that no longer exists — and asking again
-        # would turn a configuration fault into a slow one.
-        return "", f"the gateway answered {exc.code}", empty, exc.code >= 500 or exc.code == 429
-    except json.JSONDecodeError:
-        # A 200 whose body is not one JSON object — an SSE stream is what `#525`
-        # measured, and the request above is what asks for the other. Said as its
-        # own reason rather than as *could not reach the gateway*, which sends
-        # the next reader to the network for a protocol fault. The body is not
-        # logged, for the reason the branch above gives.
-        return "", "the gateway did not answer with one JSON object", empty, True
-    except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
-        return "", f"could not reach the gateway: {type(exc).__name__}", empty, True
-
-    call = read_model_call(answer)
-    # The name that was configured, when the answer did not carry one back. It is
-    # what was asked for rather than what replied, which is the honest reading of
-    # a gateway that may route the request on.
-    if not call["model"]:
-        call["model"] = model
-
-    choice = (answer.get("choices") or [{}])[0]
-    text = (choice.get("message") or {}).get("content")
-    if not text:
-        # Not worth asking the same model again — it answered, and this is what it
-        # had to say. The other account gets a turn instead.
-        return "", ("the model returned no content"
-                    f" (finish_reason: {choice.get('finish_reason') or 'unknown'})"), call, False
-
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.split("\n", 1)[1] if "\n" in text else text
-    return text, "", call, False
-
-
 def ask(system: str, brief: str, budget: int) -> tuple:
-    """(answer-text, why-not, call). Exactly one of the first two is non-empty.
+    """(answer-text, why-not, call, route) over the shared two-gateway transport."""
+    pair = gateway.gateways_from_environment(
+        "TRIAGE",
+        os.environ,
+        model_var="TRIAGE_LLM_MODEL",
+        default_model=DEFAULT_MODEL,
+    )
+    model = gateway.model_from_environment(
+        os.environ, model_var="TRIAGE_LLM_MODEL", default_model=DEFAULT_MODEL
+    )
+    return gateway.routed_completion(
+        pair, model, system, brief, budget, request=gateway.request_completion
+    )
 
-    The configured model, then the same model again while the failures are fast,
-    then the other account once. Every attempt is the same brief over the same
-    key — nothing about the question changes, only who is asked.
-    """
-    key = os.environ.get("TRIAGE_LLM_API_KEY") or os.environ.get("LLM_GATEWAY_API_KEY_TRIAGE", "")
-    base = (os.environ.get("TRIAGE_LLM_BASE_URL") or os.environ.get("LLM_GATEWAY_BASE_URL", "")).rstrip("/")
-    empty = {"model": "", "tokens": None}
-    if not key or not base:
-        return "", "no gateway credentials — nothing was asked for", empty
 
-    # **`/v1` if it is not already there.** The same gateway is configured two ways
-    # in this organisation: `opencode.json` hands its base URL to an
-    # OpenAI-compatible provider, which appends the path itself and is therefore
-    # usually given the `/v1` root, while the image calls in the maintainer's notes
-    # use the bare host. A run that guessed wrong would 404 hourly, and the 404
-    # would be indistinguishable from a gateway that is down.
-    endpoint = base if base.endswith("/v1") else f"{base}/v1"
+def fallback_event(reason: str) -> list[str]:
+    return gateway.fallback_event("board-triage", reason)
 
-    model = os.environ.get("TRIAGE_LLM_MODEL", "").strip() or DEFAULT_MODEL
-    # **Named or not asked** (`#502`). This used to infer the second attempt as
-    # the other of two hard-coded names, and both of them were identifiers the
-    # gateway had stopped serving — so the retry path could not reach a served
-    # model however many times it ran. `none` still switches it off explicitly;
-    # an empty string is nobody having set the variable, which is now the same
-    # thing as far as this file is concerned, because inferring a second name is
-    # what produced the failure.
-    named = os.environ.get("TRIAGE_LLM_FALLBACK_MODEL", "").strip()
-    other = "" if named == "none" else named or DEFAULT_FALLBACK_MODEL
 
-    wanted = [model] + ([other] if other and other != model else [])
-
-    # ## Ask for what the gateway says it serves
-    #
-    # A name the catalogue does not carry fails identically every pass, so it is
-    # dropped here with the reason rather than retried on a schedule. A tier
-    # alias is exempt, and an unreadable catalogue leaves only the aliases
-    # askable — `served_models` and `usable_models` both say why.
-    served, catalogue_why = served_models(endpoint, key)
-    if catalogue_why:
-        print(catalogue_why, file=sys.stderr)
-        aliases = [name for name in wanted if name.startswith("@")]
-        if not aliases:
-            return "", ("the model catalogue could not be read and no configured "
-                        "model is a tier alias"), empty
-        wanted = aliases
-    else:
-        usable, unserved = usable_models(wanted, served)
-        for name in unserved:
-            print(f"{name}: the gateway does not serve this model — not asked",
-                  file=sys.stderr)
-        if not usable:
-            return "", ("no configured model is served by the gateway"
-                        f" ({', '.join(wanted)})"), empty
-        wanted = list(usable)
-
-    why, call = "nothing was asked", empty
-    for attempt_model in wanted:
-        pauses = list(RETRY_PAUSES)
-        while True:
-            began = time.monotonic()
-            text, why, call, again = ask_once(endpoint, key, attempt_model, system, brief, budget)
-            if text:
-                return text, "", call
-            slow = time.monotonic() - began >= SLOW_FAILURE_SECONDS
-            print(f"{attempt_model}: {why}"
-                  + (" — too slow to be worth asking twice" if slow and again else ""),
-                  file=sys.stderr)
-            if not again or slow or not pauses:
-                break
-            time.sleep(pauses.pop(0))
-    return "", why, call
-
+def emit_fallback(reason: str) -> None:
+    if not os.environ.get("LOKI_URL"):
+        return
+    cmd = fallback_event(reason)
+    cmd[1] = str(Path(__file__).with_name("loki-event.sh"))
+    for name in ("GITHUB_REPOSITORY", "GITHUB_RUN_ID", "GITHUB_WORKFLOW", "GITHUB_RUN_ATTEMPT"):
+        value = os.environ.get(name, "")
+        if value:
+            cmd.append(f"{name.lower().removeprefix('github_')}={value}")
+    subprocess.run(cmd, check=False)
 
 def read_brief(path: str, marker: str) -> tuple:
     try:
@@ -588,7 +315,11 @@ def route(brief_path: str, out_path: str) -> int:
     if why:
         return nothing(out_path, "decisions", f"{why} — nothing was triaged")
 
-    text, why, call = ask(SYSTEM, brief, 16000)
+    text, why, call, taken = ask(SYSTEM, brief, 16000)
+    # A fallback that produced an answer is recorded once, with its reason class
+    # and nothing else. `#502`'s red ending is untouched below.
+    if taken.get("route") == "fallback" and taken.get("reason"):
+        emit_fallback(taken["reason"])
     if why:
         # `#502`: this chunk had candidates and got no answer. The empty file is
         # still written, so the workflow's `jq -s` merge is unchanged and one bad
@@ -662,7 +393,9 @@ def propose(brief_path: str, out_path: str) -> int:
     if why:
         return nothing(out_path, "proposals", f"{why} — nothing was proposed")
 
-    text, why, _ = ask(PROPOSE_SYSTEM, brief, 4000)
+    text, why, _, taken = ask(PROPOSE_SYSTEM, brief, 4000)
+    if taken.get("route") == "fallback" and taken.get("reason"):
+        emit_fallback(taken["reason"])
     if why:
         return nothing(out_path, "proposals", f"{why} — nothing was proposed this pass")
 
