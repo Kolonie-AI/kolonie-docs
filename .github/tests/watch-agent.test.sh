@@ -168,12 +168,16 @@ expect "decide exits 1" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
 # `#133`: "the silent-service check runs with no model call and no API key".
 # Proved by running the judge with the key unset and asserting that the decision
 # is unchanged — not by reading the code and believing it.
-(unset OPENROUTER_API_KEY_WATCH; python3 "$JUDGE" "$WORK/out" 2>"$WORK/judge.err")
+(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WATCH \
+ -u LLM_GATEWAY_FALLBACK_BASE_URL -u LLM_GATEWAY_FALLBACK_API_KEY_WATCH \
+ python3 "$JUDGE" "$WORK/out" 2>"$WORK/judge.err")
 expect "with no key the judge writes no judgement" \
   "$([ ! -e "$WORK/out/judgement.json" ] && echo yes || echo no)"
 expect "and says why, in the log only" \
-  "$(grep -q "no OPENROUTER_API_KEY_WATCH" "$WORK/judge.err" && echo yes || echo no)" "$(cat "$WORK/judge.err")"
-(unset OPENROUTER_API_KEY_WATCH; python3 "$JUDGE" "$WORK/out" >/dev/null 2>&1); judge_rc=$?
+  "$(grep -q "no gateway is configured" "$WORK/judge.err" && echo yes || echo no)" "$(cat "$WORK/judge.err")"
+(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WATCH \
+ -u LLM_GATEWAY_FALLBACK_BASE_URL -u LLM_GATEWAY_FALLBACK_API_KEY_WATCH \
+ python3 "$JUDGE" "$WORK/out" >/dev/null 2>&1); judge_rc=$?
 expect "and exits 0, so the run stays green" \
   "$([ "$judge_rc" -eq 0 ] && echo yes || echo no)" "rc=$judge_rc"
 out=$(bash "$SCRIPT" decide "$WORK/out"); rc=$?
@@ -837,10 +841,14 @@ else:
 
 setup
 printf '{"data":{"result":[{"metric":{"service":"board-triage","level":"warn","reason":"candidates existed and no model answered"},"value":[1785840000,"12"]}]}}\n' > "$FIX/actions_today"
-env -u OPENROUTER_API_KEY_WATCH bash "$SCRIPT" gather "$WORK/out" >/dev/null
+env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WATCH \
+  -u LLM_GATEWAY_FALLBACK_BASE_URL -u LLM_GATEWAY_FALLBACK_API_KEY_WATCH \
+  bash "$SCRIPT" gather "$WORK/out" >/dev/null
 expect "the numbers still name the Actions event without a model" \
   "$(grep -q 'candidates existed and no model answered' "$WORK/out/numbers.md" && echo yes || echo no)"
-out=$(env -u OPENROUTER_API_KEY_WATCH python3 "$JUDGE" "$WORK/out" 2>"$WORK/judge.err"); judge_rc=$?
+out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WATCH \
+      -u LLM_GATEWAY_FALLBACK_BASE_URL -u LLM_GATEWAY_FALLBACK_API_KEY_WATCH \
+      python3 "$JUDGE" "$WORK/out" 2>"$WORK/judge.err"); judge_rc=$?
 expect "a missing key does not fail the judge" \
   "$([ "$judge_rc" -eq 0 ] && echo yes || echo no)" "rc=$judge_rc"
 expect "and writes no judgement" \

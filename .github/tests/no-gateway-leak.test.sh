@@ -112,13 +112,29 @@ check "a committed push token fails" "1" "$rc"
 absent "and never prints the value" "$SECRET_LOKI_TOKEN" "$out"
 
 echo
+echo "the second gateway's address (#550)"
+# watch-judge was the last file that spelled a provider host. The second
+# gateway's URL is now a secret this repository holds, and a committed
+# hostname is a target that stays in history after the line is deleted.
+SECRET_FALLBACK="https://fallback.example-not-a-real-host.test/v1"
+rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
+printf 'fallback: %s\n' "$SECRET_FALLBACK" > "$WORK/tree/workflow.yml"
+out=$(LLM_GATEWAY_FALLBACK_BASE_URL="$SECRET_FALLBACK" \
+  bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+check "a committed fallback address fails" "1" "$rc"
+contains "names the variable" "LLM_GATEWAY_FALLBACK_BASE_URL" "$out"
+absent "and never prints the value" "$SECRET_FALLBACK" "$out"
+
+echo
 echo "a fork, where the secrets are not there"
 # The half that must not become a check firing on a correct configuration. A
 # pull request from a fork gets no secrets, and a failure there blocks every
 # outside contribution for a reason nobody outside can act on.
 rm -rf "$WORK/tree"; mkdir -p "$WORK/tree"
 echo 'nothing to see' > "$WORK/tree/readme.md"
-out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER -u LOKI_URL -u LOKI_TOKEN bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
+out=$(env -u LLM_GATEWAY_BASE_URL -u LLM_GATEWAY_API_KEY_WORKER \
+      -u LLM_GATEWAY_FALLBACK_BASE_URL -u LOKI_URL -u LOKI_TOKEN \
+      bash "$SCRIPT" "$WORK/tree" 2>&1); rc=$?
 check "passes" "0" "$rc"
 contains "and says it skipped rather than passing quietly" "skip: LLM_GATEWAY_BASE_URL is not set" "$out"
 
@@ -139,6 +155,7 @@ echo "CI hands the log-store secrets to the leak check"
 CI="$(cd "$(dirname "$0")/../.." && pwd)/.github/workflows/ci.yml"
 contains "the store address is in the leak-check env" "LOKI_URL: \${{ secrets.LOKI_URL }}" "$(cat "$CI")"
 contains "and the reader credential too" "LOKI_TOKEN: \${{ secrets.LOKI_TOKEN }}" "$(cat "$CI")"
+contains "and the second gateway's address" "LLM_GATEWAY_FALLBACK_BASE_URL: \${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}" "$(cat "$CI")"
 
 echo
 echo "this repository as it stands"

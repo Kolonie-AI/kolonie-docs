@@ -1,32 +1,55 @@
 #!/usr/bin/env python3
-"""The Watch Agent's judgement half. `kolonie-docs#133`.
+"""The Watch Agent's judgement half. `kolonie-docs#133`, `kolonie-docs#550`.
 
     watch-judge.py <dir>
 
-Reads `<dir>/numbers.md`, asks the model whether the day is normal, and writes
-`<dir>/judgement.json` and `<dir>/judgement.md`. Writes neither and exits 0 when
-it cannot ask.
+Reads `<dir>/numbers.md`, asks `@preset/tier-2` of the primary gateway and
+then of the second, and writes `<dir>/judgement.json` and
+`<dir>/judgement.md`. Writes neither and exits 0 when it cannot ask.
 
 **Exiting 0 on every failure is the design, not laziness.** The deterministic
-half of this agent — the silent-service check — has already run by the time this
-starts, and `watch-agent.sh decide` treats a missing judgement as "no opinion"
-rather than as "nothing is wrong". So a provider outage costs the day's
-judgement and nothing else. The opposite arrangement, where this failing fails
-the workflow, would turn every OpenRouter hiccup into a red run at 05:00 and
-teach whoever reads it to stop looking.
+half of this agent — the silent-service check — has already run by the time
+this starts, and `watch-agent.sh decide` treats a missing judgement as "no
+opinion" rather than as "nothing is wrong". So a provider outage costs the
+day's judgement and nothing else. The opposite arrangement, where this
+failing fails the workflow, would turn every gateway hiccup into a red run
+at 05:00 and teach whoever reads it to stop looking.
 
-That policy is `review-pull-request.yml`'s for a missing model key, and `#133` is
-explicit that it applies to *half* of this agent and not to the whole of it.
+That policy is `review-pull-request.yml`'s for a missing model key, and
+`#133` is explicit that it applies to *half* of this agent and not to the
+whole of it.
 
-**No threshold reaches the model either.** It is given yesterday and the seven
-days before it and asked whether yesterday is unusual. Nothing in this file says
-how many errors are too many, and nothing should.
+**No threshold reaches the model either.** It is given yesterday and the
+seven days before it and asked whether yesterday is unusual. Nothing in this
+file says how many errors are too many, and nothing should.
+
+`#550` is the two-gateway half. The judge used to post directly to a
+hardcoded provider URL under a dedicated key. It now asks the same tier of
+two independently configured gateways through the shared Actions transport
+from `#546`. A successful fallback emits one Loki event with
+`service=watch-agent` and a reason class; a pair that answered nothing still
+exits 0 and writes no judgement.
 """
+from __future__ import annotations
+
+import importlib.util
 import json
 import os
+import subprocess
 import sys
-import urllib.error
-import urllib.request
+from pathlib import Path
+
+_GATEWAY_SPEC = importlib.util.spec_from_file_location(
+    "actions_gateway", Path(__file__).with_name("actions-gateway.py")
+)
+assert _GATEWAY_SPEC is not None and _GATEWAY_SPEC.loader is not None
+gateway = importlib.util.module_from_spec(_GATEWAY_SPEC)
+sys.modules["actions_gateway"] = gateway
+_GATEWAY_SPEC.loader.exec_module(gateway)
+
+USER_AGENT = "Kolonie-Watch-Agent/1.0 (+https://github.com/Kolonie-AI)"
+DEFAULT_MODEL = "@preset/tier-2"
+SERVICE = "watch-agent"
 
 SYSTEM = """You are the Colony's Watch Agent. You are shown aggregated counts \
 from one day of a small production system's logs, and the same counts for up to \
@@ -63,78 +86,118 @@ anything. If you are unsure, say so inside the paragraph and set abnormal to \
 false — a person reads the numbers above your paragraph either way."""
 
 
+def body_for(model: str, system: str, user: str) -> bytes:
+    return json.dumps({
+        "model": model,
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        # Small on purpose: the answer is a boolean and a paragraph. Large
+        # enough that a model which thinks before answering does not run out
+        # mid-JSON, which returns content: null and loses the whole answer
+        # rather than a truncated one — measured in review-pull-request.yml,
+        # same lesson.
+        "max_tokens": 2000,
+        "temperature": 0.2,
+    }).encode()
+
+
+def request_judgement(endpoint, key, model, system, brief, budget):  # noqa: ANN001
+    body = json.loads(body_for(model, system, brief).decode())
+    if budget:
+        body["max_tokens"] = budget
+    attempt = gateway.post_chat(
+        {"base_url": endpoint, "api_key": key},
+        body,
+        timeout=120,
+        user_agent=USER_AGENT,
+    )
+    if attempt["text"]:
+        return attempt["text"], "", attempt["call"]
+    return "", attempt.get("why") or attempt.get("reason") or "nothing was asked", attempt["call"]
+
+
+def ask(system: str, user: str, env: dict | None = None, request=None) -> tuple:
+    env = env if env is not None else os.environ
+    pair = gateway.gateways_from_environment("WATCH", env)
+    model = gateway.model_from_environment(env, default_model=DEFAULT_MODEL)
+    return gateway.routed_completion(
+        pair, model, system, user, 2000, request=request or request_judgement
+    )
+
+
+def fallback_event(reason: str) -> list[str]:
+    return gateway.fallback_event(SERVICE, reason)
+
+
+def emit(level: str, reason: str) -> None:
+    if not os.environ.get("LOKI_URL"):
+        return
+    cmd = [
+        "bash",
+        str(Path(__file__).with_name("loki-event.sh")),
+        "emit",
+        SERVICE,
+        level,
+        f"reason={reason}",
+    ]
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    if run_id:
+        cmd.append(f"run_id={run_id}")
+    subprocess.run(cmd, check=False)
+
+
+def emit_fallback(reason: str) -> None:
+    if reason not in gateway.REASONS:
+        return
+    emit("warn", reason)
+
+
+def no_judgement(why: str) -> int:
+    print(why, file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     outdir = sys.argv[1]
-    key = os.environ.get("OPENROUTER_API_KEY_WATCH", "")
-    if not key:
-        # Named as a configuration gap in the log, and nowhere else. `#133`: the
-        # silent-service check must still run with no key, and the issue it opens
-        # says the judgement was skipped — which `watch-agent.sh report` does by
-        # finding no judgement.md.
-        print("no OPENROUTER_API_KEY_WATCH — the numbers stand, no judgement was asked for",
-              file=sys.stderr)
-        return 0
+    pair = gateway.gateways_from_environment("WATCH", os.environ)
+    if not pair:
+        # Named as a configuration gap in the log, and nowhere else. `#133`:
+        # the silent-service check must still run with no key, and the issue
+        # it opens says the judgement was skipped — which `watch-agent.sh
+        # report` does by finding no judgement.md.
+        return no_judgement(
+            "no gateway is configured — the numbers stand, no judgement was asked for"
+        )
 
     try:
         with open(os.path.join(outdir, "numbers.md"), encoding="utf-8") as fh:
             numbers = fh.read()
     except OSError as exc:
-        print(f"could not read the numbers: {exc} — no judgement was written", file=sys.stderr)
-        return 0
+        return no_judgement(f"could not read the numbers: {exc} — no judgement was written")
 
-    body = json.dumps({
-        "model": os.environ.get("MODEL", "deepseek/deepseek-v4-flash"),
-        "messages": [{"role": "system", "content": SYSTEM},
-                     {"role": "user", "content": numbers}],
-        "response_format": {"type": "json_object"},
-        # Small on purpose: the answer is a boolean and a paragraph. Large enough
-        # that a model which thinks before answering does not run out mid-JSON,
-        # which returns content: null and loses the whole answer rather than a
-        # truncated one — measured in review-pull-request.yml, same lesson.
-        "max_tokens": 2000,
-        "temperature": 0.2,
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions", data=body,
-        headers={"Authorization": f"Bearer {key}",
-                 "Content-Type": "application/json",
-                 "HTTP-Referer": "https://github.com/Kolonie-AI",
-                 "X-Title": "Kolonie Watch Agent"})
-    try:
-        answer = json.load(urllib.request.urlopen(req, timeout=120))
-    except urllib.error.HTTPError as exc:
-        # The status and nothing else. This log is public, and a provider's error
-        # body can echo the request back with the key inside it.
-        print(f"the model endpoint answered {exc.code} — no judgement was written", file=sys.stderr)
-        return 0
-    except Exception as exc:  # noqa: BLE001 — every way of not reaching it ends the same
-        print(f"could not reach the model endpoint: {type(exc).__name__} — no judgement was written",
+    text, why, _call, taken = ask(SYSTEM, numbers)
+    if taken.get("route") == "fallback" and taken.get("reason"):
+        emit_fallback(taken["reason"])
+        print(f"the primary gateway did not answer ({taken['reason']}) — wrote the judgement via fallback",
               file=sys.stderr)
-        return 0
-
-    choice = (answer.get("choices") or [{}])[0]
-    text = (choice.get("message") or {}).get("content")
     if not text:
-        print(f"the model returned no content (finish_reason: {choice.get('finish_reason') or 'unknown'})"
-              " — no judgement was written", file=sys.stderr)
-        return 0
+        detail = why or "nothing was asked"
+        return no_judgement(
+            f"the model endpoint answered nothing usable ({detail}) — no judgement was written"
+        )
 
-    # A model asked for JSON usually returns JSON. "Usually" is not a contract.
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text.split("\n", 1)[1] if "\n" in text else text
     try:
-        verdict = json.loads(text)
+        verdict = json.loads(gateway.strip_fence(text))
     except json.JSONDecodeError:
-        print("the model did not return JSON — no judgement was written", file=sys.stderr)
-        return 0
+        return no_judgement("the model did not return JSON — no judgement was written")
+    if not isinstance(verdict, dict):
+        return no_judgement("the model did not return a verdict object — no judgement was written")
 
     paragraph = str(verdict.get("judgement") or "").strip()
     if not paragraph:
-        print("the model returned no paragraph — no judgement was written", file=sys.stderr)
-        return 0
+        return no_judgement("the model returned no paragraph — no judgement was written")
 
     out = {"abnormal": bool(verdict.get("abnormal")), "judgement": paragraph}
     with open(os.path.join(outdir, "judgement.json"), "w", encoding="utf-8") as fh:

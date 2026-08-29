@@ -43,6 +43,11 @@ ROOT=${1:-.}
 GUARDED=(
   LLM_GATEWAY_BASE_URL
   LLM_GATEWAY_API_KEY_WORKER
+  # `#550` retired the last hardcoded provider URL. The second gateway's
+  # address is now a value this repository holds and must not commit, for
+  # the same reason the first one is: a hostname in history is a target
+  # that cannot be taken back.
+  LLM_GATEWAY_FALLBACK_BASE_URL
   # `#503` added a write path from Actions into the log store, so this repository
   # now holds a second endpoint and a second token. Both are guarded for the
   # reason in the header: the token can be rotated in a minute and the store's
