@@ -42,6 +42,7 @@ ROOT=${1:-.}
 # setting kept out of the files rather than a secret kept out of the world.
 GUARDED=(
   LLM_GATEWAY_BASE_URL
+  LLM_GATEWAY_FALLBACK_BASE_URL
   LLM_GATEWAY_API_KEY_WORKER
   # `#503` added a write path from Actions into the log store, so this repository
   # now holds a second endpoint and a second token. Both are guarded for the

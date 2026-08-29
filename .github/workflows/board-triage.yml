@@ -236,16 +236,11 @@ jobs:
           # rather than only in our own logs.
           LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
           LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
-          # **A model identifier the gateway serves, or a tier alias** (`#502`).
-          # Measured 2026-08-26: the bare names this defaulted to answered 503
-          # while the served prefixed identifiers and `@preset/tier-1` answered
-          # 200, so a bare default was a deterministic failure on a schedule.
-          # The script drops any name absent from `GET /v1/models` before asking.
+          LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE }}
+          LLM_GATEWAY_FALLBACK_BASE_URL: ${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL }}
-          # The account asked when the one above will not answer. **Named or not
-          # asked**: it is no longer inferred as a second hard-coded name, which
-          # is what made the retry path unable to reach a served model at all.
-          TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
           CHUNK: 6
           WAITING: ${{ steps.candidates.outputs.waiting }}
         run: |
@@ -396,11 +391,11 @@ jobs:
           # rather than only in our own logs.
           LLM_GATEWAY_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_API_KEY_TRIAGE }}
           LLM_GATEWAY_BASE_URL: ${{ secrets.LLM_GATEWAY_BASE_URL }}
-          # Same rule as the routing step above (`#502`): a served identifier or
-          # a tier alias, never a bare legacy name defaulted to in this file.
+          LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE: ${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE }}
+          LLM_GATEWAY_FALLBACK_BASE_URL: ${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}
           TRIAGE_LLM_MODEL: ${{ vars.TRIAGE_LLM_MODEL }}
-          # Named or not asked; never inferred as a second hard-coded name.
-          TRIAGE_LLM_FALLBACK_MODEL: ${{ vars.TRIAGE_LLM_FALLBACK_MODEL }}
+          LOKI_URL: ${{ secrets.LOKI_URL }}
+          LOKI_TOKEN: ${{ secrets.LOKI_TOKEN }}
         run: |
           set -uo pipefail
           refusals="$RUNNER_TEMP/refusals.json"

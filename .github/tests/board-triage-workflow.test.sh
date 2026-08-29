@@ -128,6 +128,16 @@ absent "sweep GH_TOKEN does not fall back to WORKER_REPO_TOKEN" \
   "WORKER_REPO_TOKEN || github.token" "$sweep_block"
 
 echo
+echo "the two-gateway contract (#546)"
+absent "the retired same-gateway second model is gone from the workflow" "TRIAGE_LLM_FALLBACK_MODEL" "$workflow"
+decide_py=$(cat "$ROOT/.github/scripts/board-triage-decide.py")
+absent "and gone from the decide script" "TRIAGE_LLM_FALLBACK_MODEL" "$decide_py"
+contains "the decide step reads the fallback base URL" \
+  "LLM_GATEWAY_FALLBACK_BASE_URL: \${{ secrets.LLM_GATEWAY_FALLBACK_BASE_URL }}" "$workflow"
+contains "the decide step reads the fallback triage key" \
+  "LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE: \${{ secrets.LLM_GATEWAY_FALLBACK_API_KEY_TRIAGE }}" "$workflow"
+
+echo
 echo "the script treats an unreadable membership as unknown"
 contains "provenance answers unknown" 'echo "unknown"' "$script"
 contains "provenance asks memberships/" 'memberships/$login' "$script"
