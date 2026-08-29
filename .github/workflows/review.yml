@@ -27,10 +27,9 @@ name: Reviewer Agent
 # all; what `#123` asked to be decided per repository is what counts as sensitive
 # in it, below.
 #
-# `secrets: inherit` rather than naming one: the called workflow declares
-# `OPENROUTER_API_KEY` as optional, and the organisation secret of that name is
-# granted to this repository (measured 2026-08-03), so the reviewer runs with a
-# model rather than logging that it has none.
+# `secrets: inherit` rather than naming one: the called workflow declares the
+# two-gateway pair as optional (`kolonie-docs#547`), so a repository that has
+# not been given the fallback secrets still reviews on the primary alone.
 
 on:
   workflow_run:
