@@ -2,7 +2,7 @@
 # One finding is one issue (`kolonie-docs#237`).
 #
 # Usage:
-#   watch-finding.sh place <identity> <title> <body-file> [label ...]
+#   watch-finding.sh place <identity> <title> <body-file> [--still <sentence>] [label ...]
 #   watch-finding.sh resolve <identity> <comment>   # allowlisted findings only
 #   watch-finding.sh find <identity>         # the issue carrying it, as JSON, or nothing
 #   watch-finding.sh key <identity>          # the marker line, for a body
@@ -108,11 +108,21 @@ find_by_identity() {
 cmd_place() {
   local identity=$1 title=$2 body_file=$3
   shift 3
-  local labels=("$@")
+  local still="" labels=()
+  while [ $# -gt 0 ]; do
+    if [ "$1" = --still ]; then
+      still=${2:?place --still needs a sentence}
+      shift 2
+      continue
+    fi
+    labels+=("$1")
+    shift
+  done
 
   [ -f "$body_file" ] || { echo "no body file at $body_file" >&2; return 2; }
 
-  local found number state
+  local found number state still_text
+  still_text=${still:-the condition behind this issue is still there.}
   found=$(find_by_identity "$identity")
 
   if [ -n "$found" ]; then
@@ -122,7 +132,7 @@ cmd_place() {
     if [ "$state" = OPEN ]; then
       rewrite_body "$number" "$identity" "$body_file"
       gh issue comment "$number" --repo "$REPO" --body \
-"**Still true today.** $(date -u +%Y-%m-%d): the condition behind this issue is still there.
+"**Still true today.** $(date -u +%Y-%m-%d): $still_text
 
 Identity: \`$identity\`. [Full run]($RUN_URL)
 
@@ -343,5 +353,5 @@ case "${1:-}" in
   footer) shift; cmd_footer "${1:?footer needs an identity}" "${2:?footer needs what it joins on}" "${3:?footer needs a workflow name}" ;;
   place) shift; cmd_place "${1:?place needs an identity}" "${2:?place needs a title}" "${3:?place needs a body file}" "${@:4}" ;;
   resolve) shift; cmd_resolve "${1:?resolve needs an identity}" "${2:?resolve needs a comment saying what the measurement now is}" ;;
-  *)     echo "usage: watch-finding.sh place <identity> <title> <body-file> [label ...] | resolve <identity> <comment> | find <identity> | key <identity> | footer <identity> <joins-on> <workflow>" >&2; exit 2 ;;
+  *)     echo "usage: watch-finding.sh place <identity> <title> <body-file> [--still <sentence>] [label ...] | resolve <identity> <comment> | find <identity> | key <identity> | footer <identity> <joins-on> <workflow>" >&2; exit 2 ;;
 esac

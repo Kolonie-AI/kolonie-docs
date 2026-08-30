@@ -23,3 +23,4 @@
 # looking at it. `gather` says so in the run log, and the line can be deleted.
 
 umami	2026-08-06	kolonie-website#43 — the maintainer decided PageSense stays and Umami is not wanted; removed from the host in kolonie-infra 83541e7
+vikunja-reference	2026-08-28	kolonie-infra#252 and kolonie-infra#253 — torn down on purpose; a quiet alarm here would be the measurement without the intention

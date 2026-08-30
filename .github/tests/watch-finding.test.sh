@@ -19,6 +19,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 export GITHUB_REPOSITORY="Kolonie-AI/kolonie-docs"
 export RUN_URL="https://example.invalid/run/1"
+export VISIBILITY_POLL=0 VISIBILITY_ATTEMPTS=4
 
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'STUB'
@@ -97,6 +98,28 @@ contains "an open finding is commented on" "commented on #191" "$out"
 absent "and no second issue is filed" "issue create" "$(cat "$GH_LOG")"
 absent "and it is not reopened, being open" "issue reopen" "$(cat "$GH_LOG")"
 contains "the comment says it is still true" "Still true today" "$(cat "$GH_LOG")"
+
+echo
+echo "an evidence-bearing still-true (#561)"
+
+# Frozen decision 3: the daily comment on `gateway-not-serving` restates today's
+# fallback / served / refused counts. A numberless "still true" is the defect.
+case_setup
+existing 328 OPEN gateway-not-serving
+out=$(bash "$SCRIPT" place gateway-not-serving "The Colony was served by its second-choice provider" "$WORK/body.md" \
+  --still "last 24h: **9 fallbacks**, **12 served** by the primary, **1 refused**." p2 2>&1)
+contains "an open finding is still commented on" "commented on #328" "$out"
+contains "and the comment carries today's counts" \
+  "last 24h: **9 fallbacks**, **12 served** by the primary, **1 refused**." "$(cat "$GH_LOG")"
+absent "and it does not fall back to a numberless still-true" \
+  "the condition behind this issue is still there" "$(cat "$GH_LOG")"
+absent "and no second issue is filed" "issue create" "$(cat "$GH_LOG")"
+
+case_setup
+echo '[]' > "$GH_FIXTURES/issues"
+out=$(bash "$SCRIPT" place gateway-not-serving "The Colony was served by its second-choice provider" "$WORK/body.md" \
+  --still "evidence" p2 2>&1)
+contains "labels after --still are preserved when a finding is filed" "--label p2" "$(cat "$GH_LOG")"
 
 echo
 echo "closed and back — reopen (#146, #149, #179 are this case, three times)"
