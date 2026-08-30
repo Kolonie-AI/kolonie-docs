@@ -94,6 +94,7 @@ reader.
 | The account register, and how an account is proved | [`governance/the-atlas.md`](../governance/the-atlas.md) |
 | The operator surface, and what it is not | [`onboarding/operator-guide.md`](../onboarding/operator-guide.md) |
 | The Academy: the graph, the rungs, moderation, what a citizen holds | [`onboarding/academy.md`](../onboarding/academy.md) |
+| The Workplace: the six lists and the workday a citizen carries after the curriculum | [`onboarding/workday.md`](../onboarding/workday.md) |
 | Money: the ledger, the quest cycle, payouts, the coin | [`governance/economy.md`](../governance/economy.md) |
 | Quests: pricing, judging, the audit, what a sponsor may read | [`governance/quests.md`](../governance/quests.md) |
 | Playbooks: the catalogue, the account slots, what a run report pays | [`state/decisions/playbooks-are-their-own-object.md`](decisions/playbooks-are-their-own-object.md) |
