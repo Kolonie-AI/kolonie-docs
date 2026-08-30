@@ -68,11 +68,16 @@ case "$url" in
   # `#328` added a third instant query that also names the fallback event; it is
   # told apart by the `reason=\"status\"` filter, and it is matched **before**
   # the general fallback case for the reason the block above gives.
+  # `#561` asks for the primary's served count beside fallback and refused;
+  # `model.call.completed` with `route="gateway"` is that measurement, and it is
+  # matched before the generic slug query so a served fixture cannot leak into
+  # an error-event table.
   */query)       if [[ "$* " == *"board-triage"* || "$* " == *"opencode-worker"* ]]; then cat "$FIX/actions_today" 2>/dev/null
                  elif [[ "$* " == *"model.route.fallback"* && "$* " == *"reason%3D%22status%22"* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
                  elif [[ "$* " == *"model.route.fallback"* && "$* " == *'reason="status"'* ]]; then cat "$FIX/fallback_statuses" 2>/dev/null
                  elif [[ "$* " == *"model.route.fallback"* ]]; then cat "$FIX/fallbacks" 2>/dev/null
                  elif [[ "$* " == *"model.route.refused"* ]]; then cat "$FIX/refusals" 2>/dev/null
+                 elif [[ "$* " == *"model.call.completed"* ]]; then cat "$FIX/served" 2>/dev/null
                  else cat "$FIX/slugs" 2>/dev/null; fi ;;
   *)             cat "$FIX/openrouter" 2>/dev/null ;;
 esac
@@ -127,6 +132,7 @@ setup() {
   printf '{"data":{"result":[]}}\n' > "$FIX/fallback_statuses"
   printf '{"data":{"result":[]}}\n' > "$FIX/refusals"
   printf '{"data":{"result":[]}}\n' > "$FIX/fallback_peak"
+  printf '{"data":{"result":[]}}\n' > "$FIX/served"
   printf '{"data":{"result":[]}}\n' > "$FIX/actions_today"
   printf '{"data":{"result":[]}}\n' > "$FIX/actions_history"
   : > "$FIX/existing"
@@ -342,6 +348,38 @@ bash "$SCRIPT" gather "$WORK/out" >/dev/null
 expect "with no retired list the alarm is unchanged" \
   "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && echo yes || echo no)" "$(cat "$WORK/out/silent.txt")"
 unset WATCH_RETIRED_FILE
+
+echo
+echo "a service torn down on purpose is retired, not a new list (#561)"
+
+# Frozen decision 2: `vikunja-reference` is excluded from the 24h-quiet-after-7d
+# alarm by the existing retired list, not a second DECOMMISSIONED file. The
+# teardown evidence has to live on the same line, in the same commit.
+expect "vikunja-reference is on the existing retired list" \
+  "$(awk '!/^[[:space:]]*#/ && $1=="vikunja-reference"{found=1} END{print found?"yes":"no"}' \
+      "$ROOT/.github/scripts/watch-agent-retired.txt")"
+expect "and the same line names both teardown issues" \
+  "$(awk '!/^[[:space:]]*#/ && $1=="vikunja-reference" && /kolonie-infra#252/ && /kolonie-infra#253/ {found=1} END{print found?"yes":"no"}' \
+      "$ROOT/.github/scripts/watch-agent-retired.txt")"
+expect "there is no second decommissioned-services list" \
+  "$(ls "$ROOT/.github/scripts/"*decommission* >/dev/null 2>&1 && echo no || echo yes)"
+
+# The committed file is the one the workflow reads. A quiet `vikunja-reference`
+# beside a genuinely dead runner must split the same way `#191` already proved
+# for a fixture list: excused, recorded, and not a cloak for its neighbour.
+setup
+printf '{"data":["api","website","verifier-runner","vikunja-reference"]}\n' > "$FIX/services_7d"
+printf '{"data":["api","website"]}\n' > "$FIX/services_24h"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+expect "the decommissioned service is not reported silent" \
+  "$(grep -qx 'vikunja-reference' "$WORK/out/silent.txt" && echo no || echo yes)" \
+  "$(cat "$WORK/out/silent.txt")"
+expect "and it is recorded as retired rather than dropped" \
+  "$(grep -qx 'vikunja-reference' "$WORK/out/retired.txt" && echo yes || echo no)" \
+  "$(cat "$WORK/out/retired.txt")"
+expect "a genuinely silent service beside it is still reported" \
+  "$([ "$(cat "$WORK/out/silent.txt")" = "verifier-runner" ] && echo yes || echo no)" \
+  "$(cat "$WORK/out/silent.txt")"
 
 echo
 echo "a service the pipeline silences is quiet, not dead (#284)"
@@ -725,22 +763,48 @@ expect "and with no issue open there is nothing to close either" \
 # day as above, with that issue open, has to close it — and what makes this one
 # measurement rather than two is that the fixture is the *same* quiet fixture,
 # with nothing added but the issue.
+# `#561` frozen decision 3: zero fallbacks is commented as "condition cleared"
+# and closes the issue; the comment carries fallback count, primary served, and refused.
 setup
 jq -n '[{number:328, state:"OPEN", title:"The Colony was served by its second-choice provider",
          body:"<!-- watch-finding: gateway-not-serving -->"}]' > "$FIX/existing"
+printf '{"data":{"result":[{"metric":{"service":"moderation-runner"},"value":[1785840000,"15"]}]}}\n' > "$FIX/served"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 bash "$SCRIPT" report "$WORK/out" >/dev/null
 expect "an open gateway finding is closed once the gateway is serving again" \
   "$(logged "issue close 328" && echo yes || echo no)" "$(cat "$GH_LOG")"
 expect "and the comment says what the measurement now is" \
   "$(logged "0 fallback(s)" && echo yes || echo no)" "$(cat "$GH_LOG")"
+expect "and the closing comment carries served and refused counts" \
+  "$(logged "15 call(s) served" && logged "0 call(s) were refused" && echo yes || echo no)" "$(cat "$GH_LOG")"
 expect "and it is closed rather than filed again" \
   "$(logged "issue create" && echo no || echo yes)" "$(cat "$GH_LOG")"
 
+# `#561`: when gateway-not-serving is still open and fallbacks/refusals persist,
+# the daily update comment is evidence-bearing and carries fallbacks, primary served, and refused.
+setup
+jq -n '[{number:328, state:"OPEN", title:"The Colony was served by its second-choice provider",
+         body:"<!-- watch-finding: gateway-not-serving -->"}]' > "$FIX/existing"
+printf '{"data":{"result":[{"metric":{"service":"support-triage-runner","reason":"status"},"value":[1785840000,"8"]}]}}\n' > "$FIX/fallbacks"
+printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"9"]]}]}}\n' > "$FIX/fallback_peak"
+printf '{"data":{"result":[{"metric":{"service":"support-triage-runner"},"value":[1785840000,"20"]}]}}\n' > "$FIX/served"
+printf '{"data":{"result":[{"metric":{"service":"moderation-runner"},"value":[1785840000,"1"]}]}}\n' > "$FIX/refusals"
+bash "$SCRIPT" gather "$WORK/out" >/dev/null
+bash "$SCRIPT" report "$WORK/out" >/dev/null
+expect "an active gateway finding comments with same-day evidence" \
+  "$(logged "8 fallback(s) across all services" && logged "20 call(s) served by the primary" && logged "1 call(s) refused" && echo yes || echo no)" \
+  "$(cat "$GH_LOG")"
+expect "and it does not close the active issue" \
+  "$(logged "issue close 328" && echo no || echo yes)" "$(cat "$GH_LOG")"
+
 # The other half of the same rule: a day that *is* a burst must not close it. A
 # watcher that filed and resolved on the same run would be one nobody could read.
+# Both fixtures carry the nine, because `#561` reads the close from the daily
+# total and the report from the peak — a day that populated one and not the
+# other is not a day that can happen.
 setup
 jq -n '[{number:328, state:"OPEN", title:"whatever", body:"<!-- watch-finding: gateway-not-serving -->"}]' > "$FIX/existing"
+printf '{"data":{"result":[{"metric":{"service":"support-triage-runner","reason":"status"},"value":[1785840000,"9"]}]}}\n' > "$FIX/fallbacks"
 printf '{"data":{"result":[{"metric":{},"values":[[1785836400,"9"]]}]}}\n' > "$FIX/fallback_peak"
 bash "$SCRIPT" gather "$WORK/out" >/dev/null
 bash "$SCRIPT" report "$WORK/out" >/dev/null

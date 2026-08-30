@@ -240,6 +240,17 @@ q_refusals() {
     "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
 }
 
+# --- query 2a-quater: calls the primary gateway served ------------------------
+# `model.call.completed` is written after a usable response has been read, and
+# its `route` comes from the response header. Counting `route="gateway"` therefore
+# says how many calls the primary actually served, rather than how many were
+# attempted or how many produced any log line at all (`#561`).
+q_primary_served() {
+  loki /loki/api/v1/query \
+    'query=sum by (service) (count_over_time({job="containers"} | json | event="model.call.completed" | route="gateway" [24h]))' \
+    "time=$1" | jq -r '.data.result // [] | .[] | "\(.metric.service // "(none)")\t\(.value[1] | tonumber | floor)"' 2>/dev/null | sort
+}
+
 # --- query 2b: errors per service, over a window ------------------------------
 # **The number nobody was looking at.** 674 error lines in 24 hours, measured
 # 2026-08-08 across eleven services, and nothing reported them anywhere — the
@@ -490,6 +501,7 @@ cmd_gather() {
   q_fallbacks "$NOW" > "$dir/fallbacks.tsv"
   q_fallback_statuses "$NOW" > "$dir/fallback-statuses.tsv"
   q_refusals  "$NOW" > "$dir/refusals.tsv"
+  q_primary_served "$NOW" > "$dir/served.tsv"
   q_fallbacks_hourly "$DAY_AGO" "$NOW" > "$dir/fallback-peak.txt"
 
   # The rehearsal reaches this the same way it reaches a silent service, and for
@@ -567,6 +579,12 @@ cmd_gather() {
       fi
     else
       echo "The gateway served everything — no call fell back to OpenRouter."
+    fi
+    echo
+    if [ -s "$dir/served.tsv" ]; then
+      echo "Calls served by the primary gateway: **$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/served.tsv")**."
+    else
+      echo "Calls served by the primary gateway: **0**."
     fi
     echo
     if [ -s "$dir/refusals.tsv" ]; then
@@ -866,21 +884,27 @@ cmd_errors_changed() {
 # second threshold to appear. A rule that filed at 5 and closed at 4 would flap
 # forever on a gateway sitting at 4.
 gateway_numbers() {
-  local dir="$1" peak refusals
+  local dir="$1" total peak served refusals
+
+  total=$(awk -F'\t' '{ total += $3 } END { print total + 0 }' "$dir/fallbacks.tsv" 2>/dev/null)
+  total=${total:-0}
 
   peak=$(cat "$dir/fallback-peak.txt" 2>/dev/null || echo 0)
   case "$peak" in ''|*[!0-9]*) peak=0 ;; esac
 
+  served=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/served.tsv" 2>/dev/null)
+  served=${served:-0}
+
   refusals=$(awk -F'\t' '{ total += $2 } END { print total + 0 }' "$dir/refusals.tsv" 2>/dev/null)
   refusals=${refusals:-0}
 
-  printf '%s\t%s\n' "$peak" "$refusals"
+  printf '%s\t%s\t%s\t%s\n' "$total" "$peak" "$served" "$refusals"
 }
 
 cmd_gateway_wobbled() {
-  local peak refusals
+  local total peak served refusals
 
-  IFS=$'\t' read -r peak refusals < <(gateway_numbers "$1")
+  IFS=$'\t' read -r total peak served refusals < <(gateway_numbers "$1")
 
   [ "$peak" -ge "$FALLBACK_BURST" ] && return 0
   [ "$refusals" -ge "$REFUSAL_FLOOR" ] && return 0
@@ -888,16 +912,18 @@ cmd_gateway_wobbled() {
 }
 
 report_gateway_finding() {
-  local dir="$1" peak refusals body_file
+  local dir="$1" total peak served refusals body_file found
 
-  IFS=$'\t' read -r peak refusals < <(gateway_numbers "$dir")
+  IFS=$'\t' read -r total peak served refusals < <(gateway_numbers "$dir")
 
-  # Not wobbling is not nothing to do: an open `gateway-not-serving` issue is a
-  # statement about today, and today it is false. `resolve` writes nothing when
-  # there is no such issue, which is what every ordinary day is.
-  if ! cmd_gateway_wobbled "$dir"; then
+  if [ "$total" -eq 0 ] && [ "$refusals" -eq 0 ]; then
     bash "$FINDING" resolve gateway-not-serving \
-      "the busiest hour of the last day carried **$peak fallback(s)**, under the burst threshold of $FALLBACK_BURST, and **$refusals call(s) were refused**. The gateway is serving the Colony again."
+      "**Condition cleared.** In the last 24 hours there were **0 fallback(s)**, **$served call(s) served by the primary**, and **0 call(s) were refused**."
+    return 0
+  fi
+
+  found=$(bash "$FINDING" find gateway-not-serving)
+  if ! cmd_gateway_wobbled "$dir" && [ -z "$found" ]; then
     return 0
   fi
 
@@ -922,7 +948,9 @@ report_gateway_finding() {
 
   bash "$FINDING" place gateway-not-serving \
     "The Colony was served by its second-choice provider" \
-    "$body_file" p2 area:infra from:watcher
+    "$body_file" --still \
+    "In the last 24 hours there were **$total fallback(s) across all services**, **$served call(s) served by the primary**, and **$refusals call(s) refused**." \
+    p2 area:infra from:watcher
   rm -f "$body_file"
 }
 
