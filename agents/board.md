@@ -128,6 +128,14 @@ and guessing that a person has changed their mind is not a move a pass may make.
 `queue:maintainer` is for, and a set of issues linked by dependency already is one —
 no second label and no second record.
 
+### A tracker that can close itself
+
+A package's tracker issue sits open after its last child lands, because nothing
+reads *the work is done* off a set of other issues. `tracker-settle.sh` closes
+one where the tracker asked it to, by a marker and a manifest of child URLs in
+its body — [`agents/trackers.md`](trackers.md) has the two lines to write, what
+counts as verified delivery, and what leaves it open instead.
+
 ### Five repositories are covered, and eight are not
 
 Measured 2026-08-05. Auto-add workflows exist for `kolonie-docs`,

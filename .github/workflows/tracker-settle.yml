@@ -1,0 +1,82 @@
+name: Tracker settle
+
+# Close a package tracker whose every manifested child is verified delivered.
+# `kolonie-docs#566`.
+#
+# ## Why this exists
+#
+# `kolonie-platform#1754` had all fourteen of its children closed — the last one
+# delivered by a pull request merged with every required check green — and sat in
+# Blocked for two days. Nothing was wrong with the work, and there was no path by
+# which the board could say so.
+#
+# ## Why it is opt-in, and why that is not timidity
+#
+# Closing an issue is the one write on this board nobody catches by reading it: a
+# closed issue leaves the queue, so a wrong close is invisible afterwards. A rule
+# inferring *tracker* from the word *Epic* or from a checklist would make that
+# decision about issues whose authors never asked for it. So the script reads a
+# marker and a manifest of child URLs, and anything it cannot establish leaves the
+# tracker open with one finding saying which child and why.
+#
+# ## Why not board-settle, next door
+#
+# That job moves a card that is already closed into Done — a tidy-up, cheap and
+# reversible with one command. This one *closes an issue*, which is a decision.
+# Two different acts, two different blast radii, and running them on one schedule
+# would hide the second inside the first.
+
+on:
+  schedule:
+    # Hourly, at :47, so it lands in no other job's minute: board-settle runs at
+    # 3,13,23,33,43,53, check-red-lines at 04:00 and board-self-check at 05:00.
+    - cron: '47 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Say what would close and write nothing. The way to inspect this job's
+          judgement before giving it the issues.
+        type: boolean
+        required: false
+        default: false
+
+# Queued, never cancelled: two runs would both read the same trackers, and a run
+# killed between the comment and the close leaves a tracker carrying evidence it
+# was closed on and still open.
+concurrency:
+  group: tracker-settle
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, because a pass nobody has verified is a pass that should not be
+      # allowed to close anything. The stubbed cases run in a second and need no
+      # credential.
+      - name: Test the settle pass
+        run: bash .github/tests/tracker-settle.test.sh
+
+      - name: Settle the trackers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            bash .github/scripts/tracker-settle.sh --dry-run
+          else
+            # A tracker held open is a finding rather than a broken run: the pass
+            # did its work and said what it found, and failing here would make
+            # every unfinished package look like a defect in this workflow.
+            bash .github/scripts/tracker-settle.sh || true
+          fi
