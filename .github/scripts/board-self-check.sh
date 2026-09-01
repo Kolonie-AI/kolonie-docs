@@ -164,7 +164,7 @@ check_pruning() {
 BOARD_JSON=""
 BOARD_LISTING=""
 BOARD_STATUS=
-BOARD_FLOOR=20
+BOARD_INTEGRITY="unreadable"
 
 load_board() {
   [ -n "$BOARD_LISTING" ] && return "$BOARD_STATUS"
@@ -174,23 +174,47 @@ load_board() {
   # against 203 (`#269`, measured 2026-08-10 on a 129-item board), and 5a above
   # exists because that 203 emptied the budget. A check whose own cost is the
   # thing it warns about was reporting a symptom it was helping to cause.
-  bash "$HERE/opencode-worker.sh" board-read 2>/dev/null > "$BOARD_JSON"
+  # Absence is meaningful only after the read proves itself complete. The
+  # authoritative ProjectV2 total, a terminal pagination page, and every issue's
+  # repository and number are evidence about this read rather than assumptions
+  # about how large the board used to be. That admits a legitimate 0/0 board and
+  # rejects a partial response of any size.
+  if ! bash "$HERE/opencode-worker.sh" board-read 2>/dev/null > "$BOARD_JSON"; then
+    BOARD_STATUS=1
+    return 1
+  fi
+  if ! BOARD_INTEGRITY=$(jq -er '
+    if (.totalCount | type) != "number" or .totalCount < 0 or (.totalCount | floor) != .totalCount then
+      error("invalid totalCount")
+    elif (.pagination.completed != true) then
+      error("pagination did not complete")
+    elif (.items | type) != "array" then
+      error("invalid items")
+    elif ([.items[] | select((.content.number | type) != "number" or (.content.repository | type) != "string" or (.content.repository | length) == 0)] | length) > 0 then
+      error("issue identity is incomplete")
+    elif (.items | length) != .totalCount then
+      "\(.items | length) of \(.totalCount) items returned"
+    else
+      "complete"
+    end' "$BOARD_JSON" 2>/dev/null); then
+    BOARD_INTEGRITY="missing or malformed completion metadata"
+    BOARD_STATUS=1
+    return 1
+  fi
+  if [ "$BOARD_INTEGRITY" != complete ]; then
+    BOARD_STATUS=1
+    return 1
+  fi
   jq -r '.items[] | "\(.content.repository)#\(.content.number)"' "$BOARD_JSON" 2>/dev/null \
     | sort -u > "$BOARD_LISTING"
-
-  # A board that reads as empty is a failed call, not an empty board, and
-  # reporting every open issue in the organisation as missing is the loudest
-  # possible way to be wrong. The floor is the same defence `red-lines.py` has.
-  # It lives here rather than in 5b so that every reader of the listing inherits
-  # it: a second copy of a guard is a second thing that can be got wrong.
-  if [ "$(wc -l < "$BOARD_LISTING")" -lt "$BOARD_FLOOR" ]; then BOARD_STATUS=1; else BOARD_STATUS=0; fi
-  return "$BOARD_STATUS"
+  BOARD_STATUS=0
+  return 0
 }
 
 check_arrivals() {
   local missing
   if ! load_board; then
-    echo "5b — **The board listing returned $(wc -l < "$BOARD_LISTING") items**, which is fewer than the board has ever held. Treating that as \"everything is missing\" would file a hundred false lines, so the comparison was not run. The likely causes are a spent GraphQL budget or a token that lost \`project\` scope."
+    echo "5b — **The board read did not prove a complete listing** ($BOARD_INTEGRITY). Treating that as \"everything is missing\" would file false lines, so the comparison was not run. The read must parse, finish pagination, return exactly \`totalCount\` issue items, and preserve each issue's repository and number."
     return 1
   fi
 
@@ -448,14 +472,14 @@ STATUS_DONE=${STATUS_DONE:-d37dbc2a}
 CLOSED_SETTLE_HOURS=6
 
 check_placement() {
-  local cutoff statusless closed stated
+  local cutoff statusless closed stated total
   local in_done reasoned line reopened unclosed undistinguished
   if ! load_board; then
     # 5b has already printed the number and the likely causes; repeating them
     # would be two paragraphs about one failure. What has to be said here is
     # that no comparison ran, because a silent 5d under a failing 5b reads
     # as *the columns are fine*.
-    echo "5d — **None of the three placement comparisons was run**, because the board listing did not pass its floor. See 5b for the number and the likely cause. This is unverified rather than clean: an item in no column, a closed item outside Done and an open item sitting in Done would all look exactly like this."
+    echo "5d — **None of the three placement comparisons was run**, because the board read did not prove it had completed. See 5b for the failed integrity condition. This is unverified rather than clean: an item in no column, a closed item outside Done and an open item sitting in Done would all look exactly like this."
     return 1
   fi
 
@@ -477,7 +501,8 @@ check_placement() {
   # would report all-clear forever, which is the failure mode the whole file is
   # written against.
   stated=$(jq -r '[.items[] | select(.content.state != null)] | length' "$BOARD_JSON" 2>/dev/null)
-  if [ "${stated:-0}" -eq 0 ]; then
+  total=$(jq -r '.totalCount' "$BOARD_JSON" 2>/dev/null)
+  if [ "${total:-0}" -gt 0 ] && [ "${stated:-0}" -eq 0 ]; then
     echo "5d — **The board listing carries no issue state**, so neither comparison that reads it was run. Nothing on it says whether an issue is open or closed, which means \`board-read\` is answering without \`state\` and \`closedAt\` — a defect in this checkout rather than a finding about the board."
     [ -n "$statusless" ] && { echo; echo "The status-less comparison did run, and found:"; echo; printf '%s\n' "$statusless"; }
     return 1

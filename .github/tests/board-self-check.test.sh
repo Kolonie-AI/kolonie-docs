@@ -82,6 +82,7 @@ case "$1 $2" in
            updatedAt: (.[4] // ""), stateReason: (.[5] // "")}
           + (.[0] | capture("(?<repo>.+)#(?<n>[0-9]+)$"))]
         | {data:{organization:{projectV2:{items:{
+            totalCount:length,
             pageInfo:{hasNextPage:false,endCursor:null},
             nodes:[ .[]
               | {id:("ITEM_" + .n),
@@ -229,6 +230,69 @@ covered() {
 
 logged() { grep -q -- "$1" "$GH_LOG"; }
 
+write_board_document() {
+  local count=$1 total=$2 completed=$3 file=$4
+  jq -n --argjson count "$count" --argjson total "$total" --argjson completed "$completed" '
+    {totalCount: $total,
+     pagination: {completed: $completed, pageCount: 1},
+     items: [range(0; $count) as $i
+       | {id: ("ITEM_" + (($i + 1) | tostring)), updatedAt: null,
+          status: "Ready", title: "untitled", labels: [], repository: "",
+          content: {number: ($i + 1), title: "untitled",
+                    repository: "Kolonie-AI/kolonie-docs", url: "",
+                    state: "OPEN", stateReason: null, closedAt: null,
+                    type: "Issue"}}]}' > "$file"
+}
+
+echo "a complete board read proves its own integrity"
+
+setup
+write_board_document 12 12 true "$WORK/board-document.json"
+  for i in $(seq 1 12); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/issues"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "12 of 12 items is a complete small board" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 12 20 true "$WORK/board-document.json"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "12 of 20 items is rejected as partial" "$([ $rc -eq 1 ] && [[ "$out" == *"12 of 20"* ]] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 25 25 true "$WORK/board-document.json"
+jq 'del(.totalCount)' "$WORK/board-document.json" > "$WORK/missing-total.json"
+out=$(BOARD_FILE="$WORK/missing-total.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a missing total is rejected" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 25 25 true "$WORK/board-document.json"
+jq '.totalCount = "many"' "$WORK/board-document.json" > "$WORK/malformed-total.json"
+out=$(BOARD_FILE="$WORK/malformed-total.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a malformed total is rejected" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 125 125 true "$WORK/board-document.json"
+for i in $(seq 1 125); do echo "Kolonie-AI/kolonie-docs#$i"; done > "$GH_FIXTURES/issues"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "125 of 125 items is complete" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 0 0 true "$WORK/board-document.json"
+: > "$GH_FIXTURES/issues"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "zero of zero items is a complete authenticated read" "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 25 25 false "$WORK/board-document.json"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "unfinished pagination is rejected" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+
+setup
+write_board_document 25 25 true "$WORK/board-document.json"
+jq 'del(.items[0].content.repository)' "$WORK/board-document.json" > "$WORK/missing-identity.json"
+out=$(BOARD_FILE="$WORK/missing-identity.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "an issue item without its repository identity is rejected" "$([ $rc -eq 1 ] && echo yes || echo no)" "$out"
+
+echo
 echo "a healthy board is silent"
 
 setup
@@ -270,9 +334,10 @@ expect "and names it" "$([[ "$out" == *"kolonie-docs#99"* ]] && echo yes || echo
 
 # The failure that would file a hundred false lines. A board listing that comes
 # back short is a spent budget or a lost scope, never an empty board.
-setup; echo "Kolonie-AI/kolonie-docs#1" > "$GH_FIXTURES/board"
-out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
-expect "a short board listing fails without accusing every issue" \
+setup
+write_board_document 1 25 true "$WORK/board-document.json"
+out=$(BOARD_FILE="$WORK/board-document.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
+expect "a partial board read fails without accusing every issue" \
   "$([ $rc -eq 1 ] && [[ "$out" != *"#20"* ]] && echo yes || echo no)" "$out"
 expect "and says why it did not run the comparison" \
   "$([[ "$out" == *"was not run"* ]] && echo yes || echo no)" "$out"
@@ -657,11 +722,12 @@ out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a closed item in Done and an open item in Ready are both silent" \
   "$([ $rc -eq 0 ] && echo yes || echo no)" "$out"
 
-# The same floor 5b has, inherited rather than copied: a listing that came back
-# short is a spent budget, and "every item is in no column" is the loudest
-# possible way to be wrong about it.
-setup; echo "Kolonie-AI/kolonie-docs#1|" > "$GH_FIXTURES/board"
-out=$(bash "$SCRIPT" check "$WORK/report"); rc=$?
+# An incomplete read suppresses every placement comparison: partial data must
+# not turn into findings about cards that may not be the complete board.
+setup
+write_board_document 1 25 true "$WORK/board-document.json"
+jq '.items[0].status = ""' "$WORK/board-document.json" > "$WORK/partial-board.json"
+out=$(BOARD_FILE="$WORK/partial-board.json" bash "$SCRIPT" check "$WORK/report"); rc=$?
 expect "a short listing suppresses all three comparisons" \
   "$([[ "$out" != *"These board items are in no column"* && "$out" != *"are closed and are not in Done"* \
       && "$out" != *"were reopened"* && "$out" != *"were never closed"* && "$out" != *"cannot say why"* \

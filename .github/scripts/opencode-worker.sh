@@ -297,15 +297,16 @@ graphql_value() { # <gh-api-graphql-args...>  → the value on stdout, or nothin
 #
 # ## Why it paginates
 #
-# The page is 100 and the board is past it. A single page would return the first
-# hundred items and exit zero, so an issue would be missing from the queue rather
-# than the queue being missing — the quiet failure `BOARD_LIMIT` was sized to
-# prevent, arriving by a different route.
+# The test suite covers single-page and 125-item reads, and the loop treats a
+# terminal `hasNextPage=false` as evidence rather than inferring completion from
+# the number of pages returned. A legitimate empty board therefore answers 0/0
+# with completed pagination; a truncated response cannot masquerade as one.
 read -r -d '' BOARD_QUERY <<'GRAPHQL' || true
 query($org: String!, $project: Int!, $after: String) {
   organization(login: $org) {
     projectV2(number: $project) {
       items(first: 100, after: $after) {
+        totalCount
         pageInfo { hasNextPage endCursor }
         nodes {
           id
@@ -332,12 +333,12 @@ query($org: String!, $project: Int!, $after: String) {
 }
 GRAPHQL
 
-# **The shape is `gh project item-list --format json`'s, deliberately.** Every
-# `jq` filter in this script and the four in AGENTS.md §6 were written against
-# it, so emitting the same document means this change is one line at each call
-# site and no filter has to be re-read to be trusted. `labels` and the urls cost
-# nothing to ask for — a page is a point with them or without — so they are here
-# rather than left out to be added back by whoever needs them next.
+# The shape retains `gh project item-list --format json`'s `items` array and adds
+# the read-integrity evidence that command's output cannot carry: ProjectV2's
+# authoritative `totalCount` and whether this pagination loop reached a terminal
+# page. Existing filters keep reading `.items`; consumers that decide absence is
+# meaningful first compare its length with `totalCount` and require completed
+# pagination.
 #
 # `state` and `closedAt` are here on the same terms (`#329`). A **scalar on a node
 # already being fetched is free**: the score is the number of nodes a query asks
@@ -397,11 +398,20 @@ board_read() {
     return 0
   fi
 
-  local after="" page pages rc=0
+  local after="" page pages rc=0 total_count="" page_count=0 completed=false
   pages=$(mktemp) || return 1
   while :; do
     page=$(gh api graphql -f query="$BOARD_QUERY" -f org="$ORG" \
              -F project="$BOARD_PROJECT" ${after:+-f after="$after"}) || { rc=1; break; }
+    page_count=$((page_count + 1))
+    page_total=$(jq -r '.data.organization.projectV2.items.totalCount | select(type == "number" and . >= 0 and floor == .)' <<<"$page" 2>/dev/null) || { rc=1; break; }
+    [ -n "$page_total" ] || { rc=1; break; }
+    if [ -z "$total_count" ]; then
+      total_count=$page_total
+    elif [ "$total_count" != "$page_total" ]; then
+      rc=1
+      break
+    fi
     # Draft items and pull requests have no `number`: the fragment matches only
     # an Issue, so anything else arrives as an empty object. Dropping them here
     # saves every caller from having to.
@@ -431,11 +441,21 @@ board_read() {
                       # cannot say why as a board of never-closed issues.
                       + (.content | if has("stateReason") then {stateReason} else {} end)) } ]
     ' <<<"$page" >>"$pages" || { rc=1; break; }
-    [ "$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$page")" = true ] || break
-    after=$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor' <<<"$page")
+    has_next=$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage | select(type == "boolean")' <<<"$page" 2>/dev/null) || { rc=1; break; }
+    case "$has_next" in
+      false) completed=true; break ;;
+      true)
+        after=$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor | select(type == "string" and length > 0)' <<<"$page" 2>/dev/null) || { rc=1; break; }
+        [ -n "$after" ] || { rc=1; break; }
+        ;;
+      *) rc=1; break ;;
+    esac
   done
-  if [ "$rc" -eq 0 ]; then
-    jq -s '{items: (add // [])}' "$pages" || rc=1
+  if [ "$rc" -eq 0 ] && [ "$completed" = true ]; then
+    jq -s --argjson totalCount "$total_count" --argjson pageCount "$page_count" \
+      '{totalCount: $totalCount, pagination: {completed: true, pageCount: $pageCount}, items: (add // [])}' "$pages" || rc=1
+  else
+    rc=1
   fi
   rm -f "$pages"
   return "$rc"
