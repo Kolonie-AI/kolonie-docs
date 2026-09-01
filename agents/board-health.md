@@ -71,6 +71,18 @@ line:
 gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
 ```
 
+**The comparison runs only on a self-proving board read.** `board-read` carries
+ProjectV2's `totalCount`, records that pagination reached `hasNextPage=false`,
+and preserves every issue item's repository and number. 5b requires all three
+and requires `items | length == totalCount`; it does not infer integrity from a
+historical minimum board size. A complete 0/0 or 12/12 read is valid, while a
+12/20 read, malformed total, unfinished pagination, or missing issue identity is
+unverified and produces no absence claims.
+
+```bash
+gh project item-add 1 --owner Kolonie-AI --url https://github.com/Kolonie-AI/<repo>/issues/<n>
+```
+
 **5c — the pointing.** 5a and 5b both ask about the board's contents. 5c asks
 whether the automation that fills it is actually aimed at the repositories it
 serves: has each of them the eight labels the triage pass writes, a `triage.yml`

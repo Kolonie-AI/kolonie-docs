@@ -136,6 +136,7 @@ case "$1 $2" in
       *)
         jq -c '
           { data: { organization: { projectV2: { items: {
+            totalCount: (.items | length),
             pageInfo: { hasNextPage: false, endCursor: null },
             nodes: [ .items[]
               | { id: .id,
@@ -1538,6 +1539,10 @@ echo "a board read by somebody else (BOARD_FILE)"
 case_setup
 boarded "10:In Progress"
 bash "$SCRIPT" board-read > "$WORK/handed-over.json" 2>/dev/null
+check "the board document carries its authoritative item count" "1" \
+  "$(jq -r 'if .totalCount == (.items | length) then 1 else 0 end' "$WORK/handed-over.json")"
+check "the board document says pagination completed" "true" \
+  "$(jq -r '.pagination.completed' "$WORK/handed-over.json")"
 
 # A fresh case: no board fixture at all, so anything that queries for itself sees
 # nothing. Only the handed-over file can produce a finding here.

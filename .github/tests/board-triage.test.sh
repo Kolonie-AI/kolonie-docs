@@ -183,6 +183,7 @@ case "$1 $2" in
       *)
         jq -c '
           { data: { organization: { projectV2: { items: {
+            totalCount: (.items | length),
             pageInfo: { hasNextPage: false, endCursor: null },
             nodes: [ .items[]
               | { id: .id,
