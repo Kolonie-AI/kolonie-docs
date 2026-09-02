@@ -108,8 +108,12 @@ echo "an unset gateway variable fails loudly rather than proceeding"
 # while the secret still carries the old name yields an empty value, and an
 # empty gateway configuration falls through to whatever the fallback path is —
 # which is silent. This is the line that makes it loud.
+#
+# `#572` narrows the model's refusal away: the value is no longer forwarded —
+# the worker resolves a canonical tier and degrades to its own rather than
+# stopping the queue — so the two a misconfiguration can actually unset are the
+# address and the key, and those are the two that must refuse.
 guard=$(grep -n 'is not set' "$ROOT/.github/workflows/opencode-worker.yml")
-contains "the model is named in the refusal" "LLM_GATEWAY_MODEL_WORKER" "$guard"
 contains "the base URL is named in the refusal" "LLM_GATEWAY_BASE_URL" "$guard"
 contains "the key is named in the refusal" "LLM_GATEWAY_API_KEY_WORKER" "$guard"
 

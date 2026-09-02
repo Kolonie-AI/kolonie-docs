@@ -27,6 +27,18 @@ REASONS = ("unreachable", "timeout", "status", "malformed")
 DEFAULT_USER_AGENT = "Kolonie-AI/actions-gateway"
 DEFAULT_TIMEOUT = 300
 
+# The closed set of capability tiers, and the only chat model values any Actions
+# caller may send. It mirrors `CAPABILITY_TIERS` in `packages/core` — the model
+# choice lives at the gateway, so a caller names a capability and never a
+# provider's model. `kolonie-platform#1810` closed the same boundary in
+# TypeScript; this is the Actions half of it.
+#
+# A value outside the set is refused rather than forwarded, because the failure
+# it causes is silent: a stale slug answers 503 through a healthy gateway, on a
+# schedule, and reads as a provider hiccup rather than as configuration nobody
+# chose.
+CAPABILITY_TIERS = ("@preset/tier-1", "@preset/tier-2", "@preset/tier-3")
+
 
 def configured_gateway(base_url: str | None, api_key: str | None) -> dict | None:
     base = (base_url or "").strip().rstrip("/")
@@ -66,20 +78,36 @@ def model_from_environment(
     default_model: str = "",
     service: str | None = None,
 ) -> str:
+    """The capability tier this caller asks for, from the environment or its default.
+
+    An override is honoured only when it is one of `CAPABILITY_TIERS`. Anything
+    else — a provider slug, a bare `tier-1`, an arbitrary string, an empty value
+    — is dropped and the caller's own canonical tier is used, so a mistyped
+    repository variable degrades to the documented request rather than to a
+    model the gateway does not serve or to no model at all.
+
+    A caller naming a default outside the set is a mistake in this repository
+    rather than in a deployment, so it raises rather than degrading. The message
+    carries the contract and never the value.
+    """
     env = env if env is not None else os.environ
+    if default_model not in CAPABILITY_TIERS:
+        raise ValueError(
+            "a chat caller must name one of the capability tiers as its default: "
+            + ", ".join(CAPABILITY_TIERS)
+        )
+    candidates = []
     if model_var:
-        named = (env.get(model_var) or "").strip()
-        if named:
-            return named
+        candidates.append(env.get(model_var))
     if service:
         token = service.strip().upper()
-        named = (
-            (env.get(f"LLM_GATEWAY_MODEL_{token}") or "").strip()
-            or (env.get("LLM_GATEWAY_MODEL") or "").strip()
-        )
-        if named:
+        candidates.append(env.get(f"LLM_GATEWAY_MODEL_{token}"))
+        candidates.append(env.get("LLM_GATEWAY_MODEL"))
+    for configured in candidates:
+        named = (configured or "").strip()
+        if named in CAPABILITY_TIERS:
             return named
-    return (default_model or "").strip()
+    return default_model
 
 
 def chat_url(base_url: str) -> str:

@@ -109,7 +109,7 @@ def ask(system: str, user: str, env: dict | None = None, request=None) -> tuple:
     env = env if env is not None else os.environ
     pair = gateway.gateways_from_environment("REVIEWER", env)
     model = gateway.model_from_environment(
-        env, model_var="REVIEWER_LLM_MODEL", default_model=DEFAULT_MODEL
+        env, model_var="REVIEWER_LLM_MODEL", service="REVIEWER", default_model=DEFAULT_MODEL
     )
     return gateway.routed_completion(
         pair, model, system, user, 16000, request=request or request_review

@@ -121,7 +121,7 @@ def request_judgement(endpoint, key, model, system, brief, budget):  # noqa: ANN
 def ask(system: str, user: str, env: dict | None = None, request=None) -> tuple:
     env = env if env is not None else os.environ
     pair = gateway.gateways_from_environment("WATCH", env)
-    model = gateway.model_from_environment(env, default_model=DEFAULT_MODEL)
+    model = gateway.model_from_environment(env, service="WATCH", default_model=DEFAULT_MODEL)
     return gateway.routed_completion(
         pair, model, system, user, 2000, request=request or request_judgement
     )
