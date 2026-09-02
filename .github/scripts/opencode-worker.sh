@@ -11,6 +11,7 @@
 #   opencode-worker.sh release <repo> <number> # -> back to Ready
 #   opencode-worker.sh move <repo> <number> Ready|Inbox|Blocked  # -> the only board writes triage may make (#262, #412)
 #   opencode-worker.sh review <repo> <number>  # -> In Review, once a pull request exists
+#   opencode-worker.sh model-tier              # -> the capability tier this run asks for
 #   opencode-worker.sh check-command <path/to/AGENTS.md>   # -> the repository's own check
 #   opencode-worker.sh check-prerequisite <path/to/AGENTS.md>  # -> what that check needs first, or nothing
 #   opencode-worker.sh prohibited-paths [file]  # -> the paths no worker may write, from operations/worker-prohibitions.md
@@ -598,6 +599,42 @@ fenced_lines_under() {
 # convention cannot express.
 first_fenced_block_under() {
   fenced_lines_under "$1" "$2" | head -n 1
+}
+
+# The capability tier the worker's own model requests carry.
+#
+# ## Why a tier and not the secret's value (`#572`)
+#
+# `LLM_GATEWAY_MODEL_WORKER` used to be a free string, written straight into the
+# derived OpenCode config and into `--model gateway/<value>`. That is the same
+# defect `kolonie-platform#1810` closed on the TypeScript side: a provider slug
+# in that variable is a value nobody chose reaching a gateway that does not serve
+# it, and the symptom is a run that dies with a provider error rather than a
+# configuration one.
+#
+# So the variable stays — an operator may still steer this service — and what it
+# may say is narrowed to the three canonical tiers. Anything else, including an
+# unset variable, resolves to the worker's own tier rather than stopping the run:
+# the worker is tier 1 because it writes code against a whole repository, and a
+# scheduled run that refuses to start over a mistyped variable is an hour of
+# queue nobody works.
+CAPABILITY_TIERS=${CAPABILITY_TIERS:-@preset/tier-1 @preset/tier-2 @preset/tier-3}
+WORKER_TIER=${WORKER_TIER:-@preset/tier-1}
+
+model_tier() {
+  local configured=${LLM_GATEWAY_MODEL_WORKER:-}
+  # Trim, because a secret pasted with a newline is the ordinary way this
+  # arrives wrong and an untrimmed value matches nothing.
+  configured=$(printf '%s' "$configured" | tr -d '[:space:]')
+
+  local tier
+  for tier in $CAPABILITY_TIERS; do
+    if [ "$configured" = "$tier" ]; then
+      printf '%s\n' "$tier"
+      return 0
+    fi
+  done
+  printf '%s\n' "$WORKER_TIER"
 }
 
 check_command_from() {
@@ -2097,6 +2134,11 @@ case "${1:-}" in
     set_status "$item" "$option" >/dev/null ||
       die "could not move $repo#$number to $column" 4
     echo "moved $repo#$number to $column"
+    exit 0
+    ;;
+
+  model-tier)
+    model_tier
     exit 0
     ;;
 

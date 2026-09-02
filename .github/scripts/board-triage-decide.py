@@ -277,7 +277,7 @@ def ask(system: str, brief: str, budget: int) -> tuple:
         default_model=DEFAULT_MODEL,
     )
     model = gateway.model_from_environment(
-        os.environ, model_var="TRIAGE_LLM_MODEL", default_model=DEFAULT_MODEL
+        os.environ, model_var="TRIAGE_LLM_MODEL", service="TRIAGE", default_model=DEFAULT_MODEL
     )
     return gateway.routed_completion(
         pair, model, system, brief, budget, request=gateway.request_completion

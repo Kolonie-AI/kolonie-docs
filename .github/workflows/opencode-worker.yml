@@ -1072,12 +1072,23 @@ jobs:
             printf '# Background\n\nNone could be gathered for this run.\n' > "$SCRATCH/context.md"
           fi
 
-          # Refuse rather than guess. An unset secret would otherwise reach
-          # opencode as `--model gateway/`, which fails somewhere further in
-          # with a message about the provider rather than about the secret.
-          : "${LLM_GATEWAY_MODEL_WORKER:?LLM_GATEWAY_MODEL_WORKER is not set — the model is a secret, and there is deliberately no default}"
+          # Refuse rather than guess. The gateway half is still fail-loud: an
+          # unset base URL or key is a configuration fault and not something to
+          # route around.
           : "${LLM_GATEWAY_BASE_URL:?LLM_GATEWAY_BASE_URL is not set}"
           : "${LLM_GATEWAY_API_KEY_WORKER:?LLM_GATEWAY_API_KEY_WORKER is not set}"
+
+          # **The model is a capability tier, resolved rather than forwarded**
+          # (`#572`). `LLM_GATEWAY_MODEL_WORKER` still steers this service, and
+          # what it may say is now the three canonical presets. Anything else —
+          # a provider slug, a bare `tier-1`, an unset secret — resolves to the
+          # worker's own tier, so a mistyped variable costs a weaker request at
+          # worst and never a run that dies naming a provider.
+          #
+          # It is a tier and never a value in the log: the tier is not a secret,
+          # which is the point — what ran is now readable from the run itself.
+          WORKER_MODEL_TIER=$(bash ../.github/scripts/opencode-worker.sh model-tier)
+          export WORKER_MODEL_TIER
 
           # ## Why the model is written into a derived config rather than left
           # ## to `--model` alone
@@ -1095,11 +1106,13 @@ jobs:
           # locally on 2026-08-07 and fixed by declaring the model; the same run
           # then answered in three seconds with `> build · gpt-5.6-sol`.
           #
-          # `#207` requires that **no model is named in a committed file**, so
-          # the declaration is made here from the secret. `opencode.json` stays
-          # the source and stays model-free; this adds one key to a copy.
-          # Changing `LLM_GATEWAY_MODEL_WORKER` still changes the model on the next run
-          # with no commit, which is the property the issue is about.
+          # `#207` requires that **no model is named in a committed file**, and a
+          # capability tier is not one: it names what is asked for, not which
+          # provider model answers, and that choice still lives at the gateway.
+          # `opencode.json` stays the source and stays model-free; this adds one
+          # key to a copy. Changing `LLM_GATEWAY_MODEL_WORKER` to another
+          # canonical tier still changes the request on the next run with no
+          # commit, which is the property `#262` is about.
           #
           # In the scratch directory with everything else since `#246`. opencode
           # reads `$OPENCODE_CONFIG` itself rather than through the tool sandbox,
@@ -1112,21 +1125,20 @@ jobs:
           # target's checkout, which is a different repository four times out of
           # five and has no such file. Reading it from the target would mean
           # every repository carrying a copy — five records of one fact.
-          jq --arg m "$LLM_GATEWAY_MODEL_WORKER" \
+          jq --arg m "$WORKER_MODEL_TIER" \
             '.provider.gateway.models[$m] = {}' ../opencode.json \
             > "$SCRATCH/runtime.json"
           export OPENCODE_CONFIG="$SCRATCH/runtime.json"
 
           # `gateway` is the provider id in `opencode.json`; the half after the
-          # slash is the secret.
+          # slash is the capability tier this run resolved.
           #
-          # This line says a model resolved, not which one — GitHub masks a
-          # secret's value wherever it appears in a log, including in opencode's
-          # own banner. So *which* model ran is read from the gateway's side or
-          # from the secret, and what the log can prove is that the run reached
-          # the provider rather than falling back to a committed default. There
-          # is no committed default to fall back to.
-          echo "model: gateway/${LLM_GATEWAY_MODEL_WORKER}"
+          # **It names the tier, which the line before `#572` could not.** The
+          # model used to be a secret, so GitHub masked it wherever it appeared
+          # and the log could say only that a model had resolved. A tier is not
+          # a secret and is worth reading: it is what the run asked for, and
+          # which provider model served it stays at the gateway.
+          echo "model: gateway/${WORKER_MODEL_TIER}"
 
           # ## The prohibitions are read, not written here (`#260`)
           #
@@ -1248,7 +1260,7 @@ jobs:
                 --config "$SCRATCH/runtime.json" \
                 --route-out "$route_out" \
                 -- \
-                env -u GH_TOKEN opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$prompt" \
+                env -u GH_TOKEN opencode run --model "gateway/$WORKER_MODEL_TIER" "$prompt" \
                 2>&1 | tee "$model_log"; then
             fail worker "opencode's own run did not finish. That is the model, the gateway or the tool — not a verdict on the change" "$model_log"
           fi
@@ -1739,8 +1751,12 @@ jobs:
           # environment into a public comment. What it can see is the digest,
           # which has been through the same redaction the excerpt has.
           account=""
+          # Its own resolution rather than the failed step's: a step's exports do
+          # not cross into this one, and the tier is derived rather than carried
+          # so both steps ask the same question of the same script (`#572`).
+          reporting_tier=$(bash .github/scripts/opencode-worker.sh model-tier)
           if [ "$kind" = work ] && command -v opencode >/dev/null 2>&1 &&
-             [ -n "${LLM_GATEWAY_MODEL_WORKER:-}" ] && [ -f /tmp/opencode/runtime.json ] &&
+             [ -n "$reporting_tier" ] && [ -f /tmp/opencode/runtime.json ] &&
              [ -s "$FAILURE_DIR/output" ]; then
 
             digest=$(bash .github/scripts/opencode-worker.sh failure-digest "$FAILURE_DIR/output")
@@ -1764,7 +1780,7 @@ jobs:
 
               if ( cd "$reading" &&
                    OPENCODE_CONFIG=/tmp/opencode/reporting.json \
-                   timeout 120 opencode run --model "gateway/$LLM_GATEWAY_MODEL_WORKER" "$read_prompt" \
+                   timeout 120 opencode run --model "gateway/$reporting_tier" "$read_prompt" \
                    > "$RUNNER_TEMP/opencode-account.raw" 2>/dev/null ); then
                 account=$(bash .github/scripts/opencode-worker.sh redact "$RUNNER_TEMP/opencode-account.raw")
                 echo "the model wrote an account of the failure"
