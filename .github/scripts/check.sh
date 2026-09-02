@@ -92,6 +92,9 @@ step "nothing was lost when a document was split" \
 step "every internal Markdown link resolves" \
   python3 .github/scripts/check-links.py .
 
+step "Actions LLM callers use the reviewed gateway and tier contract" \
+  python3 .github/scripts/check-llm-callers.py
+
 step "the incidents are still newest first" \
   python3 .github/scripts/check-incident-order.py operations/incidents.md
 

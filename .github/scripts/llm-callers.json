@@ -1,0 +1,147 @@
+{
+  "sharedTransport": {
+    "path": ".github/scripts/actions-gateway.py"
+  },
+  "transports": [
+    {
+      "path": ".github/scripts/actions-gateway.py",
+      "symbol": "chat_url"
+    }
+  ],
+  "transportUsers": [
+    {
+      "path": ".github/scripts/board-triage-decide.py",
+      "symbol": "ask",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/review-pull-request.py",
+      "symbol": "ask",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/review-pull-request.py",
+      "symbol": "main",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/watch-judge.py",
+      "symbol": "ask",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/watch-judge.py",
+      "symbol": "main",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/worker-gateway-proxy.py",
+      "symbol": "main",
+      "variable": "gateways_from_environment"
+    },
+    {
+      "path": ".github/scripts/worker-gateway-proxy.py",
+      "symbol": "main",
+      "variable": "LocalProxy"
+    }
+  ],
+  "callers": [
+    {
+      "path": ".github/scripts/board-triage-decide.py",
+      "symbol": "ask",
+      "tier": "@preset/tier-1"
+    },
+    {
+      "path": ".github/scripts/review-pull-request.py",
+      "symbol": "ask",
+      "tier": "@preset/tier-2"
+    },
+    {
+      "path": ".github/scripts/watch-judge.py",
+      "symbol": "ask",
+      "tier": "@preset/tier-2"
+    }
+  ],
+  "modelResolvers": [
+    {
+      "path": ".github/scripts/board-triage-decide.py",
+      "symbol": "ask"
+    },
+    {
+      "path": ".github/scripts/review-pull-request.py",
+      "symbol": "ask"
+    },
+    {
+      "path": ".github/scripts/watch-judge.py",
+      "symbol": "ask"
+    }
+  ],
+  "modelReaders": [
+    {
+      "path": ".github/scripts/board-triage-decide.py",
+      "symbol": "ask",
+      "variable": "TRIAGE_LLM_MODEL"
+    },
+    {
+      "path": ".github/scripts/review-pull-request.py",
+      "symbol": "ask",
+      "variable": "REVIEWER_LLM_MODEL"
+    },
+    {
+      "path": ".github/scripts/opencode-worker.sh",
+      "symbol": "model_tier",
+      "variable": "LLM_GATEWAY_MODEL_WORKER"
+    }
+  ],
+  "workflowModels": [
+    {
+      "path": ".github/workflows/board-triage.yml",
+      "symbol": "TRIAGE_LLM_MODEL",
+      "variable": "TRIAGE_LLM_MODEL"
+    },
+    {
+      "path": ".github/workflows/board-triage.yml",
+      "symbol": "TRIAGE_LLM_MODEL",
+      "variable": "TRIAGE_LLM_MODEL"
+    },
+    {
+      "path": ".github/workflows/opencode-worker.yml",
+      "symbol": "LLM_GATEWAY_MODEL_WORKER",
+      "variable": "LLM_GATEWAY_MODEL_WORKER"
+    },
+    {
+      "path": ".github/workflows/opencode-worker.yml",
+      "symbol": "LLM_GATEWAY_MODEL_WORKER",
+      "variable": "LLM_GATEWAY_MODEL_WORKER"
+    },
+    {
+      "path": ".github/workflows/review-pull-request.yml",
+      "symbol": "REVIEWER_LLM_MODEL",
+      "variable": "REVIEWER_LLM_MODEL"
+    },
+    {
+      "path": ".github/workflows/review-pull-request.yml",
+      "symbol": "model",
+      "variable": "model"
+    }
+  ],
+  "workerModels": [
+    {
+      "path": ".github/workflows/opencode-worker.yml",
+      "symbol": "WORKER_MODEL_TIER",
+      "tier": "@preset/tier-1"
+    },
+    {
+      "path": ".github/workflows/opencode-worker.yml",
+      "symbol": "reporting_tier",
+      "tier": "@preset/tier-1"
+    }
+  ],
+  "worker": {
+    "path": ".github/workflows/opencode-worker.yml",
+    "symbol": "WORKER_MODEL_TIER",
+    "proxy": ".github/scripts/worker-gateway-proxy.py",
+    "tierScript": ".github/scripts/opencode-worker.sh",
+    "tierSymbol": "model_tier"
+  }
+}
