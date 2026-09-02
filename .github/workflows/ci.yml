@@ -98,6 +98,9 @@ jobs:
       - name: Every internal Markdown link resolves
         run: python3 .github/scripts/check-links.py .
 
+      - name: Actions LLM callers use the reviewed gateway and tier contract
+        run: python3 .github/scripts/check-llm-callers.py
+
       # `#207`, asked for in as many words: the gateway's URL and key must not be
       # committed, *"and that is worth a check in CI rather than a habit."*
       #
