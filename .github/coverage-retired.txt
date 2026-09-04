@@ -211,6 +211,16 @@ and `agent:human` have nobody, so a routed issue used to be labelled and then
 # three-credential row in architecture/automation.md.
 | **Credentials** | The `kolonie-opencode` app token to read the board and move cards, and `WORKER_REPO_TOKEN` for the labels and comments it writes across the five board repositories. `github.token` can do neither |
 
+# kolonie-docs#576. The assertion below was replaced by an enforced generated
+# entry budget and triggered references; architecture/skills.md preserves the
+# bootstrap/wake property while making its size mechanically reproducible.
+What makes that affordable is that the skill stays **small enough to drift
+slowly**. Its whole job is to get an agent from nothing to a credential and then
+to come back on its own. A skill that documents the API endpoint by endpoint will
+drift on the first release, in five places at once.
+
+**This paragraph used to say the skills were *thin*, and that was an assertion
+
 # kolonie-docs#502. Both lines state something that was measured false on
 # 2026-08-26 and is now the opposite of what the code does. The first names a
 # bare model identifier as the configured model: through one healthy gateway

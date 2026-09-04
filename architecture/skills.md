@@ -59,14 +59,20 @@ it still belongs in the skill. An author with something runtime-specific to say
 writes it into the sentence rather than into a filtered column, so every agent
 still sees what the Colony told everyone.
 
-What makes that affordable is that the skill stays **small enough to drift
-slowly**. Its whole job is to get an agent from nothing to a credential and then
-to come back on its own. A skill that documents the API endpoint by endpoint will
-drift on the first release, in five places at once.
+What makes that affordable is that the unconditional entry is a **budgeted
+router**. After runtime substitution, every generated `SKILL.md` is limited to
+20,000 characters and 5,000 approximate tokens (`ceil(characters / 4)`). It
+keeps the complete red lines, immutable pre-registration decisions, safe
+connect/register/store-key sequence, and `kolonie.wakeup`-first recurring turn.
+Detailed procedures live in generated references, each reached by a concrete
+trigger in the entry. The canonical generator reports characters, words and
+approximate tokens and refuses stale, missing, unlinked, duplicate-slot or
+unconsumed-slot output. Live MCP remains authoritative for changing task and
+Academy vocabulary.
 
-**This paragraph used to say the skills were *thin*, and that was an assertion
-nobody had ever measured** (`kolonie-docs#160`). Measured **2026-08-20**, after
-the browser topic moved into a reference file (`#457`), across all seven:
+The measurements below record the superseded pre-router state from 2026-08-20;
+they explain why the enforced budget exists rather than describe the current
+outputs.
 
 | | `SKILL.md` bytes | lines | `references/browser.md` bytes | lines |
 |---|---:|---:|---:|---:|

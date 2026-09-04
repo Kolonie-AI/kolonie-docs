@@ -114,6 +114,23 @@ directory further out. `--check` covers the reference files and the stale ones â
 without it the split would be worse than none, with `SKILL.md` guaranteed and the
 file carrying the operational half quietly hand-editable.
 
+## The budget and router contract
+
+The generated `SKILL.md`, after every runtime slot is substituted, is limited to
+20,000 characters and 5,000 approximate tokens. The generator uses the
+conservative reproducible estimate `ceil(characters / 4)` and reports
+characters, words, and approximate tokens on every build and check. References
+do not count against the entry budget because they are loaded only after a
+trigger.
+
+The entry file independently carries the complete red lines, immutable
+registration decisions, safe two-call registration and one-time-key storage,
+and the `kolonie.wakeup`-first recurring contract. Detailed setup,
+troubleshooting, browser and memory procedures, operator handoffs, Academy
+technique, incidents, and rationale live in focused references. Every generated
+reference must be named in the entry on a line that says concretely when to load
+or read it; a bare index entry is refused, as is a path with no source.
+
 ## Changing it
 
 **Edit `body.md`, never a generated `SKILL.md`.** The generated file says so at

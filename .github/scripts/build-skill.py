@@ -113,6 +113,14 @@ SLOT_CLOSE = "<!-- kolonie:end -->"
 # The one directory name, on both sides. The specification names it, and
 # `dirname(BODY)` and `dirname(OUTPUT)` are the two ends of the same move.
 REFERENCES = "references"
+MAX_ENTRY_CHARACTERS = 20_000
+MAX_ENTRY_TOKENS = 5_000
+REFERENCE_LINK = re.compile(r"references/[a-z0-9-]+\.md")
+TRIGGER = re.compile(
+    r"\b(?:when|before|if)\b.*\b(?:load|read)\b|"
+    r"\b(?:load|read)\b.*\b(?:when|before|if)\b",
+    re.IGNORECASE,
+)
 
 
 class Problem(Exception):
@@ -226,21 +234,51 @@ def reference_sources(body_path):
     }
 
 
+def entry_metrics(text):
+    return len(text), len(text.split()), (len(text) + 3) // 4
+
+
+def check_entry_budget(text):
+    characters, _, tokens = entry_metrics(text)
+    exceeded = []
+    if characters > MAX_ENTRY_CHARACTERS:
+        exceeded.append(f"{characters:,} characters exceeds 20,000 characters")
+    if tokens > MAX_ENTRY_TOKENS:
+        exceeded.append(f"{tokens:,} approximate tokens exceeds 5,000 approximate tokens")
+    if exceeded:
+        raise Problem("generated SKILL.md exceeds its entry budget: " + "; ".join(exceeded))
+
+
+def check_reference_links(entry, sources):
+    linked = set(REFERENCE_LINK.findall(entry))
+    declared = set(sources)
+    missing = sorted(linked - declared)
+    if missing:
+        raise Problem("generated SKILL.md names missing reference files: " + ", ".join(missing))
+    for relative in sorted(declared):
+        lines = [line for line in entry.splitlines() if relative in line]
+        if not lines:
+            raise Problem(
+                f"{sources[relative]} would be generated as '{relative}' and nothing in the "
+                f"generated SKILL.md names that path, so no reader would ever open it. "
+                f"Point at it from the shared body, or delete the source."
+            )
+        if not any(TRIGGER.search(line) for line in lines):
+            raise Problem(
+                f"generated SKILL.md names '{relative}' without a concrete trigger "
+                "saying when to load or read it"
+            )
+
+
 def build(body_path, slots):
     """The whole skill directory: {relative path: text}, `SKILL.md` first."""
     used = {}
     generated = {"SKILL.md": render(body_path, slots, used)}
-    for relative, source in reference_sources(body_path).items():
+    sources = reference_sources(body_path)
+    for relative, source in sources.items():
         generated[relative] = render(source, slots, used)
-        # The counterpart of the unused-slot rule, one directory out. `SKILL.md`
-        # is the only thing a reader is handed, so a path that does not appear
-        # in it is a file nobody is told to open.
-        if relative not in generated["SKILL.md"]:
-            raise Problem(
-                f"{source} would be generated as '{relative}' and nothing in the "
-                f"generated SKILL.md names that path, so no reader would ever "
-                f"open it. Point at it from {body_path}, or delete the source."
-            )
+    check_reference_links(generated["SKILL.md"], sources)
+    check_entry_budget(generated["SKILL.md"])
     check_every_slot_reaches_a_reader(slots, used)
     return generated
 
@@ -281,6 +319,11 @@ def main(argv):
         for relative in generated
     }
     stale = stale_references(out_path, generated)
+    characters, words, tokens = entry_metrics(generated["SKILL.md"])
+    print(
+        f"build-skill: entry {characters} characters, {words} words, "
+        f"{tokens} approximate tokens"
+    )
 
     if check:
         for relative, text in generated.items():
