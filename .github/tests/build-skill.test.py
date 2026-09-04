@@ -316,6 +316,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
     expect("regenerating restores it", build_skill.main(argv) == 0)
 
+    (source / "body.md").write_text(
+        POINTING_BODY.replace("Read `references/browser.md` before you sign up anywhere.\n\n", ""),
+        encoding="utf-8",
+    )
     (source / "references" / "browser.md").unlink()
     expect(
         "--check sees a reference the body no longer declares, and is 2",
@@ -330,23 +334,101 @@ with tempfile.TemporaryDirectory() as tmp:
     expect("SKILL.md itself survived the deletion", out_path.is_file())
 
 
-# Against the real body, asserting the property that is about the *generator*:
-# that the shared half is large enough for the split to be worth having. If this
-# floor ever fires, somebody has moved the Colony's text back into the runtimes.
 real_body = (ROOT / "onboarding" / "skill" / "body.md").read_text(encoding="utf-8")
 shared_lines = [
     line
     for line in real_body.splitlines()
-    if not build_skill.INSERT.match(line.strip())
+    if not line.startswith("<!-- kolonie:insert")
 ]
 expect(
-    "the shared body still carries the Colony's half",
-    len(shared_lines) >= 200,
-    f"only {len(shared_lines)} shared lines in onboarding/skill/body.md",
+    "the shared entry is a compact router",
+    len(shared_lines) < 200,
+    f"{len(shared_lines)} shared lines in onboarding/skill/body.md",
 )
 
 
 print()
+
+
+def minimal_runtime(frontmatter: str = "---\nname: kolonie\n---") -> str:
+    return (
+        slot("frontmatter", frontmatter)
+        + slot("banner", "Runtime banner.")
+        + slot("requirements", "Runtime requirements.")
+        + slot("connect", "Connect through the runtime MCP configuration.")
+        + slot("store-key", "Store KOLONIE_API_KEY in the runtime secret store.")
+        + slot("come-back", "Use the runtime scheduler and prevent overlapping runs.")
+        + slot("browser-setting", "Use the runtime browser profile setting.")
+        + slot("touches", "## What this skill touches\n\nRuntime settings only.")
+    )
+
+
+budget_body = "<!-- kolonie:insert frontmatter -->\n" + ("x" * 20001)
+budget_result, _ = directory(budget_body, slot("frontmatter", "x"))
+expect(
+    "an entry over the character budget is rejected",
+    isinstance(budget_result, build_skill.Problem) and "20,000 characters" in str(budget_result),
+    repr(budget_result),
+)
+
+token_body = "<!-- kolonie:insert frontmatter -->\n" + ("word " * 5001)
+token_result, _ = directory(token_body, slot("frontmatter", "x"))
+expect(
+    "an entry over the approximate-token budget is rejected",
+    isinstance(token_result, build_skill.Problem) and "5,000 approximate tokens" in str(token_result),
+    repr(token_result),
+)
+
+triggered, _ = directory(
+    "<!-- kolonie:insert frontmatter -->\nLoad `references/setup.md`.\n",
+    slot("frontmatter", "x"),
+    {"setup.md": "# Setup\n"},
+)
+expect(
+    "a reference path without a concrete load trigger is rejected",
+    isinstance(triggered, build_skill.Problem) and "concrete trigger" in str(triggered),
+    repr(triggered),
+)
+
+missing_reference, _ = directory(
+    "<!-- kolonie:insert frontmatter -->\nLoad `references/setup.md` when setup starts.\n",
+    slot("frontmatter", "x"),
+)
+expect(
+    "a linked reference with no source is rejected",
+    isinstance(missing_reference, build_skill.Problem) and "missing reference" in str(missing_reference),
+    repr(missing_reference),
+)
+
+real_body = ROOT / "onboarding" / "skill" / "body.md"
+real_runtime = minimal_runtime()
+with tempfile.TemporaryDirectory() as tmp:
+    runtime_path = Path(tmp) / "runtime.md"
+    runtime_path.write_text(real_runtime, encoding="utf-8")
+    try:
+        real = build_skill.build(real_body, build_skill.read_slots(runtime_path))["SKILL.md"]
+    except build_skill.Problem as problem:
+        real = problem
+
+expect(
+    "the entry alone carries safe fresh registration",
+    isinstance(real, str)
+    and "kolonie.register" in real
+    and "confirmationToken" in real
+    and "credentials.apiKey" in real
+    and "KOLONIE_API_KEY" in real
+    and "one-time" in real.lower(),
+    repr(real),
+)
+expect(
+    "the entry alone carries a wakeup-first recurring turn",
+    isinstance(real, str)
+    and "kolonie.wakeup" in real
+    and "first" in real[real.index("kolonie.wakeup") : real.index("kolonie.wakeup") + 200].lower()
+    and "prevent overlapping" in real.lower(),
+    repr(real),
+)
+
 if FAILURES:
     print(f"{len(FAILURES)} failed: {', '.join(FAILURES)}")
     raise SystemExit(1)
